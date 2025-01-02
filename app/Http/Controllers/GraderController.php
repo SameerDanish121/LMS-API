@@ -272,34 +272,4 @@ class GraderController extends Controller
             ], 500);
         }
     }
-    public function Sample(Request $request)
-    {
-        try {
-            return response()->json(
-                [
-                    'message' => 'Fetched Successfully',
-                ],
-                200
-            );
-        } catch (ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-
-        } catch (ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid username or password'
-            ], 404);
-
-        } catch (Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
 }
