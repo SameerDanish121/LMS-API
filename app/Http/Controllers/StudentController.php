@@ -258,7 +258,6 @@ class StudentController extends Controller
     public function Login(Request $request)
     {
         try {
-            $currentSession = (new session())->getCurrentSessionId();
             $request->validate([
                 "username" => 'required|string|ends_with:@biit',
                 "password" => 'required'
@@ -269,16 +268,32 @@ class StudentController extends Controller
                 ->firstOrFail();
             $role = $user->role->type;
             if ($role == 'Student') {
-                $student = student::with(['session', 'program', 'section'])
-                    ->where('user_id', $user->id)
+                $student = student::where('user_id', $user->id)->with(['program','user'])
                     ->first();
+                    
+                $studentInfo=[
+                 "id"=>$student->id,
+                 "name"=>$student->name,
+                 "RegNo"=>$student->RegNo,
+                 "CGPA"=>$student->cgpa,
+                 "Gender"=>$student->gender,
+                 "Guardian"=>$student->guardian,
+                 "username"=>$student->user->username,
+                 "password"=>$student->user->password,
+                 "email"=>$student->user->email,
+                 "InTake"=>(new session())->getSessionNameByID($student->session_id),
+                 "Program"=>$student->program->name,
+                 "Image"=>Action::getImageByPath($student->image)
+                ];
                 $student_id = $student->pluck('id');
                 $section_id = $student->section_id;
                 return response()->json([
                     'Type' => $role,
-                    'StudentInfo' => $student,
+                    'StudentInfo' => $studentInfo,
                     "timetable" =>timetable::getTodayTimetableBySectionId($section_id),
-                    "Attendance" =>(new attendance())->getAttendanceByID($student_id)
+                    "Attendance" =>(new attendance())->getAttendanceByID($student_id),
+                    "Total Enrollments"=>student_offered_courses::GetCountOfTotalEnrollments($student_id),
+                    "Current Session"=>(new session())->getSessionNameByID((new session())->getCurrentSessionId())?:'N/A'
                 ], 200);
             } else if ($role == 'Admin') {
                 $Admin=admin::where('user_id',$user->id)

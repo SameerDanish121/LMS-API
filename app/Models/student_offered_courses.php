@@ -36,5 +36,19 @@ class student_offered_courses extends Model
     {
         return $this->belongsTo(offered_courses::class, 'offered_course_id');
     }
-    
+    public static function GetCountOfTotalEnrollments($student_id = null)
+    {
+        if (!$student_id) {
+            return 0;
+        }
+        $currentSession = (new session())->getCurrentSessionId();
+        if ($currentSession == 0) {
+            return $currentSession;
+        }
+        $count = self::where('student_id', $student_id)
+            ->whereHas('offeredCourse', function ($query) use ($currentSession) {
+                $query->where('session_id', $currentSession);
+            })->count();
+        return $count;
+    }
 }
