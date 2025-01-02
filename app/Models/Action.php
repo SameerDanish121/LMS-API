@@ -60,12 +60,13 @@ class Action extends Model
         return $attendanceData;
     }
 
-    public static function getImageByPath($originalPath=null){
-                if (file_exists(public_path($originalPath))) {
-                    $imageContent = file_get_contents(public_path($originalPath));
-                    return base64_encode($imageContent);
-                } else {
-                    return null;
-                }
+    public static function getImageByPath($originalPath = null)
+    {
+        if (file_exists(public_path($originalPath))) {
+            $imageContent = file_get_contents(public_path($originalPath));
+            return base64_encode($imageContent);
+        } else {
+            return null;
+        }
     }
 }

@@ -200,4 +200,39 @@ class timetable extends Model
                 ];
             });
     }
+
+    public static function getTodayTimetableOfJuniorLecturerById($JuniorLecturer_id=null){
+        if (!$JuniorLecturer_id) {
+            return [];
+        }
+        if (!(new session())->getCurrentSessionId()) {
+            return [];
+        }
+        $timetable = Timetable::with([
+            'course:name,id,description',
+            'teacher:name,id',
+            'venue:venue,id',
+            'dayslot:day,start_time,end_time,id',
+            'section:id'
+        ])
+            ->whereHas('dayslot', function ($query) {
+                $query->where('day', Carbon::now()->format('l'));
+            })
+            ->where('junior_lecturer_id', $JuniorLecturer_id)
+            ->where('session_id', (new session())->getCurrentSessionId())
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'coursename' => $item->course->name ?? 'N/A',
+                    'description' => $item->course->description ?? 'N/A',
+                    'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
+                    'Teacher' => $item->teacher? $item->teacher->name : 'N/A',
+                    'venue' => $item->venue->venue ?? 'N/A',
+                    'day' => $item->dayslot->day ?? 'N/A',
+                    'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
+                    'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
+                ];
+            });
+        return $timetable;
+    }
 }

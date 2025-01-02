@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
+use Carbon\Carbon;
 class excluded_days extends Model
 {
     protected $table = 'excluded_days';
@@ -26,4 +26,24 @@ class excluded_days extends Model
         'type',
         'reason',
     ];
+    public static function checkHoliday()
+    {
+        // Get today's date
+        $today = Carbon::today()->toDateString();
+
+        // Check if a record exists with today's date and type 'Holiday'
+        $isHoliday = excluded_days::where('date', $today)
+            ->where('type', 'Holiday')
+            ->exists();
+
+        return $isHoliday;
+    }
+    public static function checkHolidayReason()
+    {
+        $today = Carbon::today()->toDateString();
+        $isHoliday = excluded_days::where('date', $today)
+            ->where('type', 'Holiday')
+            ->first();
+        return $isHoliday?"Today is a holiday. Reason: " . $isHoliday->reason . ". There will be no classes as per the schedule.":$isHoliday;
+    }
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 use App\Models\Action;
 use App\Models\admin;
+use App\Models\excluded_days;
+use App\Models\juniorlecturer;
 use Illuminate\Support\Str;
 use App\Mail\ForgotPasswordMail;
 use Illuminate\Support\Facades\Mail;
@@ -43,7 +45,7 @@ class StudentController extends Controller
             if (!$teacher_offered_course_id || !$student_id) {
                 throw new Exception('Please Provide Values in request Properly');
             }
-            $attendance = attendance::getSubjectAttendance($teacher_offered_course_id,$student_id);
+            $attendance = attendance::getSubjectAttendance($teacher_offered_course_id, $student_id);
             $totalPresent = $attendance->where('status', 'p')->count();
             $totalAbsent = $attendance->where('status', 'a')->count();
             $total_Classes = $totalPresent + $totalAbsent;
@@ -67,7 +69,7 @@ class StudentController extends Controller
     {
         try {
             $section_id = $request->section_id;
-            $timetable =timetable::getFullTimetableBySectionId($section_id);
+            $timetable = timetable::getFullTimetableBySectionId($section_id);
             response()->json([
                 'status' => 'success',
                 'data' => $timetable
@@ -161,7 +163,7 @@ class StudentController extends Controller
     {
         try {
             $studentId = $request->student_id;
-           $attendanceData=(new attendance())->getAttendanceByID($studentId);
+            $attendanceData = (new attendance())->getAttendanceByID($studentId);
             return response()->json([
                 'message' => 'Attendance data fetched successfully',
                 'data' => $attendanceData,
@@ -268,64 +270,118 @@ class StudentController extends Controller
                 ->firstOrFail();
             $role = $user->role->type;
             if ($role == 'Student') {
-                $student = student::where('user_id', $user->id)->with(['program','user'])
+                $student = student::where('user_id', $user->id)->with(['program', 'user'])
                     ->first();
-                    
-                $studentInfo=[
-                 "id"=>$student->id,
-                 "name"=>$student->name,
-                 "RegNo"=>$student->RegNo,
-                 "CGPA"=>$student->cgpa,
-                 "Gender"=>$student->gender,
-                 "Guardian"=>$student->guardian,
-                 "username"=>$student->user->username,
-                 "password"=>$student->user->password,
-                 "email"=>$student->user->email,
-                 "InTake"=>(new session())->getSessionNameByID($student->session_id),
-                 "Program"=>$student->program->name,
-                 "Image"=>Action::getImageByPath($student->image)
-                ];
                 $student_id = $student->pluck('id');
                 $section_id = $student->section_id;
+                $attribute = excluded_days::checkHoliday() ? 'Holiday' : 'Timetable';
+                $studentInfo = [
+                    "id" => $student->id,
+                    "name" => $student->name,
+                    "RegNo" => $student->RegNo,
+                    "CGPA" => $student->cgpa,
+                    "Gender" => $student->gender,
+                    "Guardian" => $student->guardian,
+                    "username" => $student->user->username,
+                    "password" => $student->user->password,
+                    "email" => $student->user->email,
+                    "InTake" => (new session())->getSessionNameByID($student->session_id),
+                    "Program" => $student->program->name,
+                    "Section" => (new section())->getNameByID($student->section_id),
+                    "Total Enrollments" => student_offered_courses::GetCountOfTotalEnrollments($student_id),
+                    "Current Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?: 'N/A',
+                    "Image" => Action::getImageByPath($student->image),
+                    $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : timetable::getTodayTimetableBySectionId($section_id),
+                    "Attendance" => (new attendance())->getAttendanceByID($student_id)
+                ];
+
                 return response()->json([
                     'Type' => $role,
                     'StudentInfo' => $studentInfo,
-                    "timetable" =>timetable::getTodayTimetableBySectionId($section_id),
-                    "Attendance" =>(new attendance())->getAttendanceByID($student_id),
-                    "Total Enrollments"=>student_offered_courses::GetCountOfTotalEnrollments($student_id),
-                    "Current Session"=>(new session())->getSessionNameByID((new session())->getCurrentSessionId())?:'N/A'
                 ], 200);
             } else if ($role == 'Admin') {
-                $Admin=admin::where('user_id',$user->id)
-                ->with(['user'])
-                ->first();
+                $Admin = admin::where('user_id', $user->id)
+                    ->with(['user'])
+                    ->first();
+                $session = session::where('id', (new session())->getCurrentSessionId())->first();
+                $admin = [
+                    "id" => $Admin->id,
+                    "name" => $Admin->name,
+                    "phone_number" => $Admin->phone_number,
+                    "Designation" => $Admin->Designation,
+                    "Username" => $Admin->user->username,
+                    "Password" => $Admin->user->password,
+                    "image" => Action::getImageByPath($Admin->image),
+                    "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
+                    "Start Date" => $session->start_date ?? "N/A",
+                    "End Date" => $session->end_date ?? "N/A"
+                ];
                 return response()->json([
                     'Type' => $role,
-                    'AdminInfo'=>$Admin
+                    'AdminInfo' => $admin
                 ], 200);
             } else if ($role == 'Teacher') {
-                $teacher=teacher::where('user_id',$user->id)
-                ->with(['user'])
-                ->first();
+                $teacher = teacher::where('user_id', $user->id)
+                    ->with(['user'])
+                    ->first();
+                $attribute = excluded_days::checkHoliday() ? 'Holiday' : 'Timetable';
+                $Teacher = [
+                    "id" => $teacher->id,
+                    "name" => $teacher->name,
+                    "gender" => $teacher->gender,
+                    "Date Of Birth" => $teacher->date_of_birth,
+                    "Username" => $teacher->user->username,
+                    "Password" => $teacher->user->password,
+                    "image" => Action::getImageByPath($teacher->image),
+                    "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
+                    $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : timetable::getTodayTimetableOfTeacherById($teacher->id),
+                ];
                 return response()->json([
                     'Type' => $role,
-                    'TeacherInfo'=>$teacher,
-                    'Timetable'=>timetable::getTodayTimetableOfTeacherById($teacher->id)??'Not Fetched'
+                    'TeacherInfo' => $Teacher,
                 ], 200);
             } else if ($role == 'Datacell') {
-                $datacell=datacell::where('user_id',$user->id)
-                ->with(['user'])
-                ->first();
+                $Datacell = datacell::where('user_id', $user->id)
+                    ->with(['user'])
+                    ->first();
+                $session = session::where('id', (new session())->getCurrentSessionId())->first();
+                $datacell = [
+                    "id" => $Datacell->id,
+                    "name" => $Datacell->name,
+                    "phone_number" => $Datacell->phone_number,
+                    "Designation" => $Datacell->Designation,
+                    "Username" => $Datacell->user->username,
+                    "Password" => $Datacell->user->password,
+                    "image" => Action::getImageByPath($Datacell->image),
+                    "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
+                    "Start Date" => $session->start_date ?? "N/A",
+                    "End Date" => $session->end_date ?? "N/A"
+                ];
                 return response()->json([
-                   'Type' => $role,
-                   'DatacellInfo'=>$datacell
+                    'Type' => $role,
+                    'DatacellInfo' => $datacell
                 ], 200);
             } else if ($role == 'JuniorLecturer') {
+                $jl = juniorlecturer::where('user_id', $user->id)
+                    ->with(['user'])
+                    ->first();
+                $attribute = excluded_days::checkHoliday() ? 'Holiday' : 'Timetable';
+                $Teacher = [
+                    "id" => $jl->id,
+                    "name" => $jl->name,
+                    "gender" => $jl->gender,
+                    "Date Of Birth" => $jl->date_of_birth,
+                    "Username" => $jl->user->username,
+                    "Password" => $jl->user->password,
+                    "image" => Action::getImageByPath($jl->image),
+                    "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
+                    $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : timetable::getTodayTimetableOfJuniorLecturerById($jl->id),
+                ];
                 return response()->json([
-                    'status' => 'success',
-                    'data' => 'You are Junior Lecturer '
+                    'Type' => $role,
+                    'TeacherInfo' => $Teacher,
                 ], 200);
-            }else{
+            } else {
                 return response()->json([
                     'status' => 'Failed',
                     'data' => 'You are a Unauthorized User !'
@@ -341,8 +397,8 @@ class StudentController extends Controller
 
         } catch (ModelNotFoundException $e) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid username or password'
+                'status' => 'Failed',
+                'data' => 'You are a Unauthorized User !'
             ], 404);
 
         } catch (Exception $e) {
@@ -395,16 +451,16 @@ class StudentController extends Controller
     }
     public function sendForgotPasswordEmail(Request $request)
     {
-        $email=$request->email;
+        $email = $request->email;
         $otp = rand(100000, 999999);
         try {
             // Send the OTP email
             Mail::raw("Your OTP code is: $otp", function ($message) use ($email) {
                 $message->to($email)
-                        ->subject('Your OTP Code')
-                        ->from('BIIT@edu.pk.com', 'LMS'); // Replace with your email
+                    ->subject('Your OTP Code')
+                    ->from('BIIT@edu.pk.com', 'LMS'); // Replace with your email
             });
-    
+
             return response()->json(['message' => 'OTP sent successfully']);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Failed to send email', 'error' => $e->getMessage()], 500);
