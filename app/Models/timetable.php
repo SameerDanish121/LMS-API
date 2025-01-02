@@ -128,16 +128,76 @@ class timetable extends Model
             ->get()
             ->map(function ($item) {
                 return [
-                    'coursename' => $item->course->name??'N/A',
-                    'description' => $item->course->description??'N/A',
-                    'section' =>(new section())->getNameByID($item->section->id)??'N/A',
+                    'coursename' => $item->course->name ?? 'N/A',
+                    'description' => $item->course->description ?? 'N/A',
+                    'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
                     'juniorlecturer' => $item->juniorLecturer ? $item->juniorLecturer->name : 'N/A',
-                    'venue' => $item->venue->venue??'N/A',
-                    'day' => $item->dayslot->day??'N/A',
+                    'venue' => $item->venue->venue ?? 'N/A',
+                    'day' => $item->dayslot->day ?? 'N/A',
                     'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
                     'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
                 ];
             });
-            return $timetable;
+        return $timetable;
+    }
+    public static function getFullTimetableBySectionId($section_id = null)
+    {
+
+        if (!$section_id) {
+            return [];
+        }
+        return Timetable::with([
+            'course:name,id,description',
+            'teacher:name,id',
+            'venue:venue,id',
+            'dayslot:day,start_time,end_time,id',
+            'juniorLecturer:id,name'
+        ])
+            ->where('section_id', $section_id)
+            ->where('session_id', (new session())->getCurrentSessionId())
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'coursename' => $item->course->name,
+                    'description' => $item->course->description,
+                    'teachername' => $item->teacher->name ?? 'N/A',
+                    'juniorlecturer' => $item->juniorLecturer ? $item->juniorLecturer->name : 'N/A',
+                    'venue' => $item->venue->venue,
+                    'day' => $item->dayslot->day,
+                    'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
+                    'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
+                ];
+            });
+    }
+    public static function getFullTimetableByTeacherId($teacher_id = null)
+    {
+        if (!$teacher_id) {
+            return [];
+
+        }
+        return timetable::with([
+            'course:name,id,description',
+            'teacher:name,id',
+            'venue:venue,id',
+            'dayslot:day,start_time,end_time,id',
+            'juniorLecturer:name',
+            'section'
+        ])
+            ->where('teacher_id', $teacher_id)
+            ->where('session_id', (new session())->getCurrentSessionId())
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'coursename' => $item->course->name,
+                    'description' => $item->course->description,
+                    'teachername' => $item->teacher->name ?? 'N/A',
+                    'juniorlecturername' => $item->juniorLecturer->name ?? 'N/A',
+                    'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
+                    'venue' => $item->venue->venue,
+                    'day' => $item->dayslot->day,
+                    'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
+                    'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
+                ];
+            });
     }
 }

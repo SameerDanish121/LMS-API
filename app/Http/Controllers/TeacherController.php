@@ -42,29 +42,8 @@ class TeacherController extends Controller
     public function FullTimetable(Request $request)
     {
         try {
-            $teacher_id=teacher::where('name',$request->teacher_name)->pluck('id')->first();
-            $timetable = timetable::with([
-                'course:name,id,description',
-                'teacher:name,id',
-                'venue:venue,id',
-                'dayslot:day,start_time,end_time,id',
-                'juniorLecturer:name'
-            ])
-                ->where('teacher_id', $teacher_id)
-                ->where('session_id', (new session())->getCurrentSessionId())
-                ->get()
-                ->map(function ($item) {
-                    return [
-                        'coursename' => $item->course->name,
-                        'description' => $item->course->description,
-                        'teachername' => $item->teacher->name ?? 'N/A',
-                        'juniorlecturername' => $item->juniorLecturer->name ?? 'N/A',
-                        'venue' => $item->venue->venue,
-                        'day' => $item->dayslot->day,
-                        'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
-                        'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
-                    ];
-                });
+            $teacher_id=$request->teacher_id;
+            $timetable = timetable::getFullTimetableByTeacherId($teacher_id);
             return response()->json([
                 'status' => 'success',
                 'data' => $timetable

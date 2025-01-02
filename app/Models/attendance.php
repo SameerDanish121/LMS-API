@@ -28,6 +28,16 @@ class attendance extends Model
     {
         return $this->belongsTo(Venue::class, 'venue_id');
     }
+    public static function getSubjectAttendance($teacher_offered_course_id=null,$student_id=null){
+        if (!$teacher_offered_course_id || !$student_id) {
+            return [];
+        }
+       return attendance::where('teacher_offered_course_id', $teacher_offered_course_id)
+       ->where('student_id', $student_id)
+       ->select(['status', 'date_time', 'isLab'])
+       ->get();
+    }
+
     public function getAttendanceByID($studentId=null)
     {
         if (!$studentId) {

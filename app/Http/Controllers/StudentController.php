@@ -40,11 +40,10 @@ class StudentController extends Controller
         try {
             $teacher_offered_course_id = $request->teacher_offered_course_id;
             $student_id = $request->student_id;
-            $session_id = (new session())->getCurrentSessionId();
-            $attendance = attendance::where('teacher_offered_course_id', $teacher_offered_course_id)
-                ->where('student_id', $student_id)
-                ->select(['status', 'date_time', 'isLab'])
-                ->get();
+            if (!$teacher_offered_course_id || !$student_id) {
+                throw new Exception('Please Provide Values in request Properly');
+            }
+            $attendance = attendance::getSubjectAttendance($teacher_offered_course_id,$student_id);
             $totalPresent = $attendance->where('status', 'p')->count();
             $totalAbsent = $attendance->where('status', 'a')->count();
             $total_Classes = $totalPresent + $totalAbsent;
@@ -56,7 +55,6 @@ class StudentController extends Controller
                 'Absents' => $totalAbsent,
                 'Attendance' => $attendance
             ], 200);
-
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -69,29 +67,8 @@ class StudentController extends Controller
     {
         try {
             $section_id = $request->section_id;
-            $timetable = Timetable::with([
-                'course:name,id,description',
-                'teacher:name,id',
-                'venue:venue,id',
-                'dayslot:day,start_time,end_time,id',
-                'juniorLecturer:id,name'
-            ])
-                ->where('section_id', $section_id)
-                ->where('session_id', (new session())->getCurrentSessionId())
-                ->get()
-                ->map(function ($item) {
-                    return [
-                        'coursename' => $item->course->name,
-                        'description' => $item->course->description,
-                        'teachername' => $item->teacher->name ?? 'N/A',
-                        'juniorlecturer' => $item->juniorLecturer ? $item->juniorLecturer->name : 'N/A',
-                        'venue' => $item->venue->venue,
-                        'day' => $item->dayslot->day,
-                        'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
-                        'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
-                    ];
-                });
-            return response()->json([
+            $timetable =timetable::getFullTimetableBySectionId($section_id);
+            response()->json([
                 'status' => 'success',
                 'data' => $timetable
             ], 200);
@@ -332,6 +309,11 @@ class StudentController extends Controller
                 return response()->json([
                     'status' => 'success',
                     'data' => 'You are Junior Lecturer '
+                ], 200);
+            }else{
+                return response()->json([
+                    'status' => 'Failed',
+                    'data' => 'You are a Unauthorized User !'
                 ], 200);
             }
 
