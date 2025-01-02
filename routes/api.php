@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\GraderController;
+use App\Http\Controllers\TestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\StudentController;
@@ -10,6 +11,7 @@ use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\JuniorLecturerController;
 use App\Http\Controllers\DatacellController;
 Route::get('/Login', [StudentController::class, 'Login']);
+Route::get('/checking', [TestController::class, 'Empty']);
 Route::prefix('Student')->group(function () {
     Route::get('/FullTimetable', [StudentController::class, 'FullTimetable']);
     Route::get('/Notification', [StudentController::class, 'Notification']);
