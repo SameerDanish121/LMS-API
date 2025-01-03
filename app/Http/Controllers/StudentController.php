@@ -416,6 +416,12 @@ class StudentController extends Controller
         try {
             $student_id = $request->student_id;
             $course_id = $request->course_id;
+            if(!$student_id){
+                throw new Exception('Student ID IS Required');
+            }
+            if(!$course_id){
+                throw new Exception('Course ID IS Required');
+            }
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
