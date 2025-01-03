@@ -11,6 +11,7 @@ class teacher_offered_courses extends Model
 
    // Disable timestamps if not present in the table (no created_at/updated_at columns)
    public $timestamps = false;
+   protected $primaryKey='id';
 
    // Define the fillable properties for mass assignment
    protected $fillable = [

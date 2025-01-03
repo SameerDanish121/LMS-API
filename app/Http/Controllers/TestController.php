@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\course;
+use App\Models\section;
 use App\Models\student_offered_courses;
+use App\Models\teacher;
 use Illuminate\Http\Request;
 use App\Models\session;
 USE Exception;
@@ -11,11 +14,11 @@ class TestController extends Controller
     public function Empty(Request $request)
     { 
         try {
-            $task_id = student_offered_courses::GetCountOfTotalEnrollments(2);
+            $task_id =(new course())->getIDByName('Technical And Business Writing');
                 return response()->json(
                     [
                         'message' => 'Fetched Successfully',
-                        'Enrolls' => $task_id
+                        'Course' => $task_id
                     ],
                     200
                 );

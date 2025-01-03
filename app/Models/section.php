@@ -24,6 +24,8 @@ class section extends Model
         $section = self::where('id', $id)->first();
         if ($section) {
             return $section->program . '-' . $section->semester . $section->group;
+        }else{
+            return null;
         }
     }
     public function timetables()

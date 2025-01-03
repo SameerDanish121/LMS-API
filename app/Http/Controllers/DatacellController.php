@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\teacher;
 use Exception;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Http\Request;
 use App\Models\attendance;
 use App\Models\course;
@@ -245,5 +247,107 @@ class DatacellController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+
+    public function uploadExcel(Request $request)
+    {
+        try {
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls',
+                'session' => 'required'
+            ]);
+            $session_name = $request->session;
+            $session_id = (new session())->getSessionIdByName($session_name);
+            if (!$session_id) {
+                throw new Exception('NO SESSION EXISIT FOR THE PROVIDED NAME ');
+            }
+            $file = $request->file('excel_file');
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+            $filteredData = [];
+            foreach ($sheetData as $row) {
+                $filteredData[] = array_slice($row, 0, 4);
+            }
+            $nonEmpty = [];
+            foreach ($filteredData as $row) {
+                if (
+                    array_filter($row, function ($value) {
+                        return !is_null($value);
+                    })
+                ) {
+                    if ($row['A'] != 'Section') {
+                        $row = array_map('trim', $row);
+                        $nonEmpty[] = $row;
+                    }
+
+                }
+            }
+            $FaultyData = [];
+            $Succesfull = [];
+            foreach ($nonEmpty as $index => $row) {
+                $section_id = (new section())->getIDByName($row['A']);
+                if (!$section_id) {
+                    $FaultyData[] = $row;
+                    continue;
+                }
+                $course_id = (new course())->getIDByName($row['B']);
+                if (!$course_id) {
+                    $FaultyData[] = $row;
+                    continue;
+                }
+                $teacher_id = (new teacher())->getIDByName($row['D']);
+                if (!$teacher_id) {
+                    $FaultyData[] = $row;
+                    continue;
+                }
+                $offered_course = offered_courses::firstOrCreate(
+                    [
+                        "course_id" => $course_id,
+                        "session_id" => $session_id
+                    ]
+                );
+                $offered_course_id = $offered_course->id;
+                teacher_offered_courses::firstOrCreate(
+                    [
+                        "teacher_id" => $teacher_id,
+                        "offered_course_id" => $offered_course_id,
+                        "section_id" => $section_id,
+                    ]
+                );
+                $Succesfull[] = $row;
+            }
+            return response()->json(
+                [
+                    'message' => 'The Teacher Enrollments Are Added',
+                    'data' => [
+                        "Sucessfull" => $Succesfull,
+                        "FaultyData" => $FaultyData
+                    ]
+                ],
+                200
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+
+
     }
 }
