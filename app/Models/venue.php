@@ -14,4 +14,8 @@ class venue extends Model
 
    // Define the fillable property for mass assignment
    protected $fillable = ['venue'];
+   public function timetables()
+    {
+        return $this->hasMany(Timetable::class, 'venue_id', 'id');
+    }
 }

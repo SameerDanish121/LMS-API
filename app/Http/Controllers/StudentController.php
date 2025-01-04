@@ -70,7 +70,7 @@ class StudentController extends Controller
         try {
             $section_id = $request->section_id;
             $timetable = timetable::getFullTimetableBySectionId($section_id);
-            response()->json([
+            return response()->json([
                 'status' => 'success',
                 'data' => $timetable
             ], 200);

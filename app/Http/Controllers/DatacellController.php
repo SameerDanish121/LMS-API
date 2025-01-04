@@ -240,7 +240,7 @@ class DatacellController extends Controller
                 'message' => 'Invalid username or password'
             ], 404);
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
@@ -288,8 +288,7 @@ class DatacellController extends Controller
             foreach ($nonEmpty as $index => $row) {
                 $section_id = (new section())->getIDByName($row['A']);
                 if (!$section_id) {
-                    $FaultyData[] = $row;
-                    continue;
+                   $section_id=section::addNewSection($row['A']);
                 }
                 $course_id = (new course())->getIDByName($row['B']);
                 if (!$course_id) {

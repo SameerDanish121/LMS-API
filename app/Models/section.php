@@ -49,4 +49,22 @@ class section extends Model
         }
         return null;
     }
+    public static function addNewSection($name)
+    {
+        preg_match('/([A-Za-z]+)-(\d+)([A-Za-z]+)/', $name, $matches);
+        if (!empty($matches)) {
+            $programType = $matches[1];
+            $semester = $matches[2];
+            $group = $matches[3];
+            $section = self::firstOrCreate(
+                [
+                    'program' => $programType,
+                    'semester' => $semester,
+                    'group' => $group,
+                ]
+            );
+            return $section->id;
+        }
+        return null;
+    }
 }

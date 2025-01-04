@@ -142,11 +142,10 @@ class timetable extends Model
     }
     public static function getFullTimetableBySectionId($section_id = null)
     {
-
         if (!$section_id) {
             return [];
         }
-        return Timetable::with([
+        $Timetable=Timetable::with([
             'course:name,id,description',
             'teacher:name,id',
             'venue:venue,id',
@@ -168,6 +167,7 @@ class timetable extends Model
                     'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
                 ];
             });
+            return $Timetable;
     }
     public static function getFullTimetableByTeacherId($teacher_id = null)
     {

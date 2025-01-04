@@ -25,7 +25,10 @@ class teacher extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
-
+    public function timetables()
+    {
+        return $this->hasMany(Timetable::class, 'teacher_id', 'id');
+    }
     // Function to get ID by name
     public function getIDByName($Name = null)
     {

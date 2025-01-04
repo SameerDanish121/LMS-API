@@ -28,4 +28,8 @@ class juniorlecturer extends Model
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
     }
+    public function timetables()
+    {
+        return $this->hasMany(Timetable::class, 'junior_lecturer_id', 'id');
+    }
 }

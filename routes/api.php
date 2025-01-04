@@ -19,7 +19,7 @@ Route::get('/Login', [StudentController::class, 'Login']);
 //////////////////////////////////////////////////////~api/Student///////////////////////////////////////////////
 
 Route::prefix('Student')->group(function () {
-    Route::get('/FullTimetable', [StudentController::class, 'FullTimetable']);
+    Route::get('/FullTimetable', [StudentController::class,'FullTimetable']);
     Route::get('/Notification', [StudentController::class, 'Notification']);
     Route::get('/Transcript', [StudentController::class, 'Transcript']);
     Route::get('/attendance', [StudentController::class,'getAttendance']);

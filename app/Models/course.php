@@ -29,6 +29,11 @@ class Course extends Model
     {
         return $this->belongsTo(Program::class, 'program_id', 'id');
     }
+    // In Section.php
+    public function timetables()
+    {
+        return $this->hasMany(Timetable::class, 'course_id', 'id');
+    }
 
     /**
      * Define the self-referential relationship for the 'pre_req_main' field (prerequisite course).
