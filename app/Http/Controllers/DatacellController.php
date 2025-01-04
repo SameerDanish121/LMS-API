@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Action;
+use App\Models\dayslot;
 use App\Models\teacher;
 use Exception;
+use GrahamCampbell\ResultType\Success;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Http\Request;
 use App\Models\attendance;
@@ -205,23 +208,7 @@ class DatacellController extends Controller
             ], 500);
         }
     }
-    public function UploadTimetable(Request $request)
-    {
-        try {
-            $merge = $request->merge;
-            if ($merge) {
 
-            } else {
-
-            }
-        } catch (Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
     ////////////////////////////////////////////////////////////////////////////////////
     public function Sample(Request $request)
     {
@@ -288,7 +275,7 @@ class DatacellController extends Controller
             foreach ($nonEmpty as $index => $row) {
                 $section_id = (new section())->getIDByName($row['A']);
                 if (!$section_id) {
-                   $section_id=section::addNewSection($row['A']);
+                    $section_id = section::addNewSection($row['A']);
                 }
                 $course_id = (new course())->getIDByName($row['B']);
                 if (!$course_id) {
@@ -322,6 +309,296 @@ class DatacellController extends Controller
                     'data' => [
                         "Sucessfull" => $Succesfull,
                         "FaultyData" => $FaultyData
+                    ]
+                ],
+                200
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+
+
+    }
+    public function UploadTimetableExcel(Request $request)
+    {
+        try {
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls',
+                'session' => 'required'
+            ]);
+            $session_name = $request->session;
+            $session_id = (new session())->getSessionIdByName($session_name);
+            if (!$session_id) {
+                $session_id = (new session())->getUpcomingSessionId();
+            }
+            $file = $request->file('excel_file');
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+
+            ///////////////////////////////////////Non Empty Row///////////////////////////////////
+            $NonEmptyRow = [];
+            foreach ($sheetData as $row) {
+                if (
+                    array_filter($row, function ($value) {
+                        return !is_null($value);
+                    })
+                ) {
+                    $row = array_map('trim', $row);
+                    $NonEmptyRow[] = $row;
+                }
+            }
+            ///////////////////////////////////////EmptyRowFilter///////////////////////////////////
+            $sectionList = [];
+            foreach ($NonEmptyRow[0] as $firstRowCell) {
+                if ($firstRowCell != null || $firstRowCell != '') {
+                    $sectionList[] = $firstRowCell;
+                }
+            }
+            $ColumnEmptyCheck = [];
+            $sliceLength = count($sectionList);
+            foreach ($NonEmptyRow as $row) {
+                $slicedRow = array_slice($row, 0, $sliceLength);
+                $ColumnEmptyCheck[] = $slicedRow;
+            }
+            ///////////////////////////////ColumnEmptyCheck/////////////////////////////////////
+            $Monday = [];
+            $Tuesday = [];
+            $Wednesday = [];
+            $Thursday = [];
+            $Firday = [];
+            $WhatIs = '';
+            foreach ($ColumnEmptyCheck as $row) {
+                if ($row['A'] == 'Monday') {
+                    $WhatIs = 'Monday';
+                    continue;
+                } else if ($row['A'] == 'Tuesday') {
+                    $WhatIs = 'Tuesday';
+                    continue;
+                } else if ($row['A'] == 'Wednesday') {
+                    $WhatIs = 'Wednesday';
+                    continue;
+                } else if ($row['A'] == 'Thursday') {
+                    $WhatIs = 'Thursday';
+                    continue;
+                } else if ($row['A'] == 'Friday') {
+                    $WhatIs = 'Friday';
+                    continue;
+                } else {
+                    if ($WhatIs == 'Monday') {
+                        $Monday[] = $row;
+                    }
+                    if ($WhatIs == 'Tuesday') {
+                        $Tuesday[] = $row;
+                    }
+                    if ($WhatIs == 'Wednesday') {
+                        $Wednesday[] = $row;
+                    }
+                    if ($WhatIs == 'Thursday') {
+                        $Thursday[] = $row;
+                    }
+                    if ($WhatIs == 'Friday') {
+                        $Firday[] = $row;
+                    }
+                }
+            }
+            //////////////////////////////////////////SplitOntheBasisOFDays////////////////////////
+            function convertTo24HourFormat($time)
+            {
+                return date("H:i:s", strtotime($time));
+            }
+            $Success=[];
+            $Error=[];
+            foreach ($Monday as $MondayRows) {
+                $Time = $MondayRows['A'];
+                $Day = 'Monday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+                
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+                $dayslotId = $dayslot->id;
+                
+                foreach ($MondayRows as $index => $value) {
+                   if($value==$Time){
+                    continue;
+                   }
+                   if($value!=null&&$value!=''){
+                    
+                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
+                      if($timetable){
+                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }else{
+                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }
+                    }else{
+                        continue;
+                    }
+                }
+            }
+
+            ////////////////////////////////////////////Tuesday///////////////////////////////////////
+            foreach ($Tuesday as $MondayRows) {
+                $Time = $MondayRows['A'];
+                $Day = 'Tuesday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+                $dayslotId = $dayslot->id;
+                $values = array_values($Monday);
+
+                foreach ($values as $index => $value) {
+                   if($value==$Time){
+                    continue;
+                   }
+                   if($value!=null&&$value!=''){
+                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
+                      if($timetable){
+                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }else{
+                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }
+                    }
+                }
+            }
+            ///////////////////////////////////////////////////WED////////////////////////////////////
+            foreach ($Wednesday as $MondayRows) {
+                $Time = $MondayRows['A'];
+                $Day = 'Wednesday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+                $dayslotId = $dayslot->id;
+                $values = array_values($Monday);
+
+                foreach ($values as $index => $value) {
+                   if($value==$Time){
+                    continue;
+                   }
+                   if($value!=null&&$value!=''){
+                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
+                      if($timetable){
+                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }else{
+                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }
+                    }
+                }
+            }
+            /////////////////////////////////////////////////////////////////////THURSDAY///////////////
+            foreach ($Thursday as $MondayRows) {
+                $Time = $MondayRows['A'];
+                $Day = 'Thursday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+                $dayslotId = $dayslot->id;
+                $values = array_values($Monday);
+
+                foreach ($values as $index => $value) {
+                   if($value==$Time){
+                    continue;
+                   }
+                   if($value!=null&&$value!=''){
+                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
+                      if($timetable){
+                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }else{
+                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }
+                    }
+                }
+            }
+            //////////////////////////////////////////////////////////////////FRIDAY/////////////////////////////
+            foreach ($Firday as $MondayRows) {
+                $Time = $MondayRows['A'];
+                $Day = 'Friday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+                $dayslotId = $dayslot->id;
+                $values = array_values($Monday);
+
+                foreach ($values as $index => $value) {
+                   if($value==$Time){
+                    continue;
+                   }
+                   if($value!=null&&$value!=''){
+                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
+                      if($timetable){
+                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }else{
+                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
+                        "Raw Data"=>$value];
+                      }
+                    }
+                }
+            }
+            return response()->json(
+                [
+                    'Message'=>'Data Inserted Successfully !',
+                    'data' => [
+                        "Sucess" =>$Success,
+                        "Not Inserted" =>$Error,
                     ]
                 ],
                 200

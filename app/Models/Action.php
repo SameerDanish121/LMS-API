@@ -69,4 +69,96 @@ class Action extends Model
             return null;
         }
     }
+    public static function GetVenueIDByName($venueName)
+    {
+        // Check if the venue exists by name
+        $venue = venue::firstOrCreate(
+            ['venue' => $venueName],
+            ['venue' => $venueName]
+        );
+
+        // Return the ID of the found or newly created venue
+        return $venue->id;
+    }
+    public static function getJuniorLecIdByName($name)
+    {
+        $juniorLecturer = juniorlecturer::where('name', $name)->first();
+        return $juniorLecturer ? $juniorLecturer->id : null;
+    }
+    public static function containsLab($venue)
+{
+    // Check if 'Lab' exists in the string
+    if (strpos($venue, 'Lab') !== false) {
+        return true;
+    }
+
+    return false;
+}
+    public static function insertOrCreateTimetable($RawDATA, $daySlot_id)
+    {
+        $sessionId = (new session())->getCurrentSessionId();
+        if (!$sessionId) {
+            $sessionId = (new session())->getUpcomingSessionId();
+            if (!$sessionId) {
+                return null;
+            }
+        }
+        $RawDATA = trim($RawDATA);
+        if (preg_match('/^([A-Za-z0-9-]+)_(\w+)\s?\((.*?)\)_\d+\s?\((.*?)\)_([\w\s]+)$/', $RawDATA, $matches)) {
+            $courseShortForm = $matches[2] ?? '';
+        $section = $matches[3] ?? '';
+        $teacherInfo = $matches[4] ?? '';
+        $venue = $matches[5] ?? '';
+        echo $venue;
+        if (strpos($teacherInfo, ',') !== false) {
+            $parts = explode(',', $teacherInfo);
+            $teacherName = trim($parts[0]);
+            $juniorLecturerName = trim($parts[1]);
+        } else {
+            $teacherName = $teacherInfo;
+            $juniorLecturerName = null;
+        }
+        $section_id = section::addNewSection($section);
+        $course = Course::where('description', $courseShortForm)->first();
+        if (!$course) {
+            return null;
+        }
+        $course_id = $course->id;
+        $venue_id = self::GetVenueIDByName($venue);
+      
+        if (self::containsLab($venue)) {
+            if($teacherName&&$juniorLecturerName){
+                $juniorLecture_id = self::getJuniorLecIdByName($juniorLecturerName);
+                $teacher_id = (new teacher())->getIDByName($teacherName);
+                if (!$teacher_id) {
+                    return null;
+                }
+                $type='Supervised Lab';
+            }if($teacherName&&!$juniorLecturerName){
+                $juniorLecture_id = self::getJuniorLecIdByName($teacherName);
+                $type='Lab';
+            }
+        }else{
+            $teacher_id = (new teacher())->getIDByName($teacherName);
+            $type='Class';
+        }
+        return Timetable::firstOrCreate(
+            [
+                'session_id' => $sessionId,
+                'section_id' => $section_id,
+                'dayslot_id' => $daySlot_id,
+                'course_id' => $course_id, 
+                'teacher_id' => $teacher_id??null, 
+                'junior_lecturer_id' => $juniorLecture_id??null, 
+                'venue_id' => $venue_id   , 
+                'type' => $type
+            ]
+        );
+        }else{
+            throw new Exception("Regex NOT MATCH".$RawDATA);
+        }
+        
+        
+
+    }
 }

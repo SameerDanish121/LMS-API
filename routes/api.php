@@ -62,7 +62,8 @@ Route::prefix('Datacell')->group(function () {
     Route::post('/NewOfferedCourse', [DatacellController::class,'AddNewOfferedCourse']);
     Route::post('/EnrollStudent', [DatacellController::class,'NewEnrollment']);
     Route::post('/UploadTeacherCourse', [DatacellController::class,'uploadExcel']);
-
+    Route::post('/UploadTimetableExel', [DatacellController::class,'UploadTimetableExcel']);
+    
 });
 
 
