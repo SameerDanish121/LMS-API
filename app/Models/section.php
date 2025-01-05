@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
+use Exception;
 class section extends Model
 {
     protected $table = 'section';
@@ -51,7 +51,10 @@ class section extends Model
     }
     public static function addNewSection($name)
     {
-        preg_match('/([A-Za-z]+)-(\d+)([A-Za-z]+)/', $name, $matches);
+        if(!preg_match('/([A-Za-z]+)-(\d+)([A-Za-z]+)/', $name, $matches))
+        {
+throw new Exception('Section REGEX NOT MATECHED');
+        }
         if (!empty($matches)) {
             $programType = $matches[1];
             $semester = $matches[2];

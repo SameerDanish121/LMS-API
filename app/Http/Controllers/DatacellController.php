@@ -425,6 +425,8 @@ class DatacellController extends Controller
             }
             $Success=[];
             $Error=[];
+            $RawDataWithAllRequiredAttributes=[];
+        
             foreach ($Monday as $MondayRows) {
                 $Time = $MondayRows['A'];
                 $Day = 'Monday';
@@ -439,35 +441,40 @@ class DatacellController extends Controller
                         'end_time' => $endTimeFormatted,
                     ]
                 );
+              
                 $dayslotId = $dayslot->id;
-                
+              
                 foreach ($MondayRows as $index => $value) {
+                   
                    if($value==$Time){
                     continue;
-                   }
-                   if($value!=null&&$value!=''){
+                   }else if($value!=null&&$value!=''){
                     
                       $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
                       if($timetable){
                         $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
-                      }else{
+                      }else if($timetable==null||!$timetable){
                         $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
                       }
+                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
                     }else{
                         continue;
                     }
                 }
             }
 
-            ////////////////////////////////////////////Tuesday///////////////////////////////////////
-            foreach ($Tuesday as $MondayRows) {
-                $Time = $MondayRows['A'];
+
+
+
+            foreach ($Tuesday as $TuesdayRows) {
+                $Time = $TuesdayRows['A'];
                 $Day = 'Tuesday';
                 list($startTime, $endTime) = explode(' - ', $Time);
                 $startTimeFormatted = convertTo24HourFormat($startTime);
                 $endTimeFormatted = convertTo24HourFormat($endTime);
+                
                 $dayslot = dayslot::firstOrCreate(
                     [
                         'day' => $Day,
@@ -476,31 +483,37 @@ class DatacellController extends Controller
                     ]
                 );
                 $dayslotId = $dayslot->id;
-                $values = array_values($Monday);
-
-                foreach ($values as $index => $value) {
+                
+                foreach ($TuesdayRows as $index => $value) {
                    if($value==$Time){
                     continue;
-                   }
-                   if($value!=null&&$value!=''){
+                   }else if($value!=null&&$value!=''){
                       $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
                       if($timetable){
                         $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
-                      }else{
+                      }else if($timetable==null||!$timetable){
                         $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
                       }
+                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
+                    }else{
+                        continue;
                     }
                 }
             }
-            ///////////////////////////////////////////////////WED////////////////////////////////////
-            foreach ($Wednesday as $MondayRows) {
-                $Time = $MondayRows['A'];
+
+
+
+
+            /////////////////////////////////////////////////wed///////////////////////////
+            foreach ($Wednesday as $WedRows) {
+                $Time = $WedRows['A'];
                 $Day = 'Wednesday';
                 list($startTime, $endTime) = explode(' - ', $Time);
                 $startTimeFormatted = convertTo24HourFormat($startTime);
                 $endTimeFormatted = convertTo24HourFormat($endTime);
+                
                 $dayslot = dayslot::firstOrCreate(
                     [
                         'day' => $Day,
@@ -509,31 +522,33 @@ class DatacellController extends Controller
                     ]
                 );
                 $dayslotId = $dayslot->id;
-                $values = array_values($Monday);
-
-                foreach ($values as $index => $value) {
+                
+                foreach ($WedRows as $index => $value) {
                    if($value==$Time){
                     continue;
-                   }
-                   if($value!=null&&$value!=''){
+                   }else if($value!=null&&$value!=''){
                       $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
                       if($timetable){
                         $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
-                      }else{
+                      }else if($timetable==null||!$timetable){
                         $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
                       }
+                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
+                    }else{
+                        continue;
                     }
                 }
             }
-            /////////////////////////////////////////////////////////////////////THURSDAY///////////////
-            foreach ($Thursday as $MondayRows) {
-                $Time = $MondayRows['A'];
+
+            foreach ($Thursday as $ThuRows) {
+                $Time = $ThuRows['A'];
                 $Day = 'Thursday';
                 list($startTime, $endTime) = explode(' - ', $Time);
                 $startTimeFormatted = convertTo24HourFormat($startTime);
                 $endTimeFormatted = convertTo24HourFormat($endTime);
+                
                 $dayslot = dayslot::firstOrCreate(
                     [
                         'day' => $Day,
@@ -542,31 +557,33 @@ class DatacellController extends Controller
                     ]
                 );
                 $dayslotId = $dayslot->id;
-                $values = array_values($Monday);
-
-                foreach ($values as $index => $value) {
+                
+                foreach ($ThuRows as $index => $value) {
                    if($value==$Time){
                     continue;
-                   }
-                   if($value!=null&&$value!=''){
+                   }else if($value!=null&&$value!=''){
                       $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
                       if($timetable){
                         $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
-                      }else{
+                      }else if($timetable==null||!$timetable){
                         $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
                       }
+                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
+                    }else{
+                        continue;
                     }
                 }
             }
-            //////////////////////////////////////////////////////////////////FRIDAY/////////////////////////////
-            foreach ($Firday as $MondayRows) {
-                $Time = $MondayRows['A'];
+
+            foreach ($Firday as $FriRows) {
+                $Time = $FriRows['A'];
                 $Day = 'Friday';
                 list($startTime, $endTime) = explode(' - ', $Time);
                 $startTimeFormatted = convertTo24HourFormat($startTime);
                 $endTimeFormatted = convertTo24HourFormat($endTime);
+                
                 $dayslot = dayslot::firstOrCreate(
                     [
                         'day' => $Day,
@@ -575,21 +592,22 @@ class DatacellController extends Controller
                     ]
                 );
                 $dayslotId = $dayslot->id;
-                $values = array_values($Monday);
-
-                foreach ($values as $index => $value) {
+                
+                foreach ($FriRows as $index => $value) {
                    if($value==$Time){
                     continue;
-                   }
-                   if($value!=null&&$value!=''){
+                   }else if($value!=null&&$value!=''){
                       $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
                       if($timetable){
                         $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
-                      }else{
+                      }else if($timetable==null||!$timetable){
                         $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
                         "Raw Data"=>$value];
                       }
+                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
+                    }else{
+                        continue;
                     }
                 }
             }
@@ -598,7 +616,7 @@ class DatacellController extends Controller
                     'Message'=>'Data Inserted Successfully !',
                     'data' => [
                         "Sucess" =>$Success,
-                        "Not Inserted" =>$Error,
+                        "Error"=>$Error
                     ]
                 ],
                 200
