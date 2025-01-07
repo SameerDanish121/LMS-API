@@ -237,7 +237,7 @@ class DatacellController extends Controller
     }
 
 
-    public function uploadExcel(Request $request)
+    public function OfferedCourseTeacheruploadExcel(Request $request)
     {
         try {
             $request->validate([
@@ -644,4 +644,48 @@ class DatacellController extends Controller
 
 
     }
+
+
+
+
+
+
+
+    ///////////////////////////////////////////////////////UNDER TEST///////////////////
+    public function getTimetableGroupedBySection(Request $request)
+    {
+    $session_id = $request->session_id ?? (new Session())->getCurrentSessionId();
+    if (!$session_id) {
+        return response()->json(['error' => 'Session ID is required.'], 400);
+    }
+
+    $timetable = Timetable::with([
+        'course:name,id,description',
+        'teacher:name,id',
+        'venue:venue,id',
+        'dayslot:day,start_time,end_time,id',
+        'juniorLecturer:id,name',
+    ])
+        ->where('session_id', $session_id)
+        ->get()
+        ->map(function ($item) {
+            return [
+                'section' => (new Section())->getNameByID($item->section_id) ?? 'N/A',
+                    'name' => $item->course->name ?? 'N/A',
+                    'description' => $item->course->description ?? 'N/A',
+                'teacher' => $item->teacher->name ?? 'N/A',
+                'junior_lecturer' => $item->juniorLecturer->name ?? 'N/A',
+                'venue' => $item->venue->venue ?? 'N/A',
+                'day' => $item->dayslot->day ?? 'N/A',
+                'time' => ($item->dayslot->start_time && $item->dayslot->end_time)
+                    ? Carbon::parse($item->dayslot->start_time)->format('g:i A') . ' - ' . Carbon::parse($item->dayslot->end_time)->format('g:i A')
+                    : 'N/A',
+            ];
+        })
+        ->groupBy('section'); // Group the data by 'section'
+
+    return response()->json($timetable, 200);
+}
+
+
 }

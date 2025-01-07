@@ -53,8 +53,8 @@ class section extends Model
     {
         if(!preg_match('/([A-Za-z]+)-(\d+)([A-Za-z]+)/', $name, $matches))
         {
-throw new Exception('Section REGEX NOT MATECHED');
-        }
+          return null;
+        }else
         if (!empty($matches)) {
             $programType = $matches[1];
             $semester = $matches[2];

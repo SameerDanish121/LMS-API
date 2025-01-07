@@ -15,6 +15,8 @@ use App\Http\Controllers\DatacellController;
 
 Route::get('/Login', [StudentController::class, 'Login']);
 
+Route::post('/ImageUpload', [TestController::class,'upload']);
+
 
 //////////////////////////////////////////////////////~api/Student///////////////////////////////////////////////
 
@@ -25,6 +27,7 @@ Route::prefix('Student')->group(function () {
     Route::get('/attendance', [StudentController::class,'getAttendance']);
     Route::get('/attendancePerSubject', [StudentController::class,'AttendancePerSubject']);
     Route::post('/submitTask', [StudentController::class,'submitAnswer']);
+     
 });
 
 
@@ -61,8 +64,9 @@ Route::prefix('Datacell')->group(function () {
     Route::get('/AllStudent', [DatacellController::class,'AllStudent']);
     Route::post('/NewOfferedCourse', [DatacellController::class,'AddNewOfferedCourse']);
     Route::post('/EnrollStudent', [DatacellController::class,'NewEnrollment']);
-    Route::post('/UploadTeacherCourse', [DatacellController::class,'uploadExcel']);
+    Route::post('/UploadTeacherCourse', [DatacellController::class,'OfferedCourseTeacheruploadExcel']);
     Route::post('/UploadTimetableExel', [DatacellController::class,'UploadTimetableExcel']);
+    Route::get('/timetable/grouped', [DatacellController::class, 'getTimetableGroupedBySection']);
     
 });
 
@@ -73,3 +77,5 @@ Route::prefix('Datacell')->group(function () {
 ////////////////////////////////////////////////////////~TESTING~///////////////////////////////
 
 Route::get('/checking', [TestController::class, 'Empty']);
+
+Route::post('/file-credentials', [TestController::class, 'getFileCredentials']);
