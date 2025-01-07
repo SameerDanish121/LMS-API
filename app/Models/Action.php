@@ -51,7 +51,6 @@ class Action extends Model
      */
     private static function getFileExtension($fileType)
     {
-        // Mapping of file types to extensions
         $mimeTypeMap = [
             'pdf' => 'pdf',
             'jpg' => 'jpg',

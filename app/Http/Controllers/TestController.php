@@ -18,34 +18,8 @@ class TestController extends Controller
     public function upload(Request $request)
     {
 
-        return FileHandler::storeFile('CC-LAB','Course Content/Fall-2024',$request->file('file'));
+        return FileHandler::deleteFileByPath($request->file);
     }
-    public function uploadFile(Request $request)
-    {
-       
-        try {
-        
-            $file = $request->file('file');
-            //$filedata=FileHandler::getFileData($file);
-            if (!$file->isValid()) {
-                throw new Exception('The uploaded file is invalid.');
-            }
-            $filePath = $file->store('uploads', 'public'); // This stores the file in the 'storage/app/public/uploads' directory
-            $fileData = Storage::get($filePath);
-            return response()->json([
-                'success' => true,
-                'message' => 'File uploaded and stored successfully!',
-                'file_data' => $file->getPathname(),
-                'data'=>$fileData??'Hello'
-            ]);
-        } catch (Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
 
     public function Empty(Request $request)
     {

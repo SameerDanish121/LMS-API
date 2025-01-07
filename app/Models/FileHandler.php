@@ -8,6 +8,8 @@ use Exception;
 use Illuminate\Support\Facades\File;
 class FileHandler extends Model
 {
+
+
     public static function storeFile($fileName, $remainingDirectory, $file)
     {
         try {
@@ -35,6 +37,22 @@ class FileHandler extends Model
             return null;
         }
     }
+    public static function deleteFileByPath($filePath)
+    {
+        try {
+            if (file_exists(public_path($filePath))) {
+
+                unlink(public_path($filePath));
+                return 'File Deleted';
+            } else {
+                
+                    return 'File does not exist.';
+            }
+        } catch (Exception $e) {
+                return 'Error deleting file: ';
+        }
+    }
+
     public static function getFolderInfo($basePath = 'storage')
     {
         try {
@@ -69,11 +87,11 @@ class FileHandler extends Model
             $formattedSize = self::formatSize($folderSize);
             $subFolderDetails = self::scanFolder($subFolder, $basePath);
             $relativePath = str_replace(public_path() . '/', '', $subFolder);
-            $path =$relativePath;
+            $path = $relativePath;
             $trimmedPath = strstr($path, 'storage\\', false);
             $trimmedPath = ltrim($trimmedPath, 'storage\\');
             $trimmedPath = str_replace('\\', '/', $trimmedPath);
-            $relativePath=$trimmedPath;
+            $relativePath = $trimmedPath;
             $folders[] = [
                 'folder_name' => $folderName,
                 'path' => $relativePath,
