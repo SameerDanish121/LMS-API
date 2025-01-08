@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Action;
 use App\Models\dayslot;
+use App\Models\FileHandler;
 use App\Models\teacher;
 use Exception;
 use GrahamCampbell\ResultType\Success;
@@ -33,6 +34,59 @@ use Illuminate\Support\Facades\DB;
 use function Laravel\Prompts\select;
 class DatacellController extends Controller
 {
+
+    public function Archives(Request $request)
+    {
+        try {
+            if ($request->directory) {
+                $directory_details = FileHandler::getFolderInfo($request->directory);
+                if (!$directory_details) {
+                    throw new Exception('No Directory Exsist with the Given Name');
+                }
+            } else {
+                $directory_details = FileHandler::getFolderInfo();
+            }
+            return response()->json(
+                [
+                    'message' => 'Directory Details Fetched !',
+                    'Details' => $directory_details,
+                ],
+                200
+            );
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function DeleteFolderByPath(Request $request)
+    {
+        try {
+            if ($request->path) {
+                $isFolderDeleted=FileHandler::deleteFolder($request->path);
+                if (!$isFolderDeleted) {
+                    throw new Exception('No Directory Exsist with the Given Path');
+                }
+            } else {
+                throw new Exception('Folder PATH OR Name is Required , Please Select Valid Folder !');
+            }
+            return response()->json(
+                [
+                    'message' => 'Folder Deleted Successfully !',
+                    'logs'=>" Deleted {$isFolderDeleted} Of Data  "
+                ],
+                200
+            );
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
     public function AllStudent(Request $request)
     {
         try {
@@ -423,17 +477,17 @@ class DatacellController extends Controller
             {
                 return date("H:i:s", strtotime($time));
             }
-            $Success=[];
-            $Error=[];
-            $RawDataWithAllRequiredAttributes=[];
-        
+            $Success = [];
+            $Error = [];
+            $RawDataWithAllRequiredAttributes = [];
+
             foreach ($Monday as $MondayRows) {
                 $Time = $MondayRows['A'];
                 $Day = 'Monday';
                 list($startTime, $endTime) = explode(' - ', $Time);
                 $startTimeFormatted = convertTo24HourFormat($startTime);
                 $endTimeFormatted = convertTo24HourFormat($endTime);
-                
+
                 $dayslot = dayslot::firstOrCreate(
                     [
                         'day' => $Day,
@@ -441,25 +495,31 @@ class DatacellController extends Controller
                         'end_time' => $endTimeFormatted,
                     ]
                 );
-              
+
                 $dayslotId = $dayslot->id;
-              
+
                 foreach ($MondayRows as $index => $value) {
-                   
-                   if($value==$Time){
-                    continue;
-                   }else if($value!=null&&$value!=''){
-                    
-                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
-                      if($timetable){
-                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }else if($timetable==null||!$timetable){
-                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }
-                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
-                    }else{
+
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            $Success[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
+                    } else {
                         continue;
                     }
                 }
@@ -474,7 +534,7 @@ class DatacellController extends Controller
                 list($startTime, $endTime) = explode(' - ', $Time);
                 $startTimeFormatted = convertTo24HourFormat($startTime);
                 $endTimeFormatted = convertTo24HourFormat($endTime);
-                
+
                 $dayslot = dayslot::firstOrCreate(
                     [
                         'day' => $Day,
@@ -483,21 +543,27 @@ class DatacellController extends Controller
                     ]
                 );
                 $dayslotId = $dayslot->id;
-                
+
                 foreach ($TuesdayRows as $index => $value) {
-                   if($value==$Time){
-                    continue;
-                   }else if($value!=null&&$value!=''){
-                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
-                      if($timetable){
-                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }else if($timetable==null||!$timetable){
-                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }
-                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
-                    }else{
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            $Success[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
+                    } else {
                         continue;
                     }
                 }
@@ -513,7 +579,7 @@ class DatacellController extends Controller
                 list($startTime, $endTime) = explode(' - ', $Time);
                 $startTimeFormatted = convertTo24HourFormat($startTime);
                 $endTimeFormatted = convertTo24HourFormat($endTime);
-                
+
                 $dayslot = dayslot::firstOrCreate(
                     [
                         'day' => $Day,
@@ -522,21 +588,27 @@ class DatacellController extends Controller
                     ]
                 );
                 $dayslotId = $dayslot->id;
-                
+
                 foreach ($WedRows as $index => $value) {
-                   if($value==$Time){
-                    continue;
-                   }else if($value!=null&&$value!=''){
-                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
-                      if($timetable){
-                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }else if($timetable==null||!$timetable){
-                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }
-                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
-                    }else{
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            $Success[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
+                    } else {
                         continue;
                     }
                 }
@@ -548,7 +620,7 @@ class DatacellController extends Controller
                 list($startTime, $endTime) = explode(' - ', $Time);
                 $startTimeFormatted = convertTo24HourFormat($startTime);
                 $endTimeFormatted = convertTo24HourFormat($endTime);
-                
+
                 $dayslot = dayslot::firstOrCreate(
                     [
                         'day' => $Day,
@@ -557,21 +629,27 @@ class DatacellController extends Controller
                     ]
                 );
                 $dayslotId = $dayslot->id;
-                
+
                 foreach ($ThuRows as $index => $value) {
-                   if($value==$Time){
-                    continue;
-                   }else if($value!=null&&$value!=''){
-                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
-                      if($timetable){
-                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }else if($timetable==null||!$timetable){
-                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }
-                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
-                    }else{
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            $Success[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
+                    } else {
                         continue;
                     }
                 }
@@ -583,7 +661,7 @@ class DatacellController extends Controller
                 list($startTime, $endTime) = explode(' - ', $Time);
                 $startTimeFormatted = convertTo24HourFormat($startTime);
                 $endTimeFormatted = convertTo24HourFormat($endTime);
-                
+
                 $dayslot = dayslot::firstOrCreate(
                     [
                         'day' => $Day,
@@ -592,31 +670,37 @@ class DatacellController extends Controller
                     ]
                 );
                 $dayslotId = $dayslot->id;
-                
+
                 foreach ($FriRows as $index => $value) {
-                   if($value==$Time){
-                    continue;
-                   }else if($value!=null&&$value!=''){
-                      $timetable=Action::insertOrCreateTimetable($value,$dayslotId);
-                      if($timetable){
-                        $Success[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }else if($timetable==null||!$timetable){
-                        $Error[]=["Day"=>$Day,"Time"=>$startTimeFormatted.''.$endTimeFormatted,
-                        "Raw Data"=>$value];
-                      }
-                    $RawDataWithAllRequiredAttributes[]=["Value"=>$value,"DaySlot"=>$dayslotId,"Day"=>$dayslot->day];
-                    }else{
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            $Success[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
+                    } else {
                         continue;
                     }
                 }
             }
             return response()->json(
                 [
-                    'Message'=>'Data Inserted Successfully !',
+                    'Message' => 'Data Inserted Successfully !',
                     'data' => [
-                        "Sucess" =>$Success,
-                        "Error"=>$Error
+                        "Sucess" => $Success,
+                        "Error" => $Error
                     ]
                 ],
                 200
@@ -644,48 +728,43 @@ class DatacellController extends Controller
 
 
     }
-
-
-
-
-
-
-
     ///////////////////////////////////////////////////////UNDER TEST///////////////////
     public function getTimetableGroupedBySection(Request $request)
     {
-    $session_id = $request->session_id ?? (new Session())->getCurrentSessionId();
-    if (!$session_id) {
-        return response()->json(['error' => 'Session ID is required.'], 400);
-    }
-
-    $timetable = Timetable::with([
-        'course:name,id,description',
-        'teacher:name,id',
-        'venue:venue,id',
-        'dayslot:day,start_time,end_time,id',
-        'juniorLecturer:id,name',
-    ])
-        ->where('session_id', $session_id)
-        ->get()
-        ->map(function ($item) {
-            return [
-                'section' => (new Section())->getNameByID($item->section_id) ?? 'N/A',
+        $session_id = $request->session_id ?? (new Session())->getCurrentSessionId();
+        if (!$session_id) {
+            return response()->json(['error' => 'Session ID is required.'], 400);
+        }
+        $timetable = Timetable::with([
+            'course:name,id,description',
+            'teacher:name,id',
+            'venue:venue,id',
+            'dayslot:day,start_time,end_time,id',
+            'juniorLecturer:id,name',
+        ])
+            ->where('session_id', $session_id)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'section' => (new Section())->getNameByID($item->section_id) ?? 'N/A',
                     'name' => $item->course->name ?? 'N/A',
                     'description' => $item->course->description ?? 'N/A',
-                'teacher' => $item->teacher->name ?? 'N/A',
-                'junior_lecturer' => $item->juniorLecturer->name ?? 'N/A',
-                'venue' => $item->venue->venue ?? 'N/A',
-                'day' => $item->dayslot->day ?? 'N/A',
-                'time' => ($item->dayslot->start_time && $item->dayslot->end_time)
-                    ? Carbon::parse($item->dayslot->start_time)->format('g:i A') . ' - ' . Carbon::parse($item->dayslot->end_time)->format('g:i A')
-                    : 'N/A',
-            ];
-        })
-        ->groupBy('section'); // Group the data by 'section'
+                    'teacher' => $item->teacher->name ?? 'N/A',
+                    'junior_lecturer' => $item->juniorLecturer->name ?? 'N/A',
+                    'venue' => $item->venue->venue ?? 'N/A',
+                    'day' => $item->dayslot->day ?? 'N/A',
+                    'time' => ($item->dayslot->start_time && $item->dayslot->end_time)
+                        ? Carbon::parse($item->dayslot->start_time)->format('g:i A') . ' - ' . Carbon::parse($item->dayslot->end_time)->format('g:i A')
+                        : 'N/A',
+                ];
+            })
+            ->groupBy('section');
 
-    return response()->json($timetable, 200);
-}
+        return response()->json([
+            "status"=>"Successfull",
+            "timetable"=>$timetable,
+        ], 200);
+    }
 
 
 }

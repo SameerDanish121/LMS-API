@@ -18,7 +18,7 @@ class TestController extends Controller
     public function upload(Request $request)
     {
 
-        return FileHandler::deleteFileByPath($request->file);
+        return FileHandler::sendDirectoryAsZip($request->file);
     }
 
     public function Empty(Request $request)

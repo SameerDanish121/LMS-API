@@ -5,11 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 use Exception;
+use Illuminate\Support\Facades\Response;
+use ZipArchive;
 use Illuminate\Support\Facades\File;
+
 class FileHandler extends Model
 {
-
-
     public static function storeFile($fileName, $remainingDirectory, $file)
     {
         try {
@@ -45,18 +46,22 @@ class FileHandler extends Model
                 unlink(public_path($filePath));
                 return 'File Deleted';
             } else {
-                
-                    return 'File does not exist.';
+
+                return 'File does not exist.';
             }
         } catch (Exception $e) {
-                return 'Error deleting file: ';
+            return 'Error deleting file: ';
         }
     }
 
-    public static function getFolderInfo($basePath = 'storage')
+    public static function getFolderInfo($basePath=null)
     {
         try {
-
+            if (!$basePath) {
+                $basePath = 'storage';
+            }else{
+                $basePath = "storage/{$basePath}";
+            }
             $path = public_path($basePath);
             if (!File::exists($path)) {
                 throw new Exception("The base directory does not exist: {$basePath}");
@@ -99,10 +104,8 @@ class FileHandler extends Model
                 'sub_folders' => $subFolderDetails,
             ];
         }
-
         return $folders;
     }
-
     private static function calculateFolderSize($folderPath)
     {
         $size = 0;
@@ -131,14 +134,66 @@ class FileHandler extends Model
         try {
             $fullFolderPath = public_path('storage/' . $relativeFolderPath);
             if (File::exists($fullFolderPath)) {
+                $size=self::calculateFolderSize($fullFolderPath);
+                $size=self::formatSize($size);
                 File::deleteDirectory($fullFolderPath);
-                return true;
+                return $size;
+            }else{
+                throw new Exception('No Folder Exsist in Base Directory with provided path');
             }
-            return false;
         } catch (Exception $e) {
             return false;
         }
     }
+
+
+
+    //////////////////////////////////////////////////////////Faltu Bakwas//////////////////////////////////////////////
+
+    public static function sendDirectoryAsZip($directory)
+    {
+        try {
+            $directoryPath = public_path($directory);
+            if (!File::exists($directoryPath)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Directory does not exist.'
+                ]);
+            }
+            $zipFileName = 'directory_' . time() . '.zip';
+            $zipFilePath = public_path('temp/' . $zipFileName);
+            $zip = new ZipArchive;
+            if ($zip->open($zipFilePath, ZipArchive::CREATE) === TRUE) {
+                self::addDirectoryToZip($zip, $directoryPath, basename($directoryPath));
+                $zip->close();
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create ZIP file.'
+                ]);
+            }
+            return response()->download($zipFilePath)->deleteFileAfterSend(true);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    private static function addDirectoryToZip($zip, $dirPath, $baseFolder)
+    {
+        $files = File::allFiles($dirPath);
+        foreach ($files as $file) {
+            $zip->addFile($file->getRealPath(), $baseFolder . '/' . $file->getRelativePathname());
+        }
+        $directories = File::directories($dirPath);
+        foreach ($directories as $directory) {
+            self::addDirectoryToZip($zip, $directory, $baseFolder);
+        }
+    }
+
 }
 
 

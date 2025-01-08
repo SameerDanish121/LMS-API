@@ -5,11 +5,14 @@ use App\Models\Action;
 use App\Models\admin;
 use App\Models\excluded_days;
 use App\Models\juniorlecturer;
+use App\Models\StudentManagement;
 use Illuminate\Support\Str;
 use App\Mail\ForgotPasswordMail;
 use Illuminate\Support\Facades\Mail;
 use App\Models\datacell;
 use App\Models\teacher;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use App\Models\attendance;
 use App\Models\course;
@@ -26,7 +29,6 @@ use App\Models\teacher_offered_courses;
 use App\Models\timetable;
 use App\Models\User;
 use Exception;
-use Illuminate\Http\Request;
 use App\Models;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Validation\ValidationException;
@@ -416,10 +418,10 @@ class StudentController extends Controller
         try {
             $student_id = $request->student_id;
             $course_id = $request->course_id;
-            if(!$student_id){
+            if (!$student_id) {
                 throw new Exception('Student ID IS Required');
             }
-            if(!$course_id){
+            if (!$course_id) {
                 throw new Exception('Course ID IS Required');
             }
         } catch (Exception $e) {
@@ -455,6 +457,139 @@ class StudentController extends Controller
             ], 500);
         }
     }
+    public function StudentCurrentEnrollmentsName(Request $request)
+    {
+        try {
+            $request->validate([
+                'student_id' => 'required',
+            ]);
+            $id= $request->student_id;
+            $names=StudentManagement::getActiveEnrollmentCoursesName($id);
+            return response()->json([
+                'success' => true,
+                'message' => $names
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function StudentAllEnrollmentsName(Request $request)
+    {
+        try {
+            $request->validate([
+                'student_id' => 'required',
+            ]);
+            $id= $request->student_id;
+            $names=StudentManagement::getAllEnrollmentCoursesName($id);
+            return response()->json([
+                'success' => true,
+                'message' => $names
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function updateStudentImage(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'student_id' => 'required', 
+            'image' => 'required', 
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+
+        try {
+            $student_id = $request->student_id;
+            $file = $request->file('image');
+            $responseMessage =StudentManagement::updateStudentImage($student_id, $file);
+            return response()->json([
+                'success' => true,
+                'message' => $responseMessage
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400); 
+        }
+    }
+    public function updatePassword(Request $request)
+    {
+        try {
+            $request->validate([
+                'student_id' => 'required',
+                'newPassword' => 'required',
+            ]);
+            $responseMessage = StudentManagement::updateStudentPassword(
+                $request->student_id,
+                $request->newPassword
+            );
+            return response()->json([
+                'success' => true,
+                'message' => $responseMessage
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
     public function sendForgotPasswordEmail(Request $request)
     {
         $email = $request->email;
@@ -468,7 +603,7 @@ class StudentController extends Controller
             });
 
             return response()->json(['message' => 'OTP sent successfully']);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json(['message' => 'Failed to send email', 'error' => $e->getMessage()], 500);
         }
     }
