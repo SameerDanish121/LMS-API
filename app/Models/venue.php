@@ -18,4 +18,8 @@ class venue extends Model
     {
         return $this->hasMany(Timetable::class, 'venue_id', 'id');
     }
+    public function attendances()
+   {
+       return $this->hasMany(Attendance::class, 'venue_id', 'id');
+   }
 }

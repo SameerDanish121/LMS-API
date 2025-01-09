@@ -5,7 +5,10 @@ use App\Models\Action;
 use App\Models\admin;
 use App\Models\excluded_days;
 use App\Models\juniorlecturer;
+use App\Models\program;
 use App\Models\StudentManagement;
+use App\Models\subjectresult;
+use App\Models\teacher_juniorlecturer;
 use Illuminate\Support\Str;
 use App\Mail\ForgotPasswordMail;
 use Illuminate\Support\Facades\Mail;
@@ -49,17 +52,10 @@ class StudentController extends Controller
             if (!$teacher_offered_course_id || !$student_id) {
                 throw new Exception('Please Provide Values in request Properly');
             }
-            $attendance = attendance::getSubjectAttendance($teacher_offered_course_id, $student_id);
-            $totalPresent = $attendance->where('status', 'p')->count();
-            $totalAbsent = $attendance->where('status', 'a')->count();
-            $total_Classes = $totalPresent + $totalAbsent;
-            $percentage = ($totalPresent / $total_Classes) * 100;
+            $attendance = attendance::getAttendanceBySubject($teacher_offered_course_id, $student_id);
             return response()->json([
                 'status' => 'Attendance Fetched Successfully',
-                'Percentage' => $percentage,
-                'Presents' => $totalPresent,
-                'Absents' => $totalAbsent,
-                'Attendance' => $attendance
+                'data' => $attendance
             ], 200);
         } catch (Exception $e) {
             return response()->json([
@@ -730,7 +726,138 @@ class StudentController extends Controller
             ], 500);
         }
     }
-    
+    public function ContestAttendance(Request $request){
+        try {
+            $request->validate([
+                'attendance_id' => 'required',
+            ]);
+            $id=$request->attendance_id;
+            $responseMessage =StudentManagement::createContestedAttendance($id);
+            return response()->json([
+                'success' => 'Fetcehd Successfully !',
+                'Course Content' => $responseMessage?'Your attendance contest has been successfully submitted and is now under review.'
+                :'You have already submitted a contest for this attendance. It is currently pending review.'
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function GetActiveEnrollments(Request $request){
+        try {
+            $request->validate([
+                'student_id' => 'required',
+            ]);
+            $id=$request->student_id;
+            $responseMessage =StudentManagement::getYourEnrollments($id);
+            return response()->json([
+                'success' => 'Fetcehd Successfully !',
+                'Course Content' => $responseMessage
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function getYourPreviousEnrollments(Request $request){
+        try {
+            $request->validate([
+                'student_id' => 'required',
+            ]);
+            $id=$request->student_id;
+            $responseMessage =StudentManagement::getYourPreviousEnrollments($id);
+            return response()->json([
+                'success' => 'Fetcehd Successfully !',
+                'Course Content' => $responseMessage
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function TranscriptSessionDropDown(Request $request){
+        try {
+            $request->validate([
+                'student_id' => 'required',
+            ]);
+            $id=$request->student_id;
+            $responseMessage =StudentManagement:: getSessionIdsByStudentId($id);
+            return response()->json([
+                'success' => 'Fetcehd Successfully !',
+                'Records' => $responseMessage
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+   
     ////////////////////////////////////////////////////EXTRASSSSSSSSSSSSSSSSSSSS///////////////////
     public function sendForgotPasswordEmail(Request $request)
     {

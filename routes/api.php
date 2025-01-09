@@ -35,6 +35,10 @@ Route::prefix('Student')->group(function () {
     Route::get('/subject/task-result', [StudentController::class, 'GetSubjectTaskResult']);
     Route::get('/course-content', [StudentController::class, 'GetFullCourseContentOfSubject']);
     Route::get('/course-content/week', [StudentController::class, 'GetFullCourseContentOfSubjectByWeek']);
+    Route::post('/contest-attendance', [StudentController::class, 'ContestAttendance']);
+    Route::get('/getActiveEnrollments', [StudentController::class, 'getActiveEnrollments']);
+    Route::get('/getPreviousEnrollments', [StudentController::class, 'getYourPreviousEnrollments']);
+    Route::get('/TranscriptSessionDropDown', [StudentController::class, 'TranscriptSessionDropDown']);
     
 });
 

@@ -10,6 +10,24 @@ class StudentManagement extends Model
     // 'RegNo', 'name', 'cgpa', 'gender', 'date_of_birth', 
     // 'guardian', 'image', 'user_id', 'section_id', 'program_id', 
     // 'session_id', 'status'
+
+    public static function getSessionIdsByStudentId($student_id)
+    {
+        if (!$student_id) {
+            throw new Exception('Student ID is required.');
+        }
+
+        $sessionIds = student_offered_courses::where('student_id', $student_id)
+            ->join('offered_courses', 'student_offered_courses.offered_course_id', '=', 'offered_courses.id')
+            ->distinct()
+            ->pluck('offered_courses.session_id');
+        $sessionInfo = [];
+        foreach ($sessionIds as $s) {
+            $sessionInfo[] = ["ID" => $s, "Name" => (new session())->getSessionNameByID($s)];
+        }
+        return $sessionInfo;
+    }
+
     public static function updateStudentPassword($student_id, $newPassword)
     {
         $student = student::find($student_id);
@@ -325,7 +343,7 @@ class StudentManagement extends Model
                     $topics[] = [
                         'topic_id' => $topic->id,
                         'topic_name' => $topic->title,
-                        'status' => $status->Status==1?'Covered':'Not-Covered',
+                        'status' => $status->Status == 1 ? 'Covered' : 'Not-Covered',
                     ];
                 }
             }
@@ -334,7 +352,7 @@ class StudentManagement extends Model
                 'title' => $courseContent->title,
                 'type' => $courseContent->type,
                 'week' => $courseContent->week,
-                'File' =>FileHandler::getFileByPath($courseContent->content),
+                'File' => FileHandler::getFileByPath($courseContent->content),
                 'topics' => $topics,
             ];
         }
@@ -346,13 +364,13 @@ class StudentManagement extends Model
         $teacherOfferedCourse = teacher_offered_courses::where('offered_course_id', $offered_course_id)
             ->where('section_id', $section_id)
             ->first();
-    
+
         if (!$teacherOfferedCourse) {
             return [
                 'error' => 'No teacher offered course found for the given section and offered course.'
             ];
         }
-    
+
         $teacher_offered_course_id = $teacherOfferedCourse->id;
         $query = coursecontent::where('offered_course_id', $offered_course_id);
         if (!is_null($weekNo)) {
@@ -360,20 +378,20 @@ class StudentManagement extends Model
         }
         $courseContents = $query->get();
         $result = [];
-    
+
         foreach ($courseContents as $courseContent) {
             $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
             $topics = [];
-    
+
             foreach ($courseContentTopics as $courseContentTopic) {
                 $topic = topic::find($courseContentTopic->topic_id);
-    
+
                 if ($topic) {
                     $status = t_coursecontent_topic_status::where('coursecontent_id', $courseContent->id)
                         ->where('topic_id', $topic->id)
                         ->where('teacher_offered_courses_id', $teacher_offered_course_id)
                         ->first();
-    
+
                     $topics[] = [
                         'topic_id' => $topic->id,
                         'topic_name' => $topic->title,
@@ -381,7 +399,7 @@ class StudentManagement extends Model
                     ];
                 }
             }
-    
+
             $result[] = [
                 'course_content_id' => $courseContent->id,
                 'title' => $courseContent->title,
@@ -391,8 +409,143 @@ class StudentManagement extends Model
                 'topics' => $topics,
             ];
         }
-    
+
         return $result;
     }
-    
+    public static function createContestedAttendance($attendanceId)
+    {
+        $existingRecord = contested_attendance::where('Attendance_id', $attendanceId)->first();
+        if (!$existingRecord) {
+            $contestedAttendance = contested_attendance::create([
+                'Attendance_id' => $attendanceId,
+                'Status' => 'Pending',
+                'isResolved' => 0
+            ]);
+            return $contestedAttendance;
+        }
+        return null;
+    }
+    public static function getYourEnrollments($student_id)
+    {
+        $currentSessionId = (new session())->getCurrentSessionId();
+        if ($currentSessionId == 0) {
+            throw new Exception('No Active Session Found');
+        }
+        $offeredCourses = offered_courses::where('session_id', $currentSessionId)->get();
+        $courses = [];
+        foreach ($offeredCourses as $offeredCourse) {
+            $enrolledCourse = student_offered_courses::where('student_id', $student_id)
+                ->where('offered_course_id', $offeredCourse->id)
+                ->whereHas('offeredCourse', function ($query) use ($currentSessionId) {
+                    $query->where('session_id', $currentSessionId);
+                })
+                ->first();
+            if ($enrolledCourse) {
+                $teacherOfferedCourse = teacher_offered_courses::where('offered_course_id', $offeredCourse->id)
+                    ->where('section_id', $enrolledCourse->section_id)
+                    ->first();
+
+                $teacherName = null;
+                $juniorLecturerName = null;
+                if ($teacherOfferedCourse) {
+
+                    $teacher = teacher::find($teacherOfferedCourse->teacher_id);
+                    $teacherName = $teacher ? $teacher->name : null;
+
+
+                    $juniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
+                    if ($juniorLecturer) {
+                        $juniorLecturerName = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('name');
+                    }
+                }
+                $course = Course::where('id', $offeredCourse->course_id)->first();
+                $courseDetails = [
+                    'course_name' => $course->name,
+                    'course_code' => $course->code,
+                    'credit_hours' => $course->credit_hours,
+                    'Type' => $course->type,
+                    'Short Form' => $course->description,
+                    'Pre-Requisite/Main' => $course->pre_req_main == null
+                        ? 'Main' : Course::where('id', $course->pre_req_main)->value('name'),
+                    'section' => (new section())->getNameByID($enrolledCourse->section_id),
+                    'program' => $course->program
+                        ? program::where('id', $course->program_id)->value('name')
+                        : 'N/A',
+                    'teacher_name' => ($teacher && $teacher->name) ? $teacher->name : 'N/A',  // Check if teacher exists and has a name
+                    'junior_lecturer_name' => ($juniorLecturerName) ? $juniorLecturerName : 'N/A',  // Check if junior lecturer exists and has a name
+                    'offered_course_id' => $offeredCourse->id,
+                ];
+
+                $courses[] = $courseDetails;
+            }
+        }
+
+        return $courses;
+    }
+    public static function getYourPreviousEnrollments($student_id)
+    {
+        $currentSessionId = (new session())->getCurrentSessionId();
+        if ($currentSessionId == 0) {
+            throw new Exception('No Active Session Found');
+        }
+        $offeredCourses = offered_courses::where('session_id', '!=', $currentSessionId)->get();
+        $courses = [];
+
+        foreach ($offeredCourses as $offeredCourse) {
+            $enrolledCourse = student_offered_courses::where('student_id', $student_id)
+                ->where('offered_course_id', $offeredCourse->id)
+                ->whereHas('offeredCourse', function ($query) use ($currentSessionId) {
+                    $query->where('session_id', '!=', $currentSessionId);  // Exclude the current session
+                })
+                ->first();
+
+            if ($enrolledCourse) {
+                $teacherOfferedCourse = teacher_offered_courses::where('offered_course_id', $offeredCourse->id)
+                    ->where('section_id', $enrolledCourse->section_id)
+                    ->first();
+
+                $teacherName = null;
+                $juniorLecturerName = null;
+                if ($teacherOfferedCourse) {
+
+                    $teacher = teacher::find($teacherOfferedCourse->teacher_id);
+                    $teacherName = $teacher ? $teacher->name : null;
+
+                    $juniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
+                    if ($juniorLecturer) {
+                        $juniorLecturerName = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('name');
+                    }
+                }
+                $course = Course::where('id', $offeredCourse->course_id)->first();
+                $subjectResult = subjectresult::where('student_offered_course_id', $enrolledCourse->id)->first();
+                if ($subjectResult) {
+                    $result = $enrolledCourse->grade == 'F' ? 'Failed' : $subjectResult;
+                } else {
+                    $result = $enrolledCourse->grade == 'F' ? 'Failed' : 'N/A';
+                }
+                $courseDetails = [
+                    'course_name' => $course->name,
+                    'course_code' => $course->code,
+                    'credit_hours' => $course->credit_hours,
+                    'Type' => $course->type,
+                    'Short Form' => $course->description,
+                    'Pre-Requisite/Main' => $course->pre_req_main == null
+                        ? 'Main' : Course::where('id', $course->pre_req_main)->value('name'),
+                    'section' => (new section())->getNameByID($enrolledCourse->section_id),
+                    'program' => $course->program
+                        ? program::where('id', $course->program_id)->value('name')
+                        : 'N/A',
+                    'teacher_name' => $teacherName ? $teacherName : 'N/A',
+                    'junior_lecturer_name' => ($juniorLecturerName) ? $juniorLecturerName : 'N/A',
+                    'offered_course_id' => $offeredCourse->id,
+                    'result Info' => $result,
+                    'grade' => $enrolledCourse->grade ?: 'N/A',
+                ];
+
+                $courses[] = $courseDetails;
+            }
+        }
+
+        return $courses;
+    }
 }
