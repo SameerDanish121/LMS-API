@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('task', function (Blueprint $table) {
@@ -17,8 +14,8 @@ return new class extends Migration
             $table->string('path')->nullable();
             $table->enum('CreatedBy', ['Teacher', 'Junior Lecturer'])->default('Teacher');
             $table->integer('points');
-            $table->date('start_date');
-            $table->date('due_date');
+            $table->datetime('start_date');
+            $table->datetime('due_date');
             $table->string('title')->nullable();
             $table->boolean('IsEvaluated')->nullable()->default(true);
             $table->integer('teacher_offered_course_id')->index('teacher_offered_course_id');

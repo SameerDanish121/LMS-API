@@ -118,7 +118,7 @@ class StudentManagement extends Model
         $offeredCourses = offered_courses::where('session_id', $currentSessionId)->get();
         $courses = [];
         foreach ($offeredCourses as $offeredCourse) {
-            $enrolledCourse =student_offered_courses::where('student_id', $student_id)
+            $enrolledCourse = student_offered_courses::where('student_id', $student_id)
                 ->where('offered_course_id', $offeredCourse->id)
                 ->whereHas('offeredCourse', function ($query) use ($currentSessionId) {
                     $query->where('session_id', $currentSessionId);
@@ -128,7 +128,8 @@ class StudentManagement extends Model
                 $courseName = $offeredCourse->course->name;
                 $courses[] = [
                     'course_name' => $courseName,
-                    'offered_course_id' => $offeredCourse->id
+                    'offered_course_id' => $offeredCourse->id,
+                    'section_id' => $enrolledCourse->section_id,
                 ];
             }
         }
@@ -136,11 +137,10 @@ class StudentManagement extends Model
     }
     public static function getAllEnrollmentCoursesName($student_id)
     {
-        $enrollments =student_offered_courses::where('student_id', $student_id)
+        $enrollments = student_offered_courses::where('student_id', $student_id)
             ->with(['offeredCourse.session', 'offeredCourse.course'])
             ->get();
         $courses = [];
-
         foreach ($enrollments as $enrollment) {
             $offeredCourse = $enrollment->offeredCourse;
             $session = $offeredCourse->session;
@@ -148,7 +148,9 @@ class StudentManagement extends Model
                 $courses[] = [
                     'course_name' => $offeredCourse->course->name,
                     'offered_course_id' => $offeredCourse->id,
-                    'session_start_date' => $session->start_date
+                    'section_id' => $offeredCourse->section_id,
+                    'session_start_date' => $session->start_date,
+
                 ];
             }
         }
@@ -165,4 +167,232 @@ class StudentManagement extends Model
         });
         return $courses;
     }
+    public static function getAllTask($student_id)
+    {
+
+        $enrolledCourses = self::getActiveEnrollmentCoursesName($student_id);
+        $tasksGrouped = [
+            'Pending Tasks' => [],
+            'Upcoming Tasks' => [],
+            'Completed Tasks' => [],
+        ];
+        foreach ($enrolledCourses as $enrollment) {
+            $sectionId = $enrollment['section_id'];
+            $offeredCourseId = $enrollment['offered_course_id'];
+            $teacherOfferedCourse = teacher_offered_courses::where('section_id', $sectionId)
+                ->where('offered_course_id', $offeredCourseId)
+                ->first();
+            if ($teacherOfferedCourse) {
+                $teacherOfferedCourseId = $teacherOfferedCourse->id;
+                $tasks = task::where('teacher_offered_course_id', $teacherOfferedCourseId)->get();
+                foreach ($tasks as $task) {
+                    $currentDate = now();
+                    $taskDetails = [
+                        'task_id' => $task->id,
+                        'title' => $task->title,
+                        'type' => $task->type,
+                        'points' => $task->points,
+                        'start_date' => $task->start_date,
+                        'due_date' => $task->due_date,
+                        $task->type => FileHandler::getFileByPath($task->path) ?? null
+                    ];
+                    if ($task->CreatedBy === 'Teacher') {
+                        $teacher = teacher::where('id', $teacherOfferedCourse->teacher_id)->first();
+                        $taskDetails['creator_type'] = 'Teacher';
+                        $taskDetails['creator_name'] = $teacher->name ?? 'Unknown';
+                    } else if ($task->CreatedBy === 'Junior Lecturer') {
+                        $juniorLecturer = juniorlecturer::where('id', $teacherOfferedCourse->teacher_id)->first();
+                        $taskDetails['creator_type'] = 'Junior Lecturer';
+                        $taskDetails['creator_name'] = $juniorLecturer->name ?? 'Unknown';
+                    }
+                    if ($task->isMarked) {
+                        $studentTaskResult = student_task_result::where('Task_id', $task->id)
+                            ->where('Student_id', $student_id)
+                            ->first();
+                        $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
+                    }
+                    $offeredCourse = offered_courses::where('id', $teacherOfferedCourse->offered_course_id)->first();
+                    $course = $offeredCourse ? Course::where('id', $offeredCourse->course_id)->first() : null;
+                    $taskDetails['course_name'] = $course->name ?? 'Unknown';
+                    if ($task->start_date > $currentDate) {
+                        $remainingTime = $currentDate->diff($task->start_date);
+                        $taskDetails['Time Remaining in Task to Start'] = ($remainingTime->d ?? '0') . 'D ' . ($remainingTime->h ?? '0') . 'H ' . ($remainingTime->i ?? '0') . 'M';
+                        $tasksGrouped['Upcoming Tasks'][] = $taskDetails;
+                    } else if ($task->due_date < $currentDate) {
+                        $tasksGrouped['Completed Tasks'][] = $taskDetails;
+                    } else {
+                        $remainingTime = $currentDate->diff($task->start_date);
+                        $taskDetails['Time Remaining in Task to End'] = ($remainingTime->d ?? '0') . 'D ' . ($remainingTime->h ?? '0') . 'H ' . ($remainingTime->i ?? '0') . 'M';
+                        $tasksGrouped['Pending Tasks'][] = $taskDetails;
+                    }
+                }
+            }
+        }
+        return $tasksGrouped;
+    }
+
+    public static function getSubmittedTasksGroupedByTypeWithStats($student_id, $offered_course_id)
+    {
+        $groupedTasks = [
+            'Quiz' => [
+                'tasks' => [],
+                'total_marks' => 0,
+                'obtained_marks' => 0,
+                'percentage' => 0,
+            ],
+            'Assignment' => [
+                'tasks' => [],
+                'total_marks' => 0,
+                'obtained_marks' => 0,
+                'percentage' => 0,
+            ],
+            'LabTask' => [
+                'tasks' => [],
+                'total_marks' => 0,
+                'obtained_marks' => 0,
+                'percentage' => 0,
+            ],
+        ];
+        $teacherOfferedCourses = teacher_offered_courses::where('offered_course_id', $offered_course_id)->get();
+        foreach ($teacherOfferedCourses as $teacherOfferedCourse) {
+            $tasks = task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                ->where('isMarked', 1)
+                ->get();
+            foreach ($tasks as $task) {
+                $studentTaskResult = student_task_result::where('Task_id', $task->id)
+                    ->where('Student_id', $student_id)
+                    ->first();
+                $obtainedMarks = $studentTaskResult->ObtainedMarks ?? 0;
+                $taskDetails = [
+                    'task_id' => $task->id,
+                    'title' => $task->title,
+                    'type' => $task->type,
+                    'points' => $task->points,
+                    'start_date' => $task->start_date,
+                    'due_date' => $task->due_date,
+                    'obtained_points' => $obtainedMarks,
+                ];
+                if ($task->CreatedBy === 'Teacher') {
+                    $teacher = teacher::where('id', $teacherOfferedCourse->teacher_id)->first();
+                    $taskDetails['creator_type'] = 'Teacher';
+                    $taskDetails['creator_name'] = $teacher->name ?? 'Unknown';
+                } else if ($task->CreatedBy === 'Junior Lecturer') {
+                    $juniorLecturer = juniorlecturer::where('id', $teacherOfferedCourse->teacher_id)->first();
+                    $taskDetails['creator_type'] = 'Junior Lecturer';
+                    $taskDetails['creator_name'] = $juniorLecturer->name ?? 'Unknown';
+                }
+                $offeredCourse = offered_courses::where('id', $teacherOfferedCourse->offered_course_id)->first();
+                $course = $offeredCourse ? Course::where('id', $offeredCourse->course_id)->first() : null;
+                $taskDetails['course_name'] = $course->name ?? 'Unknown';
+                $groupedTasks[$task->type]['tasks'][] = $taskDetails;
+                $groupedTasks[$task->type]['total_marks'] += $task->points;
+                $groupedTasks[$task->type]['obtained_marks'] += $obtainedMarks;
+            }
+        }
+        foreach ($groupedTasks as $type => $group) {
+            $totalMarks = $group['total_marks'];
+            $obtainedMarks = $group['obtained_marks'];
+            $groupedTasks[$type]['percentage'] = $totalMarks > 0 ? round(($obtainedMarks / $totalMarks) * 100, 2) : 0;
+        }
+
+        return $groupedTasks;
+    }
+    public static function getCourseContentWithTopicsAndStatus($section_id, $offered_course_id)
+    {
+        $teacherOfferedCourse = teacher_offered_courses::where('offered_course_id', $offered_course_id)
+            ->where('section_id', $section_id)
+            ->first();
+        if (!$teacherOfferedCourse) {
+            return [
+                'error' => 'No teacher offered course found for the given section and offered course.'
+            ];
+        }
+        $teacher_offered_course_id = $teacherOfferedCourse->id;
+        $courseContents = coursecontent::where('offered_course_id', $offered_course_id)->get();
+        $result = [];
+        foreach ($courseContents as $courseContent) {
+            $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
+            $topics = [];
+            foreach ($courseContentTopics as $courseContentTopic) {
+                $topic = topic::find($courseContentTopic->topic_id);
+
+                if ($topic) {
+                    $status = t_coursecontent_topic_status::where('coursecontent_id', $courseContent->id)
+                        ->where('topic_id', $topic->id)
+                        ->where('teacher_offered_courses_id', $teacher_offered_course_id)
+                        ->first();
+
+                    $topics[] = [
+                        'topic_id' => $topic->id,
+                        'topic_name' => $topic->title,
+                        'status' => $status->Status==1?'Covered':'Not-Covered',
+                    ];
+                }
+            }
+            $result[] = [
+                'course_content_id' => $courseContent->id,
+                'title' => $courseContent->title,
+                'type' => $courseContent->type,
+                'week' => $courseContent->week,
+                'File' =>FileHandler::getFileByPath($courseContent->content),
+                'topics' => $topics,
+            ];
+        }
+
+        return $result;
+    }
+    public static function getCourseContentForSpecificWeekWithTopicsAndStatus($section_id, $offered_course_id, $weekNo = null)
+    {
+        $teacherOfferedCourse = teacher_offered_courses::where('offered_course_id', $offered_course_id)
+            ->where('section_id', $section_id)
+            ->first();
+    
+        if (!$teacherOfferedCourse) {
+            return [
+                'error' => 'No teacher offered course found for the given section and offered course.'
+            ];
+        }
+    
+        $teacher_offered_course_id = $teacherOfferedCourse->id;
+        $query = coursecontent::where('offered_course_id', $offered_course_id);
+        if (!is_null($weekNo)) {
+            $query->where('week', $weekNo);
+        }
+        $courseContents = $query->get();
+        $result = [];
+    
+        foreach ($courseContents as $courseContent) {
+            $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
+            $topics = [];
+    
+            foreach ($courseContentTopics as $courseContentTopic) {
+                $topic = topic::find($courseContentTopic->topic_id);
+    
+                if ($topic) {
+                    $status = t_coursecontent_topic_status::where('coursecontent_id', $courseContent->id)
+                        ->where('topic_id', $topic->id)
+                        ->where('teacher_offered_courses_id', $teacher_offered_course_id)
+                        ->first();
+    
+                    $topics[] = [
+                        'topic_id' => $topic->id,
+                        'topic_name' => $topic->title,
+                        'status' => $status && $status->Status == 1 ? 'Covered' : 'Not-Covered',
+                    ];
+                }
+            }
+    
+            $result[] = [
+                'course_content_id' => $courseContent->id,
+                'title' => $courseContent->title,
+                'type' => $courseContent->type,
+                'week' => $courseContent->week,
+                'File' => FileHandler::getFileByPath($courseContent->content),
+                'topics' => $topics,
+            ];
+        }
+    
+        return $result;
+    }
+    
 }

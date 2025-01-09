@@ -24,10 +24,7 @@ class student_task_result extends Model
     public function task()
     {
         return $this->belongsTo(Task::class, 'Task_id');
-    }
-
-    // Relationship to Student model
-    public function student()
+    }    public function student()
     {
         return $this->belongsTo(Student::class, 'Student_id');
     }

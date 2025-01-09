@@ -31,6 +31,9 @@ class FileHandler extends Model
     }
     public static function getFileByPath($originalPath = null)
     {
+        if(!$originalPath){
+            return null;
+        }
         if (file_exists(public_path($originalPath))) {
             $imageContent = file_get_contents(public_path($originalPath));
             return base64_encode($imageContent);

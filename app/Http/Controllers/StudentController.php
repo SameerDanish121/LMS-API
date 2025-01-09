@@ -39,6 +39,8 @@ use function Laravel\Prompts\select;
 class StudentController extends Controller
 {
 
+     
+    
     public function AttendancePerSubject(Request $request)
     {
         try {
@@ -590,6 +592,146 @@ class StudentController extends Controller
             ], 500);
         }
     }
+    public function GetTaskDetails(Request $request){
+        try {
+            $request->validate([
+                'student_id' => 'required',
+            ]);
+            $studentId=$request->student_id;
+            $responseMessage =StudentManagement::getAllTask($studentId);
+            return response()->json([
+                'success' => 'Fetcehd Successfully !',
+                'TaskDetails' => $responseMessage
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function GetSubjectTaskResult(Request $request){
+        try {
+            $request->validate([
+                'student_id' => 'required',
+                'offered_course_id'=>'required'
+            ]);
+            $studentId=$request->student_id;
+            $offer_id=$request->offered_course_id;
+            $responseMessage =StudentManagement:: getSubmittedTasksGroupedByTypeWithStats($studentId,$offer_id);
+            return response()->json([
+                'success' => 'Fetcehd Successfully !',
+                'TaskDetails' => $responseMessage
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+   
+    public function GetFullCourseContentOfSubject(Request $request){
+        try {
+            $request->validate([
+                'section_id' => 'required',
+                'offered_course_id'=>'required'
+            ]);
+            $section_id=$request->section_id;
+            $offered_course_id=$request->offered_course_id;
+            $responseMessage =StudentManagement::getCourseContentWithTopicsAndStatus($section_id,$offered_course_id);
+            return response()->json([
+                'success' => 'Fetcehd Successfully !',
+                'Course Content' => $responseMessage
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function GetFullCourseContentOfSubjectByWeek(Request $request){
+        try {
+            $request->validate([
+                'section_id' => 'required',
+                'offered_course_id'=>'required',
+                'Week_No'=>'required|integer'
+            ]);
+            $section_id=$request->section_id;
+            $offered_course_id=$request->offered_course_id;
+            $week=$request->Week_No;
+            $responseMessage =StudentManagement::getCourseContentForSpecificWeekWithTopicsAndStatus($section_id,$offered_course_id,$week);
+            return response()->json([
+                'success' => 'Fetcehd Successfully !',
+                'Course Content' => $responseMessage
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    ////////////////////////////////////////////////////EXTRASSSSSSSSSSSSSSSSSSSS///////////////////
     public function sendForgotPasswordEmail(Request $request)
     {
         $email = $request->email;

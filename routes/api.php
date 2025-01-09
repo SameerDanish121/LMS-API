@@ -31,7 +31,11 @@ Route::prefix('Student')->group(function () {
     Route::post('/update-student-image', [StudentController::class, 'updateStudentImage']);
     Route::get('/current-enrollments', [StudentController::class, 'StudentCurrentEnrollmentsName']);
     Route::get('/all-enrollments', [StudentController::class, 'StudentAllEnrollmentsName']);
-
+    Route::get('/task/details', [StudentController::class, 'getTaskDetails']);
+    Route::get('/subject/task-result', [StudentController::class, 'GetSubjectTaskResult']);
+    Route::get('/course-content', [StudentController::class, 'GetFullCourseContentOfSubject']);
+    Route::get('/course-content/week', [StudentController::class, 'GetFullCourseContentOfSubjectByWeek']);
+    
 });
 
 //////////////////////////////////////////////////////~api/Admin///////////////////////////////////////////////
@@ -54,8 +58,10 @@ Route::prefix('Teacher')->group(function () {
     Route::get('/Attendence', [TeacherController::class, 'getStudentsByTeacherAndSection']);
     Route::get('/sortAttendence', [TeacherController::class, 'getSortedAttendance']);
     Route::get('/teacher-course-details', [TeacherController::class, 'getCourseDetails']);
-});
 
+
+
+});
 
 //////////////////////////////////////////////////////~api/JuniorLecturer////////////////////////////////////////////////
 
