@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+use App\Models\FileHandler;
 use App\Models\teacher;
 use Illuminate\Support\Facades\Storage;
 use App\Models\attendance;
@@ -144,7 +145,7 @@ class GraderController extends Controller
                     if ($submission) {
                         $relativePath = str_replace('public/', '', $submission->Answer);
                         if (Storage::disk('public')->exists($relativePath)) {
-                            $submission->Answer = base64_encode(Storage::disk('public')->get($relativePath));
+                            $submission->Answer =FileHandler::getFileByPath($submission->Answer);
                         } else {
                             $submission->Answer = null;
                         }

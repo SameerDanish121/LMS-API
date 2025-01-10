@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Models\Action;
 use App\Models\admin;
 use App\Models\excluded_days;
+use App\Models\FileHandler;
 use App\Models\juniorlecturer;
 use App\Models\program;
 use App\Models\StudentManagement;
@@ -196,20 +197,15 @@ class StudentController extends Controller
             $section = Section::findOrFail($sectionId);
             $taskSectionName = $section->program . '-' . $section->semester . $section->group;
             $taskTitle = $task->title;
-            $fileName = "({$studentRegNo})-{$taskTitle}.pdf";
-            $directoryPath = "BIIT/{$sessionName}-{$sessionYear}/{$taskSectionName}/{$course_name}/";
-            $storagePath = storage_path("app/public/{$directoryPath}");
-            if (!file_exists($storagePath)) {
-                if (!mkdir($storagePath, 0777, true)) {
-                    throw new Exception('Failed to create directory.');
-                }
-            }
+            $fileName = "({$studentRegNo})-{$taskTitle}";
+            $directoryPath = "{$sessionName}-{$sessionYear}/{$taskSectionName}/{$course_name}/Task";
+           
             if ($request->hasFile('Answer') && $request->file('Answer')->isValid()) {
-                // Use the public disk to store the file
-                $filePath = $request->file('Answer')->storeAs($directoryPath, $fileName, 'public');
+                $filePath = FileHandler::storeFile($fileName,$directoryPath,$request->file('Answer'));
+                
 
                 return student_task_submission::create([
-                    'Answer' => $filePath, // Store path without "public/" prefix
+                    'Answer' => $filePath, 
                     'DateTime' => now(),
                     'Student_id' => $studentId,
                     'Task_id' => $taskId,
@@ -227,7 +223,7 @@ class StudentController extends Controller
                 Storage::disk('public')->put($filePath, $pdfData);
 
                 return student_task_submission::create([
-                    'Answer' => $filePath, // Store path without "public/" prefix
+                    'Answer' => $filePath,
                     'DateTime' => now(),
                     'Student_id' => $studentId,
                     'Task_id' => $taskId,
