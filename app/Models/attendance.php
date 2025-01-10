@@ -73,6 +73,7 @@ class attendance extends Model
                 $groupedAttendance[$groupKey]['total_absent']++;
             }
             $groupedAttendance[$groupKey]['records'][] = [
+                'id'=>$attendance->id,
                 'status' => $status,
                 'date' => $date,
                 'time' => $time,

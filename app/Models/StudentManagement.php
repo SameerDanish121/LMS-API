@@ -10,7 +10,6 @@ class StudentManagement extends Model
     // 'RegNo', 'name', 'cgpa', 'gender', 'date_of_birth', 
     // 'guardian', 'image', 'user_id', 'section_id', 'program_id', 
     // 'session_id', 'status'
-
     public static function getSessionIdsByStudentId($student_id)
     {
         if (!$student_id) {

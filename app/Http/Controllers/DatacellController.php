@@ -57,6 +57,7 @@ class DatacellController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
+
                 'error' => $e->getMessage()
             ], 500);
         }

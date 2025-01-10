@@ -44,4 +44,21 @@ class task extends Model
         // Return the section ID or null if not found
         return $sectionId ?? null;
     }
+    public static function ChangeStatusOfTask(int $taskId): bool
+    {
+        try {
+            // Find the task by ID
+            $task = self::find($taskId);
+
+            if ($task) {
+                $task->isMarked = true;
+                return $task->save(); // Save the updated task and return the result
+            }
+
+            return false; // Return false if the task was not found
+        } catch (\Exception $e) {
+            // Handle any errors and return false
+            return false;
+        }
+    }
 }

@@ -45,7 +45,30 @@ Route::prefix('Student')->group(function () {
 //////////////////////////////////////////////////////~api/Admin///////////////////////////////////////////////
 
 Route::prefix('Admin')->group(function () {
+    Route::get('/AllStudent', [AdminController::class,'AllStudent']);
+    Route::post('/SendNotification', [AdminController::class,'sendNotification']);
+    Route::post('/sections', [AdminController::class, 'showSections']);
+    Route::get('/teachers', [AdminController::class, 'AllTeacher']);
+    Route::get('/courses', [AdminController::class, 'AllCourse']);
+    Route::get('/grades', [AdminController::class, 'AllGrades']);
+  Route::get('/teacher-graders', [AdminController::class, 'getAllTeacherGraders']);
+  Route::get('/sessions', [AdminController::class, 'getAllSessions']);
+  Route::get('/junior-lectures', [AdminController::class, 'allJuniorLecturers']);
+  Route::get('/course-content', [AdminController::class, 'getCourseContent']);
+  Route::get('/search-admin', [AdminController::class, 'searchAdminByName']);
+  Route::get('/search-datacell', [AdminController::class, 'GetDatacell']);
 });
+
+
+
+
+
+
+//////////////////////////////////////////////////////~api/Teacher///////////////////////////////////////////////
+
+
+
+
 Route::prefix('Teacher')->group(function () {
     Route::post('/markAttendance', [TeacherController::class, 'markAttendance']);
     Route::get('/FullTimetable', [TeacherController::class, 'FullTimetable']);
@@ -62,11 +85,8 @@ Route::prefix('Teacher')->group(function () {
     Route::get('/Attendence', [TeacherController::class, 'getStudentsByTeacherAndSection']);
     Route::get('/sortAttendence', [TeacherController::class, 'getSortedAttendance']);
     Route::get('/teacher-course-details', [TeacherController::class, 'getCourseDetails']);
-
-
-
 });
-
+ 
 //////////////////////////////////////////////////////~api/JuniorLecturer////////////////////////////////////////////////
 
 
@@ -81,6 +101,7 @@ Route::prefix('Grader')->group(function () {
     Route::get('/YourTask', [GraderController::class, 'GraderTask']);
     Route::get('/ListOfStudent', [GraderController::class, 'ListOfStudentForTask']);
     Route::post('/SubmitTaskResult', [GraderController::class, 'SubmitNumber']);
+    Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);
 });
 
 
@@ -95,7 +116,6 @@ Route::prefix('Datacell')->group(function () {
     Route::get('/timetable/section', [DatacellController::class, 'getTimetableGroupedBySection']);
     Route::get('/getArchivesDetails', [DatacellController::class, 'Archives']);
     Route::delete('/DeleteFolderByPath', [DatacellController::class, 'DeleteFolderByPath']);
-
 });
 
 

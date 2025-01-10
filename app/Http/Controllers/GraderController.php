@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+use App\Models\teacher;
 use Illuminate\Support\Facades\Storage;
 use App\Models\attendance;
 use App\Models\course;
@@ -34,11 +35,11 @@ class GraderController extends Controller
     public function SubmitNumber(Request $request)
     {
         try {
-            $task_id=$request->task_id;
-            $student_RegNo=$request->regNo;
-            $obtainedMarks=$request->obtainedMarks;
-            if($task_id){
-                grader_task::markTaskAsGraded($task_id);
+            $task_id = $request->task_id;
+            $student_RegNo = $request->regNo;
+            $obtainedMarks = $request->obtainedMarks;
+            if ($task_id) {
+                task::ChangeStatusOfTask($task_id);
             }
             $result = student_task_result::storeOrUpdateResult($task_id, $student_RegNo, $obtainedMarks);
             if ($result) {
@@ -48,10 +49,10 @@ class GraderController extends Controller
                     ],
                     200
                 );
-            }else {
-               throw new Exception('Unexpected Error Occurs !!!!! ');
+            } else {
+                throw new Exception('Unexpected Error Occurs !!!!! ');
             }
-        }catch (Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
@@ -59,6 +60,59 @@ class GraderController extends Controller
             ], 500);
         }
     }
+    // {
+    //     "submissions": [
+    //       {
+    //         "task_id": 1,
+    //         "regNo": "2021-ARID-4583",
+    //         "obtainedMarks": 85
+    //       },
+    //       {
+    //         "task_id": 2,
+    //         "regNo": "2021-ARID-4584",
+    //         "obtainedMarks": 90
+    //       },
+    //       {
+    //         "task_id": 3,
+    //         "regNo": "2021-ARID-4585",
+    //         "obtainedMarks": 88
+    //       }
+    //     ]
+    //   }
+    public function SubmitNumberList(Request $request)
+    {
+        try {
+            $submissions = $request->submissions; 
+            $Logs=[];
+            foreach ($submissions as $submission) {
+                $task_id = $submission['task_id'];
+                $student_RegNo = $submission['regNo'];
+                $obtainedMarks = $submission['obtainedMarks'];
+               
+                if ($task_id) {
+                    task::ChangeStatusOfTask($task_id);
+                }
+                $result = student_task_result::storeOrUpdateResult($task_id, $student_RegNo, $obtainedMarks);
+                if (!$result) {
+                    $Logs[]=["Message"=>"Error in Uploading the Number of $student_RegNo","Data"=>$submission];
+                }else{
+                    $Logs[]=["Message"=>"successfully Uploaded the Number of $student_RegNo","Data"=>$submission];
+                }
+            }
+            return response()->json([
+                'message' => 'All submissions processed successfully!',
+                'data'=>$Logs
+            ], 200);
+        } catch (Exception $e) {
+            // Catch any error that occurs in the process
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function ListOfStudentForTask(Request $request)
     {
         try {
@@ -88,15 +142,10 @@ class GraderController extends Controller
                 $result = $students->map(function ($student) use ($submissions) {
                     $submission = $submissions->firstWhere('Student_id', $student->id);
                     if ($submission) {
-                        // Ensure the path is correctly formatted
                         $relativePath = str_replace('public/', '', $submission->Answer);
-
-                        // Check if the file exists and retrieve its content
                         if (Storage::disk('public')->exists($relativePath)) {
-                            // Fetch the file content (convert to base64 if needed)
                             $submission->Answer = base64_encode(Storage::disk('public')->get($relativePath));
                         } else {
-                            // If the file does not exist, set Answer to null
                             $submission->Answer = null;
                         }
                         // Return the submission
@@ -131,7 +180,6 @@ class GraderController extends Controller
             ], 500);
         }
     }
-
     public function GraderTask(Request $request)
     {
         try {
@@ -146,29 +194,66 @@ class GraderController extends Controller
                 ->map(function ($graderTask) {
                     $task = $graderTask->task;
                     $markingInfo = null;
-                    if ($graderTask->isMarked) {
+                    if ($task->isMarked) {
                         $markingInfo = $this->getMarkingInfo($task->id);
+                        return [
+                            'task_id' => $task->id,
+                            'title' => $task->title,
+                            'type' => $task->type,
+                            'path' => $task->path,
+                            'created_by' => $task->CreatedBy,
+                            'points' => $task->points,
+                            'start_date' => $task->start_date,
+                            'due_date' => $task->due_date,
+                            'is_evaluated' => $task->IsEvaluated,
+                            'teacher_offered_course' => teacher::find($task->teacherOfferedCourse->teacher_id)->value('name') ?? 'N/A',
+                            'marking_status' => 'Marked',
+                            'marking_info' => $markingInfo,
+                        ];
+                    } else {
+                        return [
+                            'task_id' => $task->id,
+                            'title' => $task->title,
+                            'type' => $task->type,
+                            'path' => $task->path,
+                            'created_by' => $task->CreatedBy,
+                            'points' => $task->points,
+                            'start_date' => $task->start_date,
+                            'due_date' => $task->due_date,
+                            'is_evaluated' => $task->IsEvaluated,
+                            'marking_status' => 'Un-Marked',
+                            'teacher_offered_course' => teacher::find($task->teacherOfferedCourse->teacher_id)->value('name') ?? 'N/A'
+                        ];
                     }
-                    return [
-                        'task_id' => $task->id,
-                        'title' => $task->title,
-                        'type' => $task->type,
-                        'path' => $task->path,
-                        'created_by' => $task->CreatedBy,
-                        'points' => $task->points,
-                        'start_date' => $task->start_date,
-                        'due_date' => $task->due_date,
-                        'is_evaluated' => $task->IsEvaluated,
-                        'teacher_offered_course' => $task->teacherOfferedCourse ? $task->teacherOfferedCourse->name : null,
-                        'marking_status' => $graderTask->isMarked ? 'Marked' : 'Un-Marked',
-                        'marking_info' => $markingInfo,
-                    ];
-                });
 
+                });
+            $currentDate = now();
+
+            // Categorize tasks
+            $markedTasks = $assignedTasks->filter(function ($task) {
+                return $task['marking_status'] === 'Marked';
+            });
+
+            $upcomingTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
+                return $task['start_date'] > $currentDate;
+            });
+
+            $ongoingTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
+                return $task['start_date'] <= $currentDate && $task['due_date'] >= $currentDate;
+            });
+
+            $unmarkedTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
+                return !$task['marking_status'] === 'Marked' && $task['due_date'] < $currentDate;
+            });
+
+            // Return categorized tasks
             return response()->json(
                 [
                     'message' => 'Fetched Successfully',
-                    'Student To Be Marked' => $assignedTasks
+                    'MarkedTask' => $markedTasks->values(),
+                    'UpcomingTask' => $upcomingTasks->values(),
+                    'OngoingTask' => $ongoingTasks->values(),
+                    'UnMarkedTask' => $unmarkedTasks->values(),
                 ],
                 200
             );
@@ -180,6 +265,7 @@ class GraderController extends Controller
             ], 500);
         }
     }
+
     private function getMarkingInfo($taskId)
     {
         $marks = student_task_result::where('Task_id', $taskId)
@@ -191,11 +277,7 @@ class GraderController extends Controller
             return null;
         }
         $topMark = $marks->first();
-
-        // Get the worst performer (last in the ordered collection)
         $worstMark = $marks->last();
-
-        // Calculate the average marks of all submissions
         $averageMarks = $marks->avg('obtained_marks');
 
         return [
@@ -205,6 +287,7 @@ class GraderController extends Controller
                 'title' => 'Good',  // Top performer title
             ],
             'average' => [
+                'student_name' => $topMark->student_name,
                 'obtained_marks' => round($averageMarks, 2),  // Average marks rounded to 2 decimals
                 'title' => 'Average',
             ],
@@ -235,7 +318,7 @@ class GraderController extends Controller
                     'teacher.name as teacher_name',
                     'teacher.image as teacher_image',
                     'teacher_grader.feedback',
-                    DB::raw("CONCAT(session.name, ' - ', session.year) as session"),
+                    DB::raw("CONCAT(session.name,'-',session.year) as session"),
                     'session.id as session_id',
                     DB::raw("CASE WHEN session.id = $currentSessionId THEN 'active' ELSE 'non_active' END as session_status"),
                     DB::raw("CASE WHEN session.id = $currentSessionId THEN NULL ELSE teacher_grader.feedback END as feedback")
@@ -253,8 +336,8 @@ class GraderController extends Controller
                             return [
                                 'teacher_name' => $item->teacher_name,
                                 'status' => $item->status,
-                                'feedback' => $item->feedback,
-                                'session_name' => $item->name,
+                                'feedback' => $item->feedback ?? 'Not Added',
+                                'session_name' => $item->session,
                             ];
                         }),
                     ];

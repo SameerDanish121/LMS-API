@@ -8,8 +8,6 @@ class student_task_result extends Model
 {
     protected $table = 'student_task_result';
     public $timestamps = false;
-
-    // Define the fillable properties for mass assignment
     protected $fillable = [
         'ObtainedMarks',
         'Task_id',
@@ -42,7 +40,6 @@ class student_task_result extends Model
                     'ObtainedMarks'=>$obtainedMarks
                 ]);
             } else {
-                // Create a new record
                 self::create([
                     'ObtainedMarks' => $obtainedMarks,
                     'Task_id' => $task_id,

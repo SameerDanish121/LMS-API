@@ -588,6 +588,43 @@ class StudentController extends Controller
             ], 500);
         }
     }
+    public function getSubjectExamResult(Request $request) {
+        try {
+            $request->validate([
+                'student_id' => 'required',
+                'offered_course_id' => 'required'
+            ]);
+            $studentId = $request->student_id;
+            $offerId = $request->offered_course_id;
+            $responseMessage = StudentManagement::getExamResultsGroupedByTypeWithStats($studentId, $offerId);
+    
+            // Return successful response
+            return response()->json([
+                'success' => 'Fetched Successfully!',
+                'ExamDetails' => $responseMessage
+            ], 200);
+        } catch (ValidationException $e) {
+            // Handle validation exception
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+        } catch (ModelNotFoundException $e) {
+            // Handle model not found exception
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid data provided'
+            ], 404);
+        } catch (Exception $e) {
+            // Handle unexpected exceptions
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
     public function GetTaskDetails(Request $request){
         try {
             $request->validate([

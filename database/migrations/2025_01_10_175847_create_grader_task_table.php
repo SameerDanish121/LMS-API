@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('grader_task', function (Blueprint $table) {
-            $table->integer('Task_id')->index('task_id');
-            $table->integer('Grader_id')->index('grader_id');
+            $table->integer('Task_id')->index('grader_task_ibfk_1');
+            $table->integer('Grader_id')->index('grader_task_ibfk_2');
         });
     }
 
