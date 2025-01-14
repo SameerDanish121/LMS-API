@@ -10,6 +10,36 @@ class StudentManagement extends Model
     // 'RegNo', 'name', 'cgpa', 'gender', 'date_of_birth', 
     // 'guardian', 'image', 'user_id', 'section_id', 'program_id', 
     // 'session_id', 'status'
+    public static function addOrUpdateStudent(
+        $regNo, $name, $cgpa, $gender, $date_of_birth, $guardian, 
+        $image = null, $user_id, $section_id, $program_id, $session_id, $status
+    ) {
+        try{
+            $student = student::where('RegNo', $regNo)->first();
+           
+            $data = [
+                'RegNo' => $regNo,
+                'name' => $name,
+                'cgpa' => $cgpa,
+                'gender' => $gender,
+                'date_of_birth' => $date_of_birth,
+                'guardian' => $guardian,
+                'image' => $image,
+                'user_id' => $user_id,
+                'section_id' => $section_id,
+                'program_id' => $program_id,
+                'session_id' => $session_id,
+                'status' => $status,
+            ];
+            $student = student::updateOrCreate(
+                ['RegNo' => $regNo], 
+                $data             
+            );
+            return $student->id;
+        }catch(Exception $exception){
+            throw new Exception($exception->getMessage());
+        }
+    }
     public static function getSessionIdsByStudentId($student_id)
     {
         if (!$student_id) {
@@ -56,52 +86,7 @@ class StudentManagement extends Model
         $student->update(['image' => $storedFilePath]);
         return "Image updated successfully for Student : $student->name";
     }
-    public static function AddOrUpdateNewStudent(
-        $RegNo,
-        $name,
-        $cgpa,
-        $gender,
-        $dateOfBirth,
-        $guardian,
-        $user_id,
-        $section,
-        $program,
-        $session,
-        $status,
-        $password,
-        $email
-    ) {
-        $user = user::where('username', $RegNo)->first();
-        if ($user) {
-            $user->update([
-                'password' => $password,
-                'email' => $email,
-            ]);
-            $user_id = $user->id;
-        } else {
-            $user_id = user::create([
-                'username' => $RegNo,
-                'password' => $password,
-                'email' => $email,
-                'role_id' => role::where('type', 'Student')->value('id'),
-            ])->id;
-        }
-        student::updateOrCreate(
-            ['RegNo' => $RegNo],
-            [
-                'name' => $name,
-                'cgpa' => $cgpa,
-                'gender' => $gender,
-                'date_of_birth' => $dateOfBirth,
-                'guardian' => $guardian,
-                'user_id' => $user_id,
-                'section_id' => (new section())->getNameByID($section) ?? null,
-                'program_id' => program::where('name', $program)->value('id') ?? null,
-                'status' => $status,
-                'session_id' => (new session())->getSessionIdByName($session) ?? null,
-            ]
-        );
-    }
+ 
     public static function StudentInfoById($student_id)
     {
         $student = student::where('id', $student_id)->with(['program', 'user'])

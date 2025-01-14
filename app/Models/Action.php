@@ -185,6 +185,18 @@ class Action extends Model
 
         return false;
     }
+
+    public static function getTaskCount($toc_id, $type)
+    {
+        try {
+            $count = task::where('teacher_offered_course_id', $toc_id)
+                ->where('type', $type)
+                ->count();
+            return $count + 1;
+        } catch (Exception $e) {
+            return 0; 
+        }
+    }
     public static function insertOrCreateTimetable($RawDATA, $daySlot_id)
     {
         $sessionId = (new session())->getCurrentSessionId();
@@ -299,4 +311,38 @@ class Action extends Model
         );
         return $timetable;
     }
+    public static function generateUniquePassword($name)
+    {
+        $cleanedName = strtolower(str_replace(' ', '', $name));
+        $numericSuffix = rand(1000, 9999);
+        $generatedPassword = $cleanedName . $numericSuffix;
+        while (user::where('password', $generatedPassword)->exists()) {
+            $numericSuffix = rand(1000, 9999);
+            $generatedPassword = $cleanedName . $numericSuffix;
+        }
+        return $generatedPassword;
+    }
+    public static function addOrUpdateUser($username, $password, $email, $roleType)
+    {
+        $role = Role::where('type', $roleType)->first();
+        if (!$role) {
+            return response()->json(['error' => 'Invalid role type'], 400);
+        }
+        $roleId = $role->id;
+        $user = user::where('username', $username)->first();
+        if ($user) {
+            $user->password = $password;
+            $user->email = $email;
+            $user->save();
+        } else {
+            $user = new user();
+            $user->username = $username;
+            $user->password = $password;
+            $user->email = $email;
+            $user->role_id = $roleId;
+            $user->save();
+        }
+        return $user->id;
+    }
+
 }

@@ -105,7 +105,6 @@ class GraderController extends Controller
                 'data'=>$Logs
             ], 200);
         } catch (Exception $e) {
-            // Catch any error that occurs in the process
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
@@ -149,10 +148,8 @@ class GraderController extends Controller
                         } else {
                             $submission->Answer = null;
                         }
-                        // Return the submission
                         return $submission;
                     } else {
-                        // If no submission exists, return a placeholder object
                         return (object) [
                             'Student_id' => $student->id,
                             'name' => $student->name,

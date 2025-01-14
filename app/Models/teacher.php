@@ -42,4 +42,5 @@ class teacher extends Model
         // Return the ID if the record is found, otherwise return null
         return $record ? $record->id : null;
     }
+    
 }

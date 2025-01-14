@@ -5,7 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Action;
 use App\Models\dayslot;
 use App\Models\FileHandler;
+use App\Models\grader;
+use App\Models\juniorlecturer;
+use App\Models\program;
+use App\Models\StudentManagement;
 use App\Models\teacher;
+use App\Models\teacher_grader;
+use App\Models\teacher_juniorlecturer;
 use Exception;
 use GrahamCampbell\ResultType\Success;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -24,6 +30,7 @@ use App\Models\task;
 use App\Models\teacher_offered_courses;
 use App\Models\timetable;
 use App\Models\User;
+use DateTime;
 use App\Models;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Validation\ValidationException;
@@ -66,7 +73,7 @@ class DatacellController extends Controller
     {
         try {
             if ($request->path) {
-                $isFolderDeleted=FileHandler::deleteFolder($request->path);
+                $isFolderDeleted = FileHandler::deleteFolder($request->path);
                 if (!$isFolderDeleted) {
                     throw new Exception('No Directory Exsist with the Given Path');
                 }
@@ -76,7 +83,7 @@ class DatacellController extends Controller
             return response()->json(
                 [
                     'message' => 'Folder Deleted Successfully !',
-                    'logs'=>" Deleted {$isFolderDeleted} Of Data  "
+                    'logs' => " Deleted {$isFolderDeleted} Of Data  "
                 ],
                 200
             );
@@ -391,6 +398,191 @@ class DatacellController extends Controller
 
 
     }
+    public function UploadStudentEnrollments(Request $request)
+    {
+        try {
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls',
+                'session' => 'required'
+            ]);
+            $session = (new session())->getSessionIdByName($request->session);
+            if (!$session) {
+                throw new Exception('No Session Exsist with given name');
+            }
+            $file = $request->file('excel_file');
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+            $NonEmptyRow = [];
+            foreach ($sheetData as $row) {
+                if (
+                    array_filter($row, function ($value) {
+                        return !is_null($value);
+                    })
+                ) {
+                    $row = array_map('trim', $row);
+                    $NonEmptyRow[] = $row;
+                }
+            }
+            $response = [
+
+            ];
+
+            array_shift($NonEmptyRow);
+            $RowNo = 1;
+            foreach ($NonEmptyRow as $singleRow) {
+                $studentRegNo = $singleRow['A'];
+                $studentName = $singleRow['B'];
+                $enrollmentExsist = null;
+                $sectionExsist = null;
+
+                $student_id = student::where('RegNo', $studentRegNo)->value('id');
+                if (!$student_id) {
+                    $response[] = ['status' => "error on Row No {$RowNo}", 'message' => "No Student with this RegNo ={$studentRegNo} , Name = {$studentName} Found in Student Record"];
+                    continue;
+                }
+                $iteration = 0;
+                $CellNo = 0;
+                foreach ($singleRow as $cell) {
+                    $CellNo++;
+                    $iteration++;
+                    if ($iteration <= 2) {
+                        continue;
+                    }
+                    if ($cell != null || $cell != '') {
+                        if ($enrollmentExsist) {
+                            $sectionExsist = $cell;
+                            $section_id = section::addNewSection($sectionExsist);
+                            if (!$section_id) {
+                                $response[] = ['status' => "error on Row No " . ($RowNo - 1) . " , Cell NO {$CellNo}", 'message' => "The Data {$sectionExsist} is in Incorrect Format "];
+                                $enrollmentExsist = null;
+                                $sectionExsist = null;
+                                continue;
+                            }
+                            $courseInfo = explode('_', $enrollmentExsist);
+                            if (count($courseInfo) == 2) {
+                                $course_name = $courseInfo[0];
+                                $course_code = $courseInfo[1];
+                            } else {
+                                $response[] = ['status' => "error on Row No {$RowNo} , Cell NO {$CellNo}", 'message' => "The Data {$courseInfo} is in Incorrect Format"];
+                                $enrollmentExsist = null;
+                                $sectionExsist = null;
+                                continue;
+                            }
+
+                            $course_id = (new course())->getIDByName($course_name);
+                            if (!$course_id) {
+                                $response[] = ['status' => "error on Row No {$RowNo} , Cell NO {$CellNo}", 'message' => "The Course {$course_name} is Not in Course Record"];
+                                $enrollmentExsist = null;
+                                $sectionExsist = null;
+                                continue;
+                            }
+                            $offered_course_id = offered_courses::where('session_id', $session)
+                                ->where('course_id', $course_id)->value('id');
+                            if (!$offered_course_id) {
+                                $response[] = ['status' => "error on Row No {$RowNo} , Cell NO {$CellNo}", 'message' => "The Course {$course_name} is Not Yet offered in Session {$request->session}"];
+                                $enrollmentExsist = null;
+                                $sectionExsist = null;
+                                continue;
+                            }
+                            $check = self::EnrollorReEnroll($student_id, $course_id, $offered_course_id, $section_id);
+                            if ($check['message'] == 'success') {
+                                $response[] = ['status' => $check['status'], 'message' => " The Enrollment for {$studentRegNo}/{$studentName} in {$course_name}: Cell No {$CellNo}, Row NO {$RowNo} " . $check['message']];
+                            } else {
+                                $response[] = ['status' => $check['status'], 'message' => " The Enrollment for {$studentRegNo}/{$studentName} in {$course_name}: Cell No {$CellNo}, Row NO {$RowNo} " . $check['message']];
+                            }
+                            $enrollmentExsist = null;
+                            $sectionExsist = null;
+                        } else {
+                            $enrollmentExsist = $cell;
+
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+
+            }
+            $successMessages = [];
+            $errorMessages = [];
+            foreach ($response as $stat) {
+                if ($stat['status'] === 'success') {
+                    $successMessages[] = $stat;
+                } else {
+                    $errorMessages[] = $stat;
+                }
+            }
+
+            return response()->json(
+                [
+                    'Message' => 'Data Inserted Successfully !',
+                    'data' => [
+                        "Sucess" => $successMessages,
+                        "Error" => $errorMessages
+                    ]
+                ],
+                200
+            );
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public static function EnrollorReEnroll($student_id, $course_id, $offered_course_id, $section_id)
+    {
+        try {
+            if (!$student_id || !$course_id || !$offered_course_id || !$section_id) {
+                return ['status' => 'failure', 'message' => 'Invalid parameters'];
+            }
+            $existingRecord = student_offered_courses::where('student_id', $student_id)
+                ->where('offered_course_id', $offered_course_id)
+                ->first();
+            if ($existingRecord) {
+                return ['status' => 'success', 'message' => 'Exist'];
+            }
+            $offeredCoursesList = offered_courses::where('course_id', $course_id)->pluck('id')->toArray();
+            $studentCourse = student_offered_courses::where('student_id', $student_id)
+                ->whereIn('offered_course_id', $offeredCoursesList)
+                ->first();
+            if ($studentCourse) {
+                if (in_array($studentCourse->grade, ['A', 'D'])) {
+                    $studentCourse->offered_course_id = $offered_course_id;
+                    $studentCourse->attempt_no += 1;
+                    $studentCourse->grade = null;
+                    $studentCourse->section_id = $section_id;
+                    $studentCourse->save();
+                    return ['status' => 'Re-Enrolled', 'message' => "Re-Enrolled the the Course with {$studentCourse->grade}"];
+                }
+            }
+            student_offered_courses::create([
+                'student_id' => $student_id,
+                'offered_course_id' => $offered_course_id,
+                'section_id' => $section_id,
+                'attempt_no' => 0,
+                'grade' => null,
+            ]);
+            return ['status' => 'success', 'message' => 'Record inserted successfully'];
+        } catch (Exception $ex) {
+            return ['status' => 'error', 'message' => "{$ex->getMessage()}"];
+        }
+    }
+
     public function UploadTimetableExcel(Request $request)
     {
         try {
@@ -726,8 +918,6 @@ class DatacellController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
-
-
     }
     ///////////////////////////////////////////////////////UNDER TEST///////////////////
     public function getTimetableGroupedBySection(Request $request)
@@ -762,10 +952,611 @@ class DatacellController extends Controller
             ->groupBy('section');
 
         return response()->json([
-            "status"=>"Successfull",
-            "timetable"=>$timetable,
+            "status" => "Successfull",
+            "timetable" => $timetable,
         ], 200);
     }
+    public function AddOrUpdateStudent(Request $request)
+    {
+        try {
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls'
+            ]);
+            $file = $request->file('excel_file');
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+            $filteredData = [];
+            foreach ($sheetData as $row) {
+                $filteredData[] = array_slice($row, 0, 11);
+            }
+            $nonEmpty = [];
+            foreach ($filteredData as $row) {
+                if (
+                    array_filter($row, function ($value) {
+                        return !is_null($value);
+                    })
+                ) {
+                    if ($row['A'] != 'RegNo') {
+                        $row = array_map('trim', $row);
+                        $nonEmpty[] = $row;
+                    }
+                }
+            }
+            $RowNo = 1;
+            $status = [];
+            foreach ($nonEmpty as $singleRow) {
+                $RowNo++;
+                $regNo = $singleRow['A'];
+                $Name = $singleRow['B'];
+                $gender = $singleRow['C'];
+                $dob = $singleRow['D'];
+                $guardian = $singleRow['E'];
+                $cgpa = $singleRow['F'];
+                $email = $singleRow['G'];
+                $currentSection = $singleRow['H'];
+                $status = $singleRow['I'];
+                $InTake = $singleRow['J'];
+                $Discipline = $singleRow['K'];
+                $dob= (new DateTime($dob))->format('Y-m-d');
+                $password=Action::generateUniquePassword($Name);
+                $user_id=Action::addOrUpdateUser($regNo,$password,$email,'Student');
+                $section_id=section::addNewSection($currentSection);
+              
+                if(!$section_id){
+                    $status[]=["status"=>'failed',"reason"=>"The Field Current Section {$currentSection} Format is Not Correct !"];
+                }
+                $session_id=(new session())->getSessionIdByName($InTake);
+                if(!$session_id){
+                    $status[]=["status"=>'failed',"reason"=>"The Field Current Session  {$InTake} Format is Not Correct !"];
+                }
+                $program_id=program::where('name',$Discipline)->value('id');
+                if(!$program_id){
+                    $status[]=["status"=>'failed',"reason"=>"The Field Disciplein  {$Discipline} Format is Not Correct !"];
+                }
+                $student=StudentManagement::addOrUpdateStudent($regNo,$Name,$cgpa,$gender,$dob,$guardian,null,$user_id,$section_id,$program_id,$session_id,$status);
+                
+                if($student){
+                    $status[]=["status"=>'success',"Logs"=>"The Student with RegNo : {$regNo} ,Name : {$Name}  is added to Record !","Username"=>$regNo , "Password"=>$password];
+                }else{
+                    $status[]=["status"=>'failed','Reason'=>'Unknown'];
+                }
+             
+            }
+            $successMessages = [];
+            $errorMessages = [];
+            foreach ($status as $stat) {
+                if ($stat['status'] === 'success') {
+                    $successMessages[] = $stat;
+                } else {
+                    $errorMessages[] = $stat;
+                }
+            }
+            return response()->json(
+                [
+                    'Message' => 'Data Inserted Successfully !',
+                    'success' =>$successMessages,
+                    'failed'=>$errorMessages
+                ],
+                200
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
 
 
+    }
+    public function AddOrUpdateCourses(Request $request)
+{
+    try {
+        $request->validate([
+            'excel_file' => 'required|mimes:xlsx,xls'
+        ]);
+
+        $file = $request->file('excel_file');
+        $spreadsheet = IOFactory::load($file->getPathname());
+        $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+
+        $filteredData = [];
+        foreach ($sheetData as $row) {
+            $filteredData[] = array_slice($row, 0, 8); // Fetch only necessary columns
+        }
+
+        $nonEmpty = [];
+        foreach ($filteredData as $row) {
+            if (array_filter($row, function ($value) {
+                return !is_null($value);
+            })) {
+                if ($row['A'] != 'code') {
+                    $row = array_map('trim', $row);
+                    $nonEmpty[] = $row;
+                }
+            }
+        }
+
+        $RowNo = 1;
+        $status = [];
+
+        foreach ($nonEmpty as $singleRow) {
+            $RowNo++;
+
+            $code = $singleRow['A'];
+            $name = $singleRow['B'];
+            $creditHours = $singleRow['C'];
+            $preReqMain = $singleRow['D'] === 'Null' ? null : $singleRow['D'];
+            $program = $singleRow['E'];
+            $type = $singleRow['F'];
+            $shortform = $singleRow['G']; // Map to 'description'
+            $lab = $singleRow['H'];
+
+            // Fetch the program ID
+            $programId = Program::where('name', $program)->value('id');
+
+            if (!$programId) {
+                $status[] = ["status" => 'failed', "reason" => "The Field Program {$program} does not exist!"];
+                continue;
+            }
+
+            // Fetch the prerequisite course ID if applicable
+            $preReqId = null;
+            if ($preReqMain !== null) {
+                $preReqId = Course::where('name', $preReqMain)->value('id');
+                if (!$preReqId) {
+                    $status[] = ["status" => 'failed', "reason" => "The prerequisite course {$preReqMain} does not exist!"];
+                    continue;
+                }
+            }
+
+            // Check if the course already exists
+            $course = Course::where('name', $name)->where('code',$code)->first();
+           
+            if ($course) {
+                $course->update([
+                    'code' => $code,
+                    'credit_hours' => $creditHours,
+                    'pre_req_main' => $preReqId,
+                    'program_id' => $programId,
+                    'type' => $type,
+                    'description' => $shortform,
+                    'lab' => $lab,
+                ]);
+                $status[] = ["status" => 'success', "Logs" => "The course with Name: {$name} was updated."];
+            } else {
+                Course::create([
+                    'code' => $code,
+                    'name' => $name,
+                    'credit_hours' => $creditHours,
+                    'pre_req_main' => $preReqId,
+                    'program_id' => $programId,
+                    'type' => $type,
+                    'description' => $shortform,
+                    'lab' => $lab,
+                ]);
+                $status[] = ["status" => 'success', "Logs" => "The course with Name: {$name} was added."];
+            }
+        }
+
+        $successMessages = [];
+        $errorMessages = [];
+        foreach ($status as $stat) {
+            if ($stat['status'] === 'success') {
+                $successMessages[] = $stat;
+            } else {
+                $errorMessages[] = $stat;
+            }
+        }
+
+        return response()->json(
+            [
+                'Message' => 'Courses Processed Successfully!',
+                'success' => $successMessages,
+                'failed' => $errorMessages
+            ],
+            200
+        );
+
+    } catch (ValidationException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+
+    } catch (ModelNotFoundException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Data not found'
+        ], 404);
+
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'An unexpected error occurred',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+public function AddOrUpdateTeachers(Request $request)
+{
+    try {
+        $request->validate([
+            'excel_file' => 'required|mimes:xlsx,xls'
+        ]);
+        $file = $request->file('excel_file');
+        $spreadsheet = IOFactory::load($file->getPathname());
+        $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+
+        $filteredData = [];
+        foreach ($sheetData as $row) {
+            $filteredData[] = array_slice($row, 0, 4); // Fetch only necessary columns
+        }
+
+        $nonEmpty = [];
+        foreach ($filteredData as $row) {
+            if (array_filter($row, function ($value) {
+                return !is_null($value);
+            })) {
+                if ($row['A'] != 'Name') {
+                    $row = array_map('trim', $row);
+                    $nonEmpty[] = $row;
+                }
+            }
+        }
+
+        $RowNo = 1;
+        $status = [];
+
+        foreach ($nonEmpty as $singleRow) {
+            $RowNo++;
+
+            $name = $singleRow['A'];
+            $dateOfBirth = $singleRow['B'];
+            $gender = $singleRow['C'];
+            $email = $singleRow['D'];
+            $username = strtolower(str_replace(' ', '', $name)) . '@biit.edu';
+            $userExists = User::where('username', $username)->exists();
+
+            if ($userExists) {
+                $status[] = ["status" => 'failed', "reason" => "Username {$username} already exists!"];
+                continue;
+            }
+            $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
+            $password = Action::generateUniquePassword($name);
+            $userId = Action::addOrUpdateUser($username, $password, $email, 'Teacher');
+
+            if (!$userId) {
+                $status[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+                continue;
+            }
+            $teacher = Teacher::where('name', $name)->first();
+
+            if ($teacher) {
+                $teacher->update([
+                    'user_id' => $userId,
+                    'name' => $name,
+                    'date_of_birth' => $formattedDOB,
+                    'gender' => $gender
+                ]);
+                $status[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated."];
+            } else {
+                Teacher::create([
+                    'user_id' => $userId,
+                    'name' => $name,
+                    'date_of_birth' => $formattedDOB,
+                    'gender' => $gender
+                ]);
+                $status[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was added."];
+            }
+        }
+
+        $successMessages = [];
+        $errorMessages = [];
+        foreach ($status as $stat) {
+            if ($stat['status'] === 'success') {
+                $successMessages[] = $stat;
+            } else {
+                $errorMessages[] = $stat;
+            }
+        }
+
+        return response()->json(
+            [
+                'Message' => 'Teachers Processed Successfully!',
+                'success' => $successMessages,
+                'failed' => $errorMessages
+            ],
+            200
+        );
+
+    } catch (ValidationException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+
+    } catch (ModelNotFoundException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Data not found'
+        ], 404);
+
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'An unexpected error occurred',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+public function assignGrader(Request $request)
+{
+    try {
+        $request->validate([
+            'excel_file' => 'required|mimes:xlsx,xls',
+            'session_name' => 'required|string'
+        ]);
+
+        $file = $request->file('excel_file');
+        $sessionName = $request->input('session_name');
+
+        $spreadsheet = IOFactory::load($file->getPathname());
+        $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+
+        $filteredData = [];
+        foreach ($sheetData as $row) {
+            $filteredData[] = array_slice($row, 0, 5); // Fetch relevant columns
+        }
+
+        $nonEmpty = [];
+        foreach ($filteredData as $row) {
+            if (array_filter($row, function ($value) {
+                return !is_null($value);
+            })) {
+                if ($row['A'] != 'RegNo') {
+                    $row = array_map('trim', $row);
+                    $nonEmpty[] = $row;
+                }
+            }
+        }
+
+        $sessionId = (new Session())->getSessionIdByName($sessionName);
+
+        if (!$sessionId) {
+            return response()->json([
+                'status' => 'failed',
+                'message' => "Invalid session name: {$sessionName}"
+            ], 400);
+        }
+
+        // Set all grader statuses to inactive
+        Grader::query()->update(['status' => 'in-active']);
+
+        $status = [];
+
+        foreach ($nonEmpty as $row) {
+            $regNo = $row['A'];
+            $name = $row['D'];
+            $type = $row['E'];
+            $studentId = Student::where('RegNo', $regNo)->value('id');
+
+            if (!$studentId) {
+                $status[] = ["status" => 'failed', "reason" => "Student with RegNo {$regNo} not found."];
+                continue;
+            }
+            $grader = Grader::where('student_id', $studentId)->first();
+
+            if ($grader) {
+                $grader->update([
+                    'type' => $type,
+                    'status' => 'active'
+                ]);
+            } else {
+                // Insert new grader
+                $grader = grader::create([
+                    'student_id' => $studentId,
+                    'type' => $type,
+                    'status' => 'active'
+                ]);
+            }
+
+            $teacherId = Teacher::where('name', $name)->value('id');
+
+            if (!$teacherId) {
+                $status[] = ["status" => 'failed', "reason" => "Teacher with name {$name} not found."];
+                continue;
+            }
+
+            // Check if the teacher_grader record exists
+            $teacherGrader = teacher_grader::where([
+                'grader_id' => $grader->id,
+                'teacher_id' => $teacherId,
+                'session_id' => $sessionId
+            ])->first();
+
+            if (!$teacherGrader) {
+                // Insert new teacher_grader record
+                teacher_grader::create([
+                    'grader_id' => $grader->id,
+                    'teacher_id' => $teacherId,
+                    'session_id' => $sessionId,
+                    'feedback' => '' // Insert empty string as feedback if none provided
+                ]);
+            }
+
+            $status[] = ["status" => 'success', "message" => "Grader assigned for RegNo {$regNo}.", "teacher" => $name, "session" => $sessionName];
+        }
+
+        $successMessages = [];
+        $errorMessages = [];
+        foreach ($status as $stat) {
+            if ($stat['status'] === 'success') {
+                $successMessages[] = $stat;
+            } else {
+                $errorMessages[] = $stat;
+            }
+        }
+
+        return response()->json([
+            'Message' => 'Grader assignment processed.',
+            'success' => $successMessages,
+            'failed' => $errorMessages
+        ], 200);
+
+    } catch (ValidationException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+
+    } catch (ModelNotFoundException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Data not found'
+        ], 404);
+
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'An unexpected error occurred',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+public function assignJuniorLecturer(Request $request)
+    {
+        try {
+            // Validate the uploaded Excel file
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls',
+                'session_name' => 'required|string'
+            ]);
+
+            $file = $request->file('excel_file');
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+
+            $sessionName = $request->input('session_name');
+            $sessionId = (new Session())->getSessionIdByName($sessionName);
+
+            if (!$sessionId) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Invalid session name.'
+                ], 400);
+            }
+
+            $status = [];
+            foreach ($sheetData as $row) {
+                if (trim($row['A']) === 'Section') {
+                    continue;
+                }
+
+                $sectionName = trim($row['A']);
+                $courseTitle = trim($row['B']);
+                $juniorLecturerName = trim($row['C']);
+                $teacherName = trim($row['D']);
+                $courseId = Course::where('name', $courseTitle)->value('id');
+                if (!$courseId) {
+                    $status[] = [
+                        'status' => 'failed',
+                        'message' => "Course '$courseTitle' not found."
+                    ];
+                    continue;
+                }
+                $offeredCourseId = offered_courses::where('course_id', $courseId)
+                    ->where('session_id', $sessionId)
+                    ->value('id');
+
+                if (!$offeredCourseId) {
+                    $status[] = [
+                        'status' => 'failed',
+                        'message' => "Offered course for '$courseTitle' not found in session '$sessionName'."
+                    ];
+                    continue;
+                }
+
+                // Fetch section_id
+                $sectionId = (new Section())->getNameByID($sectionName);
+                if (!$sectionId) {
+                    $status[] = [
+                        'status' => 'failed',
+                        'message' => "Section '$sectionName' not found."
+                    ];
+                    continue;
+                }
+                $teacherId = Teacher::where('name', $teacherName)->value('id');
+                if (!$teacherId) {
+                    $status[] = [
+                        'status' => 'failed',
+                        'message' => "Teacher '$teacherName' not found."
+                    ];
+                    continue;
+                }
+                $teacherOfferedCourse = teacher_offered_courses::where([
+                    'teacher_id' => $teacherId,
+                    'section_id' => $sectionId,
+                    'offered_course_id' => $offeredCourseId
+                ])->first();
+                
+                if (!$teacherOfferedCourse) {
+                    $status[] = [
+                        'status' => 'failed',
+                        'message' => "Teacher Offered Course not found for Teacher '$teacherName', Course '$courseTitle', Section '$sectionName'."
+                    ];
+                    continue; 
+                }
+                $juniorLecturerId = juniorlecturer::where('name', $juniorLecturerName)->value('id');
+                if (!$juniorLecturerId) {
+                    $status[] = [
+                        'status' => 'failed',
+                        'message' => "Junior Lecturer '$juniorLecturerName' not found."
+                    ];
+                    continue;
+                }
+                $teacherJuniorLecturer =teacher_juniorlecturer::updateOrCreate(
+                    [
+                        'teacher_offered_course_id' => $teacherOfferedCourse->id,
+                    ],
+                    [
+                        'juniorlecturer_id' => $juniorLecturerId
+                    ]
+                );
+
+                $status[] = [
+                    'status' => 'success',
+                    'message' => "Assigned Junior Lecturer '$juniorLecturerName' for course '$courseTitle' in section '$sectionName'."
+                ];
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Operation completed.',
+                'details' => $status
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An error occurred while processing the request.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

@@ -199,7 +199,6 @@ class StudentController extends Controller
             $taskTitle = $task->title;
             $fileName = "({$studentRegNo})-{$taskTitle}";
             $directoryPath = "{$sessionName}-{$sessionYear}/{$taskSectionName}/{$course_name}/Task";
-           
             if ($request->hasFile('Answer') && $request->file('Answer')->isValid()) {
                 $filePath = FileHandler::storeFile($fileName,$directoryPath,$request->file('Answer'));
                 

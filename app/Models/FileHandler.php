@@ -22,10 +22,9 @@ class FileHandler extends Model
                 File::makeDirectory($storagePath, 0777, true);
             }
             $filePath = 'storage/BIIT/' . $remainingDirectory;
-            $file->move($storagePath, $fileName . '.' . $getfileExtension);
+             $file->move($storagePath, $fileName . '.' . $getfileExtension);
             return $filePath . '/' . $fileName . '.' . $getfileExtension;
-
-        } catch (Exception $e) {
+        }catch (Exception $e) {
             throw new Exception('Error storing file: ' . $e->getMessage());
         }
     }

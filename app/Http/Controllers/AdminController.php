@@ -43,7 +43,10 @@ class AdminController extends Controller
             }
             foreach ($students as $student) {
                 $originalPath = $student->image;
-                if (file_exists(public_path($originalPath))) {
+                if(!$originalPath){
+                    $student->image = null;
+                }
+                else if (file_exists(public_path($originalPath))) {
                     $imageContent = file_get_contents(public_path($originalPath));
                     $student->image = base64_encode($imageContent);
                 } else {
@@ -456,12 +459,12 @@ public function getAllSessions(Request $request)
         $week = $request->input('week');             // Optional
 
         // Query course content with the related course name
-        $query = coursecontent::with(['offeredCourse:id,name']); // Include the course name
+        $query = coursecontent::with(['offeredCourse:course_id,name']); // Include the course name
 
         // Apply filter for course name if provided
         if ($courseName) {
             $query->whereHas('offeredCourse', function ($query) use ($courseName) {
-                $query->where('name', 'LIKE', '%' . $courseName . '%'); // Partial match for flexibility
+                $query->where('courseName', 'LIKE', '%' . $courseName . '%'); // Partial match for flexibility
             });
         }
 
@@ -483,7 +486,7 @@ public function getAllSessions(Request $request)
                     'content' => $content->content,
                     'week' => $content->week,
                     'title' => $content->title,
-                    'course_name' => $content->offeredCourse ? $content->offeredCourse->name : null,
+                    'course_name' => $content->offeredCourse ? $content->offeredCourse->courseName : null,
                 ];
             }),
         ]);
