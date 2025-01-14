@@ -119,12 +119,12 @@ class DatacellController extends Controller
             }
             foreach ($students as $student) {
                 $originalPath = $student->image;
-                if (file_exists(public_path($originalPath))) {
+                if(!$originalPath){
+                      $student->image=null;
+                }else {
                     $imageContent = file_get_contents(public_path($originalPath));
                     $student->image = base64_encode($imageContent);
-                } else {
-                    $student->image = null;
-                }
+                } 
             }
             return response()->json(
                 [

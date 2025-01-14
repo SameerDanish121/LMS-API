@@ -6,28 +6,35 @@ use Illuminate\Database\Eloquent\Model;
 
 class task extends Model
 {
-    protected $table = 'task';
+    protected $table = 'task';    protected $primaryKey = 'id';
+    public $incrementing = true;
+    protected $keyType = 'int';
     public $timestamps = false;
-
-    // Define the fillable properties for mass assignment
     protected $fillable = [
         'type',
-        'path',
+        'coursecontent_id',
         'CreatedBy',
         'points',
         'start_date',
         'due_date',
-        'title',
-        'IsEvaluated',
         'teacher_offered_course_id',
+        'title',
         'isMarked',
     ];
 
-    /**
-     * Define relationships with other models
-     */
+    // Relationships
 
-    // Relationship to TeacherOfferedCourse model
+    /**
+     * Get the course content associated with this task.
+     */
+    public function courseContent()
+    {
+        return $this->belongsTo(CourseContent::class, 'coursecontent_id', 'id');
+    }
+
+    /**
+     * Get the teacher offered course associated with this task.
+     */
     public function teacherOfferedCourse()
     {
         return $this->belongsTo(teacher_offered_courses::class, 'teacher_offered_course_id');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Action;
 use App\Models\attendance;
 use App\Models\Course;
+use App\Models\coursecontent;
 use App\Models\FileHandler;
 use App\Models\JuniorLecturerHandling;
 use App\Models\offered_courses;
@@ -273,22 +274,19 @@ class JuniorLecturerController extends Controller
             $validatedData = $request->validate([
                 'title' => 'required',
                 'type' => 'required|in:Quiz,Assignment,LabTask',
-                'file' => 'required|file|mimes:pdf,doc,docx|max:2048',
+                'coursecontent_id' => 'required',
                 'points' => 'required|numeric|min:0',
                 'start_date' => 'required|date',
                 'due_date' => 'required|date|after:start_date',
                 'course_name' => 'required|string|max:255',
-                'sectioninfo' => 'required|string',
-                'IsEvaluated' => 'nullable|boolean',
+                'sectioninfo' => 'required|string'
             ]);
             $courseName = $validatedData['course_name'];
             $sectionInfo = $validatedData['sectioninfo'];
-            $title = $validatedData['title'];
-            $type = $validatedData['type'];
             $points = $validatedData['points'];
             $startDate = $validatedData['start_date'];
             $dueDate = $validatedData['due_date'];
-            $isEvaluated = $validatedData['IsEvaluated'] ?? false;
+            $coursecontent_id = $validatedData['coursecontent_id'];
             $sections = explode(',', $sectionInfo);
             $course = Course::where('name', $courseName)->first();
             if (!$course) {
@@ -297,6 +295,14 @@ class JuniorLecturerController extends Controller
                     'message' => "Course '{$courseName}' not found.",
                 ], 404);
             }
+            $course_content=coursecontent::find($coursecontent_id);
+                if(!$course_content){
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => "No Task is Found with given Cradentails ",
+                    ], 404);
+                }
+            $type = $course_content->type;
             $insertedTasks = [];
             foreach ($sections as $sectionName) {
                 $sectionName = trim($sectionName);
@@ -331,25 +337,31 @@ class JuniorLecturerController extends Controller
                 if ($taskNo > 0 && $taskNo < 10) {
                     $taskNo = "0" . $taskNo;
                 }
-                $filename = $course->name . '-' . $type . $taskNo . '-' . $sectionName;
+                
+                $filename = $course->description. $course_content->title.'-' . $type . $taskNo . '-' . $sectionName;
                 $title = $filename;
-                $directory = (new session())->getSessionNameByID($currrentSession) . '/' . $sectionName . '/' . $courseName . '/Task';
-                $path = FileHandler::storeFile($filename, $directory, $request->file('file'));
                 $teacherOfferedCourseId = $teacherOfferedCourse->id;
                 $taskData = [
                     'title' => $title,
                     'type' => $type,
-                    'path' => $path,
                     'CreatedBy' => 'Junior Lecturer',
                     'points' => $points,
                     'start_date' => $startDate,
                     'due_date' => $dueDate,
-                    'IsEvaluated' => $isEvaluated,
+                    'coursecontent_id' => $coursecontent_id,
                     'teacher_offered_course_id' => $teacherOfferedCourseId,
                     'isMarked' => false,
                 ];
-                $task = Task::create($taskData);
-                $insertedTasks[] = $task;
+                $task=task::where('teacher_offered_course_id',$teacherOfferedCourse)
+                ->where('coursecontent_id',$coursecontent_id)->first();
+                if($task){
+                    $task->update($taskData);
+                    $insertedTasks[] = ['status'=>'Task is Already Allocated ! Just Updated the informations','task'=>$task];
+                }else{
+                    $task = Task::create($taskData);
+                    $insertedTasks[] = ['status'=>'Task Allocated Successfully','task'=>$task];
+                }
+               
             }
             return response()->json([
                 'status' => 'success',

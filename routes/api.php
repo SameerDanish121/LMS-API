@@ -36,8 +36,6 @@ Route::prefix('Student')->group(function () {
     Route::get('/TranscriptSessionDropDown', [StudentController::class, 'TranscriptSessionDropDown']);
     //18
 });
-
-
 //////////////////////////////////////////////////////~api/Grader////////////////////////////////////////////////
 Route::prefix('Grader')->group(function () {
     Route::get('/GraderInfo', [GraderController::class, 'GraderOf']);
@@ -47,9 +45,6 @@ Route::prefix('Grader')->group(function () {
     Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);
     //5
 });
-
-
-
 //////////////////////////////////////////////////////~api/JuniorLecturer////////////////////////////////////////////////
 Route::prefix('JuniorLecturer')->group(function () {
     Route::get('/full-timetable', [JuniorLecturerController::class, 'FullTimetable']);
@@ -81,7 +76,7 @@ Route::prefix('JuniorLecturer')->group(function () {
 Route::prefix('Admin')->group(function () {
     Route::get('/AllStudent', [AdminController::class, 'AllStudent']);
     Route::post('/SendNotification', [AdminController::class, 'sendNotification']);
-    Route::post('/sections', [AdminController::class, 'showSections']);
+    Route::get('/sections', [AdminController::class, 'showSections']);
     Route::get('/teachers', [AdminController::class, 'AllTeacher']);
     Route::get('/courses', [AdminController::class, 'AllCourse']);
     Route::get('/grades', [AdminController::class, 'AllGrades']);
@@ -118,17 +113,7 @@ Route::prefix('Teacher')->group(function () {
 
 Route::get('/checking', [TestController::class, 'Empty']);
 
-Route::post('/file-credentials', [TestController::class, 'getFileCredentials']);
-
-
-
-
-
-
-
-
-
-
+Route::get('/good', [TestController::class, 'upload']);
 
 //////////////////////////////////////////////////////~api/Datacell////////////////////////////////////////////////
 
@@ -151,6 +136,5 @@ Route::prefix('Datacell')->group(function () {
     Route::get('/timetable/section', [DatacellController::class, 'getTimetableGroupedBySection']);
     Route::get('/AllStudent', [DatacellController::class, 'AllStudent']);
     Route::post('/NewOfferedCourse', [DatacellController::class, 'AddNewOfferedCourse']);
-   
     //14
 });

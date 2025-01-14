@@ -43,10 +43,9 @@ class AdminController extends Controller
             }
             foreach ($students as $student) {
                 $originalPath = $student->image;
-                if(!$originalPath){
+                if (!$originalPath) {
                     $student->image = null;
-                }
-                else if (file_exists(public_path($originalPath))) {
+                } else if (file_exists(public_path($originalPath))) {
                     $imageContent = file_get_contents(public_path($originalPath));
                     $student->image = base64_encode($imageContent);
                 } else {
@@ -83,16 +82,16 @@ class AdminController extends Controller
                 'Student_Section' => 'nullable|integer', // For student notifications
                 'TL_receiver_id' => 'nullable|integer', // For specific notifications
             ]);
-    
+
             $receiverRole = $request->input('receiver');
             $broadcast = $request->input('broadcast');
             $senderId = $request->input('sender');
             $sectionId = $request->input('Student_Section');
             $tlReceiverId = $request->input('TL_receiver_id');
-    
+
             // Initialize an empty array to hold target users
             $users = [];
-    
+
             // Determine the target users based on the receiver role and conditions
             switch ($receiverRole) {
                 case 'student':
@@ -104,7 +103,7 @@ class AdminController extends Controller
                         $users = User::where('role_id', 11)->where('section_id', $sectionId)->get();
                     }
                     break;
-    
+
                 case 'teacher':
                     if ($broadcast && !$tlReceiverId) {
                         // Broadcast to all teachers
@@ -114,7 +113,7 @@ class AdminController extends Controller
                         $users = User::where('role_id', 2)->where('id', $tlReceiverId)->get();
                     }
                     break;
-    
+
                 case 'datacell':
                     if ($broadcast && !$tlReceiverId) {
                         // Broadcast to all datacell users
@@ -124,7 +123,7 @@ class AdminController extends Controller
                         $users = User::where('role_id', 3)->where('id', $tlReceiverId)->get();
                     }
                     break;
-    
+
                 case 'jlecture':
                     if ($broadcast && !$tlReceiverId) {
                         // Broadcast to all jlecture users
@@ -134,16 +133,16 @@ class AdminController extends Controller
                         $users = User::where('role_id', 4)->where('id', $tlReceiverId)->get();
                     }
                     break;
-    
+
                 default:
                     return response()->json(['error' => 'Invalid receiver role provided'], 400);
             }
-    
+
             // Ensure we have target users
             if ($users->isEmpty()) {
                 return response()->json(['error' => 'No users found for the given criteria'], 404);
             }
-    
+
             // Create notifications for all determined users
             foreach ($users as $user) {
                 notification::create([
@@ -158,7 +157,7 @@ class AdminController extends Controller
                     'TL_receiver_id' => $tlReceiverId,
                 ]);
             }
-    
+
             return response()->json(['success' => 'Notification(s) sent successfully!']);
         } catch (\Illuminate\Validation\ValidationException $e) {
             // Handle validation exceptions
@@ -175,237 +174,241 @@ class AdminController extends Controller
         }
     }
     public function showSections(Request $request)
-{
-    // Initialize the query to fetch all sections
-    $query =section::query();
-
-    // Check if specific filters are provided in the request and apply them
-    if ($request->has('group')) {
-        $query->where('group', $request->input('group'));
-    }
-
-    if ($request->has('semester')) {
-        $query->where('semester', $request->input('semester'));
-    }
-
-    if ($request->has('program')) {
-        $query->where('program', $request->input('program'));
-    }
-
-    // Get the filtered or all sections based on the conditions
-    $sections = $query->get();
-
-    // Return the sections as a JSON response
-    return response()->json($sections);
-}
-
-public function AllTeacher(Request $request)
-{
-    try {
-        // Initialize an empty array for teachers
-        $teachers = [];
+    {
+        // Initialize the query to fetch all sections
+        $query = section::query();
 
         // Check if specific filters are provided in the request and apply them
-        if ($request->user_id) {
-            // Search by user_id
-            $teachers = teacher::where('user_id', $request->user_id)->first();
-        } else if ($request->name) {
-            // Search by teacher name
-            $teachers = Teacher::where('name', $request->name)->get();
-        } else {
-            // If no filters are provided, get all teachers
-            $teachers = Teacher::with(['user'])->get();
+        if ($request->has('group')) {
+            $query->where('group', $request->input('group'));
         }
 
-        // Loop through each teacher to encode their image as base64
-        foreach ($teachers as $teacher) {
-            $originalPath = $teacher->image;
-            if (file_exists(public_path($originalPath))) {
-                // If the image exists, convert it to base64
-                $imageContent = file_get_contents(public_path($originalPath));
-                $teacher->image = base64_encode($imageContent); // Set the base64 encoded image
+        if ($request->has('semester')) {
+            $query->where('semester', $request->input('semester'));
+        }
+        if ($request->has('program')) {
+            $query->where('program', $request->input('program'));
+        }
+
+        // Get the filtered or all sections based on the conditions
+        $GoodFormat=[];
+        $sections = $query->get();
+        foreach($sections as $section){
+            $GoodFormat[]=[
+                'id'=>$section->id,
+                'Name'=>(new section())->getNameByID($section->id)
+            ];
+        }
+        return response()->json($GoodFormat);
+    }
+
+    public function AllTeacher(Request $request)
+    {
+        try {
+            // Initialize an empty array for teachers
+            $teachers = [];
+
+            // Check if specific filters are provided in the request and apply them
+            if ($request->user_id) {
+                // Search by user_id
+                $teachers = teacher::where('user_id', $request->user_id)->first();
+            } else if ($request->name) {
+                // Search by teacher name
+                $teachers = Teacher::where('name', $request->name)->get();
             } else {
-                $teacher->image = null; // Set to null if the image doesn't exist
+                // If no filters are provided, get all teachers
+                $teachers = Teacher::with(['user'])->get();
             }
-        }
 
-        // Return the teachers as JSON with a success message
-        return response()->json(
-            [
-                'message' => 'Teacher Fetched Successfully',
-                'Teacher' => $teachers,
-            ],
-            200
-        );
-    } catch (\Exception $e) {
-        // In case of an error, return the error details
-        return response()->json([
-            'status' => 'error',
-            'message' => 'An unexpected error occurred',
-            'error' => $e->getMessage()
-        ], 500);
+            // Loop through each teacher to encode their image as base64
+            foreach ($teachers as $teacher) {
+                $originalPath = $teacher->image;
+                if (file_exists(public_path($originalPath))) {
+                    // If the image exists, convert it to base64
+                    $imageContent = file_get_contents(public_path($originalPath));
+                    $teacher->image = base64_encode($imageContent); // Set the base64 encoded image
+                } else {
+                    $teacher->image = null; // Set to null if the image doesn't exist
+                }
+            }
+
+            // Return the teachers as JSON with a success message
+            return response()->json(
+                [
+                    'message' => 'Teacher Fetched Successfully',
+                    'Teacher' => $teachers,
+                ],
+                200
+            );
+        } catch (\Exception $e) {
+            // In case of an error, return the error details
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
-public function AllCourse(Request $request)
-{
-    try {
-        // Initialize an empty array for courses
-        $courses = [];
+    public function AllCourse(Request $request)
+    {
+        try {
+            // Initialize an empty array for courses
+            $courses = [];
 
-        // Check if specific filters are provided in the request and apply them
-        if ($request->code) {
-            // Search by course code
-            $courses = Course::where('code', $request->code)->select('id', 'code', 'name', 'credit_hours', 'pre_req_main', 'lab')->get();
-        } else if ($request->name) {
-            // Search by course name
-            $courses = Course::where('name', $request->name)->select('id', 'code', 'name', 'credit_hours', 'pre_req_main', 'lab')->get();
-        } else {
-            // If no filters are provided, get all courses with only the necessary fields
-            $courses = Course::select('id', 'code', 'name', 'credit_hours', 'pre_req_main', 'lab')->get();
-        }
-
-        // Loop through each course to modify the 'pre_req_main' field and encode the response
-        foreach ($courses as $course) {
-            // Check if 'pre_req_main' is null and modify the value accordingly
-            if (is_null($course->pre_req_main)) {
-                $course->pre_req_main = 'main'; // Set to "main" if null
+            // Check if specific filters are provided in the request and apply them
+            if ($request->code) {
+                // Search by course code
+                $courses = Course::where('code', $request->code)->select('id', 'code', 'name', 'credit_hours', 'pre_req_main', 'lab')->get();
+            } else if ($request->name) {
+                // Search by course name
+                $courses = Course::where('name', $request->name)->select('id', 'code', 'name', 'credit_hours', 'pre_req_main', 'lab')->get();
             } else {
-                // If it's not null, get the prerequisite course name
-                $course->pre_req_main = $course->prerequisite ? $course->prerequisite->name : 'Not Available';
+                // If no filters are provided, get all courses with only the necessary fields
+                $courses = Course::select('id', 'code', 'name', 'credit_hours', 'pre_req_main', 'lab')->get();
             }
+
+            // Loop through each course to modify the 'pre_req_main' field and encode the response
+            foreach ($courses as $course) {
+                // Check if 'pre_req_main' is null and modify the value accordingly
+                if (is_null($course->pre_req_main)) {
+                    $course->pre_req_main = 'main'; // Set to "main" if null
+                } else {
+                    // If it's not null, get the prerequisite course name
+                    $course->pre_req_main = $course->prerequisite ? $course->prerequisite->name : 'Not Available';
+                }
+            }
+
+            // Return the courses as JSON with a success message
+            return response()->json(
+                [
+                    'message' => 'Courses Fetched Successfully',
+                    'Courses' => $courses,
+                ],
+                200
+            );
+        } catch (\Exception $e) {
+            // In case of an error, return the error details
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Return the courses as JSON with a success message
-        return response()->json(
-            [
-                'message' => 'Courses Fetched Successfully',
-                'Courses' => $courses,
-            ],
-            200
-        );
-    } catch (\Exception $e) {
-        // In case of an error, return the error details
-        return response()->json([
-            'status' => 'error',
-            'message' => 'An unexpected error occurred',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
-public function AllGrades(Request $request)
-{
-    try {
-        // Initialize an empty array for grades
-        $grades = [];
+    public function AllGrades(Request $request)
+    {
+        try {
+            // Initialize an empty array for grades
+            $grades = [];
 
-        // Check if specific filters are provided in the request
-        if ($request->student_id) {
-            // If a student_id is provided, filter grades by student_id
-            $grades = grader::where('student_id', $request->student_id)
-                            ->with('student')  // Eager load related student data if needed
-                            ->get();
-        } else if ($request->status) {
-            // If status is provided, filter grades by status
-            $grades = Grader::where('status', $request->status)
-                            ->with('student')  // Eager load related student data
-                            ->get();
-        } else {
-            // If no filters are provided, return all grades
-            $grades = Grader::with('student')  // Eager load related student data
-                            ->get();
+            // Check if specific filters are provided in the request
+            if ($request->student_id) {
+                // If a student_id is provided, filter grades by student_id
+                $grades = grader::where('student_id', $request->student_id)
+                    ->with('student')  // Eager load related student data if needed
+                    ->get();
+            } else if ($request->status) {
+                // If status is provided, filter grades by status
+                $grades = Grader::where('status', $request->status)
+                    ->with('student')  // Eager load related student data
+                    ->get();
+            } else {
+                // If no filters are provided, return all grades
+                $grades = Grader::with('student')  // Eager load related student data
+                    ->get();
+            }
+
+            // Return the grades as JSON with a success message
+            return response()->json(
+                [
+                    'message' => 'Grades Fetched Successfully',
+                    'Grades' => $grades,
+                ],
+                200
+            );
+        } catch (\Exception $e) {
+            // In case of an error, return the error details
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Return the grades as JSON with a success message
-        return response()->json(
-            [
-                'message' => 'Grades Fetched Successfully',
-                'Grades' => $grades,
-            ],
-            200
-        );
-    } catch (\Exception $e) {
-        // In case of an error, return the error details
-        return response()->json([
-            'status' => 'error',
-            'message' => 'An unexpected error occurred',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
-public function getAllTeacherGraders(Request $request)
-{
-    try {
-        $teacherGraders = teacher_grader::with([ 'teacher'])
-            ->get()
-            ->map(function ($teacherGrader) {
+    public function getAllTeacherGraders(Request $request)
+    {
+        try {
+            $teacherGraders = teacher_grader::with(['teacher'])
+                ->get()
+                ->map(function ($teacherGrader) {
+                    return [
+                        'id' => $teacherGrader->id,
+                        'grader_id' => student::where('id', $teacherGrader->grader_id)->value('name') ?? 'N/A',
+                        'teacher_name' => $teacherGrader->teacher?->name,
+                        'session_id' => (new session())->getSessionNameByID(),
+                        'status' => $teacherGrader->status,
+                    ];
+                });
+
+            return response()->json([
+                'message' => 'Teacher Grader data fetched successfully',
+                'data' => $teacherGraders,
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An error occurred while fetching teacher grader data',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getAllSessions(Request $request)
+    {
+        try {
+            // Fetch all sessions
+            $sessions = session::all()->map(function ($session) {
+                // Check if the session is active
+                $currentDate = now();
+                $isActive = $currentDate->between(Carbon::parse($session->start_date), Carbon::parse($session->end_date));
+
                 return [
-                    'id' => $teacherGrader->id,
-                    'grader_id' =>student::where('id',$teacherGrader->grader_id)->value('name')??'N/A', 
-                    'teacher_name' => $teacherGrader->teacher?->name, 
-                    'session_id' => (new session())->getSessionNameByID(),
-                    'status' => $teacherGrader->status,
+                    'id' => $session->id,
+                    'name' => $session->name,
+                    'year' => $session->year,
+                    'start_date' => $session->start_date,
+                    'end_date' => $session->end_date,
+                    'status' => $isActive ? 'Active' : 'Inactive',
                 ];
             });
-        
-        return response()->json([
-            'message' => 'Teacher Grader data fetched successfully',
-            'data' => $teacherGraders,
-        ], 200);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'An error occurred while fetching teacher grader data',
-            'error' => $e->getMessage(),
-        ], 500);
-    }
-}
 
-public function getAllSessions(Request $request)
-{
-    try {
-        // Fetch all sessions
-        $sessions = session::all()->map(function ($session) {
-            // Check if the session is active
-            $currentDate = now();
-            $isActive = $currentDate->between(Carbon::parse($session->start_date), Carbon::parse($session->end_date));
-
-            return [
-                'id' => $session->id,
-                'name' => $session->name,
-                'year' => $session->year,
-                'start_date' => $session->start_date,
-                'end_date' => $session->end_date,
-                'status' => $isActive ? 'Active' : 'Inactive',
-            ];
-        });
-
-        // Filter based on status if requested
-        if ($request->has('status')) {
-            $status = strtolower($request->status);
-            if ($status === 'active') {
-                $sessions = $sessions->filter(fn($session) => $session['status'] === 'Active');
-            } elseif ($status === 'inactive') {
-                $sessions = $sessions->filter(fn($session) => $session['status'] === 'Inactive');
+            // Filter based on status if requested
+            if ($request->has('status')) {
+                $status = strtolower($request->status);
+                if ($status === 'active') {
+                    $sessions = $sessions->filter(fn($session) => $session['status'] === 'Active');
+                } elseif ($status === 'inactive') {
+                    $sessions = $sessions->filter(fn($session) => $session['status'] === 'Inactive');
+                }
             }
+
+            // Return the filtered sessions as JSON
+            return response()->json([
+                'message' => 'Sessions fetched successfully',
+                'data' => $sessions->values(), // Reset array keys after filtering
+            ], 200);
+        } catch (\Exception $e) {
+            // Handle errors
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        // Return the filtered sessions as JSON
-        return response()->json([
-            'message' => 'Sessions fetched successfully',
-            'data' => $sessions->values(), // Reset array keys after filtering
-        ], 200);
-    } catch (\Exception $e) {
-        // Handle errors
-        return response()->json([
-            'status' => 'error',
-            'message' => 'An unexpected error occurred',
-            'error' => $e->getMessage(),
-        ], 500);
     }
-}
 
- /**
+    /**
      * Display a list of junior lectures with optional name search.
      */
     public function allJuniorLecturers(Request $request)
@@ -418,11 +421,7 @@ public function getAllSessions(Request $request)
             if ($request->filled('name')) {
                 $query->where('name', 'LIKE', '%' . $request->name . '%');
             }
-
-            // Retrieve the results
             $lecturers = $query->get();
-
-            // Process each lecturer to encode the image as Base64
             foreach ($lecturers as $lecturer) {
                 $originalPath = $lecturer->image;
                 if ($originalPath && file_exists(public_path($originalPath))) {

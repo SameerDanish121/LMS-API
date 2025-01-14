@@ -39,4 +39,8 @@ class teacher_offered_courses extends Model
    {
        return $this->belongsTo(offered_courses::class, 'offered_course_id');
    }
+   public function tasks()
+    {
+        return $this->hasMany(Task::class, 'teacher_offered_course_id', 'id');
+    }
 }

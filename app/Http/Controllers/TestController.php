@@ -7,6 +7,7 @@ use App\Models\course;
 use App\Models\FileHandler;
 use App\Models\section;
 use App\Models\student_offered_courses;
+use App\Models\task;
 use App\Models\teacher;
 use Illuminate\Http\Request;
 use App\Models\session;
@@ -17,8 +18,7 @@ class TestController extends Controller
 {
     public function upload(Request $request)
     {
-
-        return FileHandler::sendDirectoryAsZip($request->file);
+        return task::all();
     }
 
     public function Empty(Request $request)

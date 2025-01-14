@@ -11,11 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('section', function (Blueprint $table) {
+        Schema::create('quiz_questions', function (Blueprint $table) {
             $table->integer('id', true);
-            $table->string('group', 50);
-            $table->string('semester', 50); // Changed from integer to VARCHAR(50)
-            $table->string('program', 50);
+            $table->integer('question_no');
+            $table->text('question_text');
+            $table->integer('points')->default(1);
+            $table->integer('coursecontent_id')->index('coursecontent_id');
         });
     }
 
@@ -24,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('section');
+        Schema::dropIfExists('quiz_questions');
     }
 };

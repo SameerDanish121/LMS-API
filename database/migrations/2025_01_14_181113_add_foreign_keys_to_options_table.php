@@ -11,11 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('section', function (Blueprint $table) {
-            $table->integer('id', true);
-            $table->string('group', 50);
-            $table->string('semester', 50); // Changed from integer to VARCHAR(50)
-            $table->string('program', 50);
+        Schema::table('options', function (Blueprint $table) {
+            $table->foreign(['quiz_question_id'], 'options_ibfk_1')->references(['id'])->on('quiz_questions')->onUpdate('no action')->onDelete('cascade');
         });
     }
 
@@ -24,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('section');
+        Schema::table('options', function (Blueprint $table) {
+            $table->dropForeign('options_ibfk_1');
+        });
     }
 };

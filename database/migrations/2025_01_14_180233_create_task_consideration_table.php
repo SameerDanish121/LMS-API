@@ -11,11 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('section', function (Blueprint $table) {
+        Schema::create('task_consideration', function (Blueprint $table) {
             $table->integer('id', true);
-            $table->string('group', 50);
-            $table->string('semester', 50); // Changed from integer to VARCHAR(50)
-            $table->string('program', 50);
+            $table->integer('teacher_offered_course_id')->index('teacher_offered_course_id');
+            $table->enum('type', ['Quiz', 'Assignment', 'LabTask'])->nullable();
+            $table->integer('top')->default(3);
         });
     }
 
@@ -24,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('section');
+        Schema::dropIfExists('task_consideration');
     }
 };

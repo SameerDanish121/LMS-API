@@ -21,4 +21,8 @@ class coursecontent extends Model
     {
         return $this->belongsTo(offered_courses::class, 'offered_course_id', 'id');
     }
+    public function tasks()
+    {
+        return $this->hasMany(Task::class, 'coursecontent_id', 'id');
+    }
 }

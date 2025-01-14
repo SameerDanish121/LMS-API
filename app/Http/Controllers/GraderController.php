@@ -183,7 +183,7 @@ class GraderController extends Controller
         try {
             $graderId = $request->grader_id;
             $session_id = (new session())->getCurrentSessionId();
-            $assignedTasks = grader_task::with(['task', 'task.teacherOfferedCourse.offeredCourse.session'])
+            $assignedTasks = grader_task::with(['task', 'task.teacherOfferedCourse.offeredCourse.session','courseContent'])
                 ->where('Grader_id', $graderId)
                 ->whereHas('task.teacherOfferedCourse.offeredCourse.session', function ($query) use ($session_id) {
                     $query->where('id', $session_id);
@@ -198,12 +198,11 @@ class GraderController extends Controller
                             'task_id' => $task->id,
                             'title' => $task->title,
                             'type' => $task->type,
-                            'path' => $task->path,
+                            'course_content' => $task->courseContent?FileHandler::getFileByPath($task->courseContent->content):'null',
                             'created_by' => $task->CreatedBy,
                             'points' => $task->points,
                             'start_date' => $task->start_date,
                             'due_date' => $task->due_date,
-                            'is_evaluated' => $task->IsEvaluated,
                             'teacher_offered_course' => teacher::find($task->teacherOfferedCourse->teacher_id)->value('name') ?? 'N/A',
                             'marking_status' => 'Marked',
                             'marking_info' => $markingInfo,
@@ -213,12 +212,11 @@ class GraderController extends Controller
                             'task_id' => $task->id,
                             'title' => $task->title,
                             'type' => $task->type,
-                            'path' => $task->path,
+                            'course_content' => $task->courseContent?FileHandler::getFileByPath($task->courseContent->content):'null',
                             'created_by' => $task->CreatedBy,
                             'points' => $task->points,
                             'start_date' => $task->start_date,
                             'due_date' => $task->due_date,
-                            'is_evaluated' => $task->IsEvaluated,
                             'marking_status' => 'Un-Marked',
                             'teacher_offered_course' => teacher::find($task->teacherOfferedCourse->teacher_id)->value('name') ?? 'N/A'
                         ];
@@ -243,8 +241,6 @@ class GraderController extends Controller
             $unmarkedTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
                 return !$task['marking_status'] === 'Marked' && $task['due_date'] < $currentDate;
             });
-
-            // Return categorized tasks
             return response()->json(
                 [
                     'message' => 'Fetched Successfully',
@@ -282,11 +278,11 @@ class GraderController extends Controller
             'top' => [
                 'student_name' => $topMark->student_name,
                 'obtained_marks' => $topMark->obtained_marks,
-                'title' => 'Good',  // Top performer title
+                'title' => 'Good',  
             ],
             'average' => [
                 'student_name' => $topMark->student_name,
-                'obtained_marks' => round($averageMarks, 2),  // Average marks rounded to 2 decimals
+                'obtained_marks' => round($averageMarks, 2),
                 'title' => 'Average',
             ],
             'worst' => [
