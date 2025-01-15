@@ -590,6 +590,7 @@ class DatacellController extends Controller
                 'excel_file' => 'required|mimes:xlsx,xls',
                 'session' => 'required'
             ]);
+           
             $session_name = $request->session;
             $session_id = (new session())->getSessionIdByName($session_name);
             if (!$session_id) {
@@ -893,7 +894,8 @@ class DatacellController extends Controller
                     'Message' => 'Data Inserted Successfully !',
                     'data' => [
                         "Sucess" => $Success,
-                        "Error" => $Error
+                        "Error" => $Error,
+                        "Raw Data"=>$RawDataWithAllRequiredAttributes
                     ]
                 ],
                 200
@@ -1557,6 +1559,53 @@ public function assignJuniorLecturer(Request $request)
                 'message' => 'An error occurred while processing the request.',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+    public function sendNotification(Request $request)
+    {
+        try {
+            $validatedData = $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'required|string|max:1000',
+                'url' => 'nullable|url|max:255',
+                'sender' => 'required|in:Teacher,JuniorLecturer,Admin,Datacell',
+                'reciever' => 'required|string|max:255',
+                'Brodcast' => 'required|boolean',
+                'Student_Section' => 'nullable|integer',
+                'TL_receiver_id' => 'nullable|integer',
+                'TL_sender_id' => 'nullable|integer',
+            ]);
+            
+          
+            $sender = $request->sender;
+
+            $data = [
+                'title' => $request->title,
+                'description' => $request->description,
+                'url' => $request->url,
+                'notification_date' => now(),
+                'sender' => $sender,
+                'reciever' => $request->reciever,
+                'Brodcast' => $request->Brodcast,
+                'Student_Section' => $request->Student_Section == 0 ? null : $request->Student_Section,
+                'TL_receiver_id' => $request->TL_receiver_id == 0 ? null : $request->TL_receiver_id,
+                'TL_sender_id' => $request->TL_sender_id == 0 ? null : $request->TL_sender_id,
+            ];
+            
+            if ($sender === 'Teacher' || $sender === 'JuniorLecturer') {
+                $data['TL_sender_id'] = $request->TL_sender_id ?? 113;
+            } elseif ($sender === 'Admin' || $sender === 'Datacell') {
+                $data['TL_sender_id'] = $request->TL_sender_id ?? null;
+            } else {
+                return response()->json(['message' => 'Invalid sender role.'], 400);
+            }
+            
+            $notification =notification::create($data);
+
+            return response()->json(['message' => 'Notification sent successfully!', 'data' => $notification], 201);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to send notification.', 'error' => $e->getMessage()], 500);
         }
     }
 }

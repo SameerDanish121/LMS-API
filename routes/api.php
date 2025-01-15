@@ -34,6 +34,8 @@ Route::prefix('Student')->group(function () {
     Route::get('/getActiveEnrollments', [StudentController::class, 'getActiveEnrollments']);
     Route::get('/getPreviousEnrollments', [StudentController::class, 'getYourPreviousEnrollments']);
     Route::get('/TranscriptSessionDropDown', [StudentController::class, 'TranscriptSessionDropDown']);
+    Route::get('/get/notification', [StudentController::class, 'Notifications']);
+    
     //18
 });
 //////////////////////////////////////////////////////~api/Grader////////////////////////////////////////////////
@@ -136,5 +138,8 @@ Route::prefix('Datacell')->group(function () {
     Route::get('/timetable/section', [DatacellController::class, 'getTimetableGroupedBySection']);
     Route::get('/AllStudent', [DatacellController::class, 'AllStudent']);
     Route::post('/NewOfferedCourse', [DatacellController::class, 'AddNewOfferedCourse']);
+    Route::post('/send/notification', [DatacellController::class, 'sendNotification']);
+
+    
     //14
 });

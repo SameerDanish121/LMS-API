@@ -888,7 +888,89 @@ class StudentController extends Controller
         }
     }
 
-
+    public function Notifications(Request $request)
+    {
+        try {
+            $section_id = $request->section_id;
+            $student_id = $request->student_id;  // Get the student ID from the request
+    
+            // Fetch Section-Wide Notifications for a specific Section (reciever = 'Student')
+            $sectionNotifications = notification::with(['senderUser:id,username'])
+                ->where('Student_Section', $section_id) // Filter by section_id
+                ->where('reciever', 'Student') // Filter by recipient type (Student)
+                ->whereNull('TL_receiver_id') // Ensure it's a section-wide notification (not for a specific student)
+                ->where('Brodcast', 0) // Ensure the message is targeted to the section
+                ->select('title', 'description', 'url', 'notification_date', 'sender', 'TL_sender_id')
+                ->get();
+    
+            // Fetch Direct Notifications to a specific Student (by TL_receiver_id)
+            $studentNotifications = notification::with(['senderUser:id,username'])
+                ->where('TL_receiver_id', $student_id) // Filter by TL_receiver_id (student-specific)
+                ->where('reciever', 'Student') // Filter by recipient type (Student)
+                ->select('title', 'description', 'url', 'notification_date', 'sender', 'TL_sender_id')
+                ->get();
+    
+            // Fetch Broadcast Notifications (where Brodcast = 1)
+            $broadcastNotifications = notification::with(['senderUser:id,username'])
+                ->where('Brodcast', 1) // Fetch notifications broadcasted to all students
+                ->where('reciever', 'Student') // Filter by recipient type (Student)
+                ->select('title', 'description', 'url', 'notification_date', 'sender', 'TL_sender_id')
+                ->get();
+    
+            // Combine and remove duplicates from section and student notifications
+            $notifications = $sectionNotifications->merge($studentNotifications)->unique('id'); // Assuming 'id' is unique
+    
+            // Map all notifications (section and student-specific) to the desired format
+            $notifications = $sectionNotifications->map(function ($item) {
+                return [
+                    'title' => $item->title,
+                    'description' => $item->description,
+                    'url' => $item->url,
+                    'notification_date' => $item->notification_date,
+                    'sender' => $item->sender,
+                    'TL_sender_id' => $item->senderUser->username ?? 'N/A',
+                ];
+            });
+    
+            // Map broadcast notifications separately
+            $broadcastNotifications = $broadcastNotifications->map(function ($item) {
+                return [
+                    'title' => $item->title,
+                    'description' => $item->description,
+                    'url' => $item->url,
+                    'notification_date' => $item->notification_date,
+                    'sender' => $item->sender,
+                    'TL_sender_id' => $item->senderUser->username ?? 'N/A',
+                ];
+            });
+           
+            $studentNotifications =  $studentNotifications->map(function ($item) {
+                return [
+                    'title' => $item->title,
+                    'description' => $item->description,
+                    'url' => $item->url,
+                    'notification_date' => $item->notification_date,
+                    'sender' => $item->sender,
+                    'TL_sender_id' => $item->senderUser->username ?? 'N/A',
+                ];
+            });
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'section_notifications' => $notifications,
+                    'Personal_notifications' => $studentNotifications,
+                    'broadcast_notifications' => $broadcastNotifications
+                ]
+            ], 200);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
    
     ////////////////////////////////////////////////////EXTRASSSSSSSSSSSSSSSSSSSS///////////////////
     public function sendForgotPasswordEmail(Request $request)
