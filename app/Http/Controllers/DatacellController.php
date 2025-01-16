@@ -700,11 +700,10 @@ class DatacellController extends Controller
 
                         $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
                         if ($timetable) {
-                            $Success[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
+                            if($timetable['issue']=='error'){
+                                $Error[]=$timetable;
+                            }
+                            $Success[] = $timetable;
                         } else if ($timetable == null || !$timetable) {
                             $Error[] = [
                                 "Day" => $Day,
@@ -744,11 +743,10 @@ class DatacellController extends Controller
                     } else if ($value != null && $value != '') {
                         $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
                         if ($timetable) {
-                            $Success[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
+                            if($timetable['issue']=='error'){
+                                $Error[]=$timetable;
+                            }
+                            $Success[] = $timetable;
                         } else if ($timetable == null || !$timetable) {
                             $Error[] = [
                                 "Day" => $Day,
@@ -789,11 +787,10 @@ class DatacellController extends Controller
                     } else if ($value != null && $value != '') {
                         $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
                         if ($timetable) {
-                            $Success[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
+                            if($timetable['issue']=='error'){
+                                $Error[]=$timetable;
+                            }
+                            $Success[] = $timetable;
                         } else if ($timetable == null || !$timetable) {
                             $Error[] = [
                                 "Day" => $Day,
@@ -830,11 +827,10 @@ class DatacellController extends Controller
                     } else if ($value != null && $value != '') {
                         $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
                         if ($timetable) {
-                            $Success[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
+                            if($timetable['issue']=='error'){
+                                $Error[]=$timetable;
+                            }
+                            $Success[] = $timetable;
                         } else if ($timetable == null || !$timetable) {
                             $Error[] = [
                                 "Day" => $Day,
@@ -871,11 +867,10 @@ class DatacellController extends Controller
                     } else if ($value != null && $value != '') {
                         $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
                         if ($timetable) {
-                            $Success[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
+                            if($timetable['issue']=='error'){
+                                $Error[]=$timetable;
+                            }
+                            $Success[] = $timetable;
                         } else if ($timetable == null || !$timetable) {
                             $Error[] = [
                                 "Day" => $Day,

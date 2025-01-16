@@ -22,9 +22,14 @@ class section extends Model
             return null;
         }
         $section = self::where('id', $id)->first();
-        if ($section) {
+       if($section)
+       {
+        if (in_array($section->program, ['BCS', 'BAI', 'BSE'])) {
             return $section->program . '-' . $section->semester . $section->group;
         }else{
+            return $section->program . $section->semester . $section->group;
+        }    
+    }else{
             return null;
         }
     }
@@ -47,26 +52,56 @@ class section extends Model
                 return $section->id;
             }
         }
+        preg_match('/^([A-Za-z]+)ExtraSection$/', $name, $matches);
+        if(!empty($matches)){
+            $programType = $matches[1];
+            $semester = $matches[2]; 
+            $group = $matches[3]; 
+            $section = self::where('program', $programType)
+                ->where('Extra', $semester)
+                ->where('Section', $group)
+                ->first();
+            if ($section) {
+                return $section->id;
+            }
+        }
         return null;
     }
     public static function addNewSection($name)
     {
-        if(!preg_match('/([A-Za-z]+)-(\d+)([A-Za-z]+)/', $name, $matches))
+
+        if(!$name){
+            return null;
+        }
+        if(preg_match('/([A-Za-z]+)-(\d+)([A-Za-z]+)/', $name, $matches))
         {
-          return null;
-        }else
-        if (!empty($matches)) {
-            $programType = $matches[1];
-            $semester = $matches[2];
-            $group = $matches[3];
-            $section = self::firstOrCreate(
-                [
-                    'program' => $programType,
-                    'semester' => $semester,
-                    'group' => $group,
-                ]
-            );
-            return $section->id;
+            if (!empty($matches)) {
+                $programType = $matches[1];
+                $semester = $matches[2];
+                $group = $matches[3];
+                $section = self::firstOrCreate(
+                    [
+                        'program' => $programType,
+                        'semester' => $semester,
+                        'group' => $group,
+                    ]
+                );
+                return $section->id;
+            }
+        }else if(preg_match('/^([A-Za-z]+)ExtraSection$/', $name, $matches)){
+            if (!empty($matches)) {
+                $programType = $matches[1];
+                $semester ='Extra';
+                $group = 'Section';
+                $section = self::firstOrCreate(
+                    [
+                        'program' => $programType,
+                        'semester' => $semester,
+                        'group' => $group,
+                    ]
+                );
+                return $section->id;
+            }
         }
         return null;
     }

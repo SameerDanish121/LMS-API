@@ -15,35 +15,65 @@ class Action extends Model
     // 'RegNo', 'name', 'cgpa', 'gender', 'date_of_birth', 
     // 'guardian', 'image', 'user_id', 'section_id', 'program_id', 
     // 'session_id', 'status'
+
+    public static function getMCQS($coursecontent_id)
+    {
+        if (!$coursecontent_id) {
+            return null;
+        }
+        $Question = quiz_questions::where('coursecontent_id', $coursecontent_id)->with(['Options'])->get();
+        if (!$Question) {
+            return null;
+        }
+        $Question_details = $Question->map(
+            function ($Question) {
+                return [
+                    "ID" => $Question->id,
+                    "Question NO" => $Question->question_no,
+                    "Question" => $Question->question_text,
+                    "Option 1" => $Question->Options[0]->option_text ?? null,
+                    "Option 2" => $Question->Options[1]->option_text ?? null,
+                    "Option 3" => $Question->Options[2]->option_text ?? null,
+                    "Option 4" => $Question->Options[3]->option_text ?? null,
+                    "Answer" => $Question->Options->firstWhere('is_correct', true)->option_text ?? null,
+                ];
+            }
+
+        );
+        return $Question_details;
+    }
     public static function AddorUpdateNewStudent($RegNo, $name, $cgpa, $gender, $dateofBirth, $guradain, $image, $user_id, $section, $program, $session, $status)
     {
         student::updateOrCreate(
-            [ 'RegNo'=>$RegNo,    
-            'Name'=>$name,
-            'cgpa'=>$cgpa,
-            'gender'=>$guradain,
-            'date_of_birth'=>$dateofBirth,
-            'guardian'=>$guradain,
-            'image'=>$image,
-            'user_id'=>$user_id,
-            'section_id'=>$section,
-            'program_id'=>$program,
-            'status'=>$status,
-            'session_id'=>$session],
             [
-            'RegNo'=>$RegNo,    
-            'Name'=>$name,
-            'cgpa'=>$cgpa,
-            'gender'=>$guradain,
-            'date_of_birth'=>$dateofBirth,
-            'guardian'=>$guradain,
-            'image'=>$image,
-            'user_id'=>$user_id,
-            'section_id'=>$section,
-            'program_id'=>$program,
-            'status'=>$status,
-            'session_id'=>$session,
-        ]);
+                'RegNo' => $RegNo,
+                'Name' => $name,
+                'cgpa' => $cgpa,
+                'gender' => $guradain,
+                'date_of_birth' => $dateofBirth,
+                'guardian' => $guradain,
+                'image' => $image,
+                'user_id' => $user_id,
+                'section_id' => $section,
+                'program_id' => $program,
+                'status' => $status,
+                'session_id' => $session
+            ],
+            [
+                'RegNo' => $RegNo,
+                'Name' => $name,
+                'cgpa' => $cgpa,
+                'gender' => $guradain,
+                'date_of_birth' => $dateofBirth,
+                'guardian' => $guradain,
+                'image' => $image,
+                'user_id' => $user_id,
+                'section_id' => $section,
+                'program_id' => $program,
+                'status' => $status,
+                'session_id' => $session,
+            ]
+        );
 
     }
     /**
@@ -72,9 +102,9 @@ class Action extends Model
     public static function storeFile($file, $directory, $madeUpName)
     {
         // Ensure the directory path starts with "storage/"
-        try{
+        try {
 
-        }catch(Exception $ex){
+        } catch (Exception $ex) {
 
         }
         $directory = 'storage/' . trim($directory, '/');
@@ -154,6 +184,9 @@ class Action extends Model
 
     public static function getImageByPath($originalPath = null)
     {
+        if(!$originalPath){
+           return null;
+        }
         if (file_exists(public_path($originalPath))) {
             $imageContent = file_get_contents(public_path($originalPath));
             return base64_encode($imageContent);
@@ -194,7 +227,7 @@ class Action extends Model
                 ->count();
             return $count + 1;
         } catch (Exception $e) {
-            return 0; 
+            return 0;
         }
     }
     public static function insertOrCreateTimetable($RawDATA, $daySlot_id)
@@ -203,11 +236,13 @@ class Action extends Model
         if (!$sessionId) {
             $sessionId = (new session())->getUpcomingSessionId();
             if (!$sessionId) {
-                return null;
+                return ["status" => "error", "issue" => "no session exsist"];
             }
         }
         $RawDATA = trim($RawDATA);
-
+        if (!preg_replace('/\s+/', ' ', $RawDATA)) {
+            return ["status" => "error", "issue" => "Format of {$RawDATA} is not Correct"];
+        }
         $normalizedData = preg_replace('/\s+/', ' ', $RawDATA);
         $parts = explode(' ', $normalizedData);
         $course = ltrim($parts[0]);
@@ -215,13 +250,13 @@ class Action extends Model
         if (count($CourseData) > 1) {
             $course = $CourseData[1];
         } else {
-            throw new Exception("The string does not contain an underscore.\n");
+            return ["status" => "error", "issue" => "Format of {$RawDATA} is not Correct"];
         }
-        $section = preg_replace('/^[\p{Z}\s]+/u', '', $parts[1]);
+        $section = preg_replace('/^[\p{Z}\s]+/u', '', ltrim($parts[1]));
         if (preg_match('/\(([^)]+)\)/', $section, $matches)) {
             $section = $matches[1];
         } else {
-            throw new Exception("No match found.");
+            return ["status" => "error", "issue" => "Format of {$RawDATA} is not Correct"];
         }
 
 
@@ -232,12 +267,12 @@ class Action extends Model
             $venue = $teachervenueparts[1];
 
         } else {
-            throw new Exception("Invalid format.\n");
+            return ["status" => "error", "issue" => "Format of {$RawDATA} is not Correct"];
         }
         if (count($parts) === 5) {
-            $teacherInfo = $parts[2] . ' ' . $parts[3] . $teachervenueparts[0];
+            $teacherInfo = ltrim($parts[2]) . ' ' . ltrim($parts[3]) . $teachervenueparts[0];
         } else if (count($parts) === 4) {
-            $teacherInfo = $parts[2] . ' ' . $teachervenueparts[0];
+            $teacherInfo = ltrim($parts[2]) . ' ' . $teachervenueparts[0];
         } else if (count($parts) == 3) {
             $teacherInfo = $teachervenueparts[0];
         }
@@ -249,18 +284,14 @@ class Action extends Model
         } else {
             $teacherName = $teacherInfo;
             $juniorLecturerName = null;
-
         }
 
-        $section_id = section::addNewSection($section);
 
-        if (!$section_id) {
-            return null;
-        }
 
         $course = Course::where('description', $course)->first();
         if (!$course) {
-            return null;
+            return ["status" => "error", "issue" => "no course exsist for this {$course} / {$RawDATA}"];
+
         }
         $course_id = $course->id;
         $venue_id = self::GetVenueIDByName($venue);
@@ -273,7 +304,7 @@ class Action extends Model
                 $teacher_id = (new teacher())->getIDByName($teacherName);
                 if (!$teacher_id && !$juniorLecture_id) {
 
-                    return null;
+                    return ["status" => "error", "issue" => "teacher and junior both missing / {$RawDATA}"];
                 }
                 $type = 'Supervised Lab';
             } else if ($teacherName && !$juniorLecturerName) {
@@ -281,6 +312,9 @@ class Action extends Model
                 $teacher_id = (new teacher())->getIDByName($teacherName);
                 if (!$teacher_id) {
                     $juniorLecture_id = self::getJuniorLecIdByName($teacherName);
+                    if (!$juniorLecture_id) {
+                        return ["status" => "error", "issue" => "junior Lecturer Record Not Found {$teacherInfo}  {$RawDATA}"];
+                    }
                     $type = 'Lab';
                 } else {
                     $type = 'Supervised Lab';
@@ -288,27 +322,40 @@ class Action extends Model
 
 
             } else {
-                return null;
+                return ["status" => "error", "issue" => "Format Issue / {$RawDATA}"];
             }
         } else {
             $teacher_id = (new teacher())->getIDByName($teacherName);
+            if (!$teacher_id) {
+                return ["status" => "error", "issue" => "Teacher with name {$teacherName} not Found in RECORD | {$RawDATA}"];
+            }
             $type = 'Class';
         }
         if (!$teacher_id && !$juniorLecture_id) {
-            return null;
+            return ["status" => "error", "issue" => "teacher and junior both missing /|/// {$RawDATA}"];
         }
-        $timetable = Timetable::firstOrCreate(
-            [
-                'session_id' => $sessionId,
-                'section_id' => $section_id,
-                'dayslot_id' => $daySlot_id,
-                'course_id' => $course_id,
-                'teacher_id' => $teacher_id,
-                'junior_lecturer_id' => $juniorLecture_id,
-                'venue_id' => $venue_id,
-                'type' => $type
-            ]
-        );
+        $timetable = [];
+        $section = explode(',', $section);
+        foreach ($section as $s) {
+            $section_id = section::addNewSection($s);
+
+            if (!$section_id) {
+                return ["status" => "error", "issue" => "no section is created for this {$section} / {$RawDATA}"];
+            }
+            $timetable = Timetable::firstOrCreate(
+                [
+                    'session_id' => $sessionId,
+                    'section_id' => $section_id,
+                    'dayslot_id' => $daySlot_id,
+                    'course_id' => $course_id,
+                    'teacher_id' => $teacher_id,
+                    'junior_lecturer_id' => $juniorLecture_id,
+                    'venue_id' => $venue_id,
+                    'type' => $type
+                ]
+            );
+        }
+
         return $timetable;
     }
     public static function generateUniquePassword($name)

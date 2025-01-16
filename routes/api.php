@@ -113,7 +113,7 @@ Route::prefix('Teacher')->group(function () {
 
 ////////////////////////////////////////////////////////~TESTING~///////////////////////////////
 
-Route::get('/checking', [TestController::class, 'Empty']);
+Route::get('/checking', [TestController::class,'Empty']);
 
 Route::get('/good', [TestController::class, 'upload']);
 

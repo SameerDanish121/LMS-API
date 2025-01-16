@@ -110,7 +110,6 @@ class StudentController extends Controller
                                 'grade' => $subject->grade ?? 'Pending',
                             ];
                         });
-
                     return [
                         'total_credit_points' => $sessionResult->ObtainedCreditPoints,
                         'GPA' => $sessionResult->GPA,
@@ -256,7 +255,7 @@ class StudentController extends Controller
     {
         try {
             $request->validate([
-                "username" => 'required|string|ends_with:@biit',
+                "username" => 'required|string',
                 "password" => 'required'
             ]);
             $user = User::with('role')
@@ -267,7 +266,7 @@ class StudentController extends Controller
             if ($role == 'Student') {
                 $student = student::where('user_id', $user->id)->with(['program', 'user'])
                     ->first();
-                $student_id = $student->pluck('id');
+                $student_id = $student->value('id');
                 $section_id = $student->section_id;
                 $attribute = excluded_days::checkHoliday() ? 'Holiday' : 'Timetable';
                 $studentInfo = [
@@ -283,13 +282,12 @@ class StudentController extends Controller
                     "InTake" => (new session())->getSessionNameByID($student->session_id),
                     "Program" => $student->program->name,
                     "Section" => (new section())->getNameByID($student->section_id),
-                    "Total Enrollments" => student_offered_courses::GetCountOfTotalEnrollments($student_id),
+                    "Total Enrollments" => student_offered_courses::GetCountOfTotalEnrollments($student->id),
                     "Current Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?: 'N/A',
                     "Image" => Action::getImageByPath($student->image),
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : timetable::getTodayTimetableBySectionId($section_id),
                     "Attendance" => (new attendance())->getAttendanceByID($student_id)
                 ];
-
                 return response()->json([
                     'Type' => $role,
                     'StudentInfo' => $studentInfo,
@@ -368,7 +366,7 @@ class StudentController extends Controller
                     "Date Of Birth" => $jl->date_of_birth,
                     "Username" => $jl->user->username,
                     "Password" => $jl->user->password,
-                    "image" => Action::getImageByPath($jl->image),
+                    "image" => Action::getImageByPath(originalPath:$jl->image),
                     "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : timetable::getTodayTimetableOfJuniorLecturerById($jl->id),
                 ];

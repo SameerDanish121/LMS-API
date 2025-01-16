@@ -59,10 +59,9 @@ class task extends Model
 
             if ($task) {
                 $task->isMarked = true;
-                return $task->save(); // Save the updated task and return the result
+                return $task->save(); 
             }
-
-            return false; // Return false if the task was not found
+            return false;
         } catch (\Exception $e) {
             // Handle any errors and return false
             return false;
