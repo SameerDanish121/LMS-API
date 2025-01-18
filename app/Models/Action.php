@@ -184,8 +184,8 @@ class Action extends Model
 
     public static function getImageByPath($originalPath = null)
     {
-        if(!$originalPath){
-           return null;
+        if (!$originalPath) {
+            return null;
         }
         if (file_exists(public_path($originalPath))) {
             $imageContent = file_get_contents(public_path($originalPath));
@@ -272,7 +272,7 @@ class Action extends Model
         if (count($parts) === 5) {
             $teacherInfo = ltrim($parts[2]) . ' ' . ltrim($parts[3]) . $teachervenueparts[0];
         } else if (count($parts) === 4) {
-            $teacherInfo = ltrim($parts[2]) . ' ' . $teachervenueparts[0];
+            $teacherInfo = ltrim($parts[2]) . ' ' . ltrim($teachervenueparts[0]);
         } else if (count($parts) == 3) {
             $teacherInfo = $teachervenueparts[0];
         }
@@ -285,19 +285,14 @@ class Action extends Model
             $teacherName = $teacherInfo;
             $juniorLecturerName = null;
         }
-
-
-
         $course = Course::where('description', $course)->first();
         if (!$course) {
             return ["status" => "error", "issue" => "no course exsist for this {$course} / {$RawDATA}"];
-
         }
         $course_id = $course->id;
         $venue_id = self::GetVenueIDByName($venue);
         $teacher_id = null;
         $juniorLecture_id = null;
-
         if (self::containsLab($venue)) {
             if ($teacherName && $juniorLecturerName) {
                 $juniorLecture_id = self::getJuniorLecIdByName($juniorLecturerName);
@@ -308,7 +303,6 @@ class Action extends Model
                 }
                 $type = 'Supervised Lab';
             } else if ($teacherName && !$juniorLecturerName) {
-
                 $teacher_id = (new teacher())->getIDByName($teacherName);
                 if (!$teacher_id) {
                     $juniorLecture_id = self::getJuniorLecIdByName($teacherName);
@@ -319,8 +313,6 @@ class Action extends Model
                 } else {
                     $type = 'Supervised Lab';
                 }
-
-
             } else {
                 return ["status" => "error", "issue" => "Format Issue / {$RawDATA}"];
             }
@@ -331,14 +323,13 @@ class Action extends Model
             }
             $type = 'Class';
         }
-        if (!$teacher_id && !$juniorLecture_id) {
-            return ["status" => "error", "issue" => "teacher and junior both missing /|/// {$RawDATA}"];
+        if (!$teacher_id || !$juniorLecture_id) {
+            return ["status" => "error", "issue" => "No instructor found for /|/// {$RawDATA}"];
         }
         $timetable = [];
         $section = explode(',', $section);
         foreach ($section as $s) {
             $section_id = section::addNewSection($s);
-
             if (!$section_id) {
                 return ["status" => "error", "issue" => "no section is created for this {$section} / {$RawDATA}"];
             }
@@ -355,8 +346,7 @@ class Action extends Model
                 ]
             );
         }
-
-        return $timetable;
+        return ["status" => "success", "timetable" => $timetable];
     }
     public static function generateUniquePassword($name)
     {
@@ -373,20 +363,25 @@ class Action extends Model
     {
         $role = Role::where('type', $roleType)->first();
         if (!$role) {
-            return response()->json(['error' => 'Invalid role type'], 400);
+            $role=role::create([
+                "type"=>$roleType
+            ]);
         }
         $roleId = $role->id;
         $user = user::where('username', $username)->first();
         if ($user) {
-            $user->password = $password;
-            $user->email = $email;
+            if (!empty($email)) {
+                $user->email = $email;
+            }
             $user->save();
         } else {
             $user = new user();
             $user->username = $username;
             $user->password = $password;
-            $user->email = $email;
             $user->role_id = $roleId;
+            if (!empty($email)) {
+                $user->email = $email;
+            }
             $user->save();
         }
         return $user->id;

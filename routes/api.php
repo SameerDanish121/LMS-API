@@ -10,6 +10,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\JuniorLecturerController;
 use App\Http\Controllers\DatacellController;
+use App\Http\Controllers\DatacellModuleController;
 
 ////////////////////////////////////////////////////////~api/~////////////////////////////////////////
 Route::get('/Login', [StudentController::class, 'Login']);
@@ -143,3 +144,27 @@ Route::prefix('Datacell')->group(function () {
     
     //14
 });
+
+
+Route::prefix('Uploading')->group(function () {
+    // $request->validate([
+    //     'excel_file' => 'required|mimes:xlsx,xls',
+    //     'session' => 'required'
+    // ]);
+    Route::post('/excel-upload/offeredcourse_teacherallocation', [DatacellModuleController::class, 'OfferedCourseTeacheruploadExcel']);
+     // $request->validate([
+    //     'excel_file' => 'required|mimes:xlsx,xls'
+    // ]);
+    Route::post('/excel-upload/excluded_days', [DatacellModuleController::class, 'ExcludedDays']);
+    Route::post('/excel-upload/session', [DatacellModuleController::class, 'processSessionRecords']);
+    Route::post('/excel-upload/venues', [DatacellModuleController::class, 'importVenues']);
+    Route::post('/excel-upload/sections', [DatacellModuleController::class, 'importSections']);
+    Route::post('/excel-upload/student-enrollments', [DatacellModuleController::class, 'uploadStudentEnrollments']);
+    Route::post('/excel-uplaod/add-or-update-student', [DatacellModuleController::class, 'addOrUpdateStudent']);
+    Route::post('/excel-upload/add-or-update-teacher', [DatacellModuleController::class, 'addOrUpdateTeacher']);
+    Route::post('/excel-upload/upload-junior-lecturers', [DatacellModuleController::class, 'AddOrUpdateJuniorLecturers']);
+    Route::post('/excel-uploading/graders-assign', [DatacellModuleController::class, 'assignGrader']);
+    
+});
+
+

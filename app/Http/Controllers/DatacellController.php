@@ -119,12 +119,12 @@ class DatacellController extends Controller
             }
             foreach ($students as $student) {
                 $originalPath = $student->image;
-                if(!$originalPath){
-                      $student->image=null;
-                }else {
+                if (!$originalPath) {
+                    $student->image = null;
+                } else {
                     $imageContent = file_get_contents(public_path($originalPath));
                     $student->image = base64_encode($imageContent);
-                } 
+                }
             }
             return response()->json(
                 [
@@ -297,8 +297,6 @@ class DatacellController extends Controller
             ], 500);
         }
     }
-
-
     public function OfferedCourseTeacheruploadExcel(Request $request)
     {
         try {
@@ -434,7 +432,6 @@ class DatacellController extends Controller
                 $studentName = $singleRow['B'];
                 $enrollmentExsist = null;
                 $sectionExsist = null;
-
                 $student_id = student::where('RegNo', $studentRegNo)->value('id');
                 if (!$student_id) {
                     $response[] = ['status' => "error on Row No {$RowNo}", 'message' => "No Student with this RegNo ={$studentRegNo} , Name = {$studentName} Found in Student Record"];
@@ -511,11 +508,13 @@ class DatacellController extends Controller
                     $errorMessages[] = $stat;
                 }
             }
-
             return response()->json(
                 [
                     'Message' => 'Data Inserted Successfully !',
                     'data' => [
+                        "Total Student Rows"=>count($NonEmptyRow),
+                        "Added Enrollments"=>count($successMessages),
+                        "Failed Enrollments"=>count($errorMessages),
                         "Sucess" => $successMessages,
                         "Error" => $errorMessages
                     ]
@@ -561,7 +560,7 @@ class DatacellController extends Controller
                 ->whereIn('offered_course_id', $offeredCoursesList)
                 ->first();
             if ($studentCourse) {
-                if (in_array($studentCourse->grade, ['A', 'D'])) {
+                if (in_array($studentCourse->grade, ['F', 'D'])) {
                     $studentCourse->offered_course_id = $offered_course_id;
                     $studentCourse->attempt_no += 1;
                     $studentCourse->grade = null;
@@ -583,339 +582,7 @@ class DatacellController extends Controller
         }
     }
 
-    public function UploadTimetableExcel(Request $request)
-    {
-        try {
-            $request->validate([
-                'excel_file' => 'required|mimes:xlsx,xls',
-                'session' => 'required'
-            ]);
-           
-            $session_name = $request->session;
-            $session_id = (new session())->getSessionIdByName($session_name);
-            if (!$session_id) {
-                $session_id = (new session())->getUpcomingSessionId();
-            }
-            $file = $request->file('excel_file');
-            $spreadsheet = IOFactory::load($file->getPathname());
-            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
 
-            ///////////////////////////////////////Non Empty Row///////////////////////////////////
-            $NonEmptyRow = [];
-            foreach ($sheetData as $row) {
-                if (
-                    array_filter($row, function ($value) {
-                        return !is_null($value);
-                    })
-                ) {
-                    $row = array_map('trim', $row);
-                    $NonEmptyRow[] = $row;
-                }
-            }
-            ///////////////////////////////////////EmptyRowFilter///////////////////////////////////
-            $sectionList = [];
-            foreach ($NonEmptyRow[0] as $firstRowCell) {
-                if ($firstRowCell != null || $firstRowCell != '') {
-                    $sectionList[] = $firstRowCell;
-                }
-            }
-            $ColumnEmptyCheck = [];
-            $sliceLength = count($sectionList);
-            foreach ($NonEmptyRow as $row) {
-                $slicedRow = array_slice($row, 0, $sliceLength);
-                $ColumnEmptyCheck[] = $slicedRow;
-            }
-            ///////////////////////////////ColumnEmptyCheck/////////////////////////////////////
-            $Monday = [];
-            $Tuesday = [];
-            $Wednesday = [];
-            $Thursday = [];
-            $Firday = [];
-            $WhatIs = '';
-            foreach ($ColumnEmptyCheck as $row) {
-                if ($row['A'] == 'Monday') {
-                    $WhatIs = 'Monday';
-                    continue;
-                } else if ($row['A'] == 'Tuesday') {
-                    $WhatIs = 'Tuesday';
-                    continue;
-                } else if ($row['A'] == 'Wednesday') {
-                    $WhatIs = 'Wednesday';
-                    continue;
-                } else if ($row['A'] == 'Thursday') {
-                    $WhatIs = 'Thursday';
-                    continue;
-                } else if ($row['A'] == 'Friday') {
-                    $WhatIs = 'Friday';
-                    continue;
-                } else {
-                    if ($WhatIs == 'Monday') {
-                        $Monday[] = $row;
-                    }
-                    if ($WhatIs == 'Tuesday') {
-                        $Tuesday[] = $row;
-                    }
-                    if ($WhatIs == 'Wednesday') {
-                        $Wednesday[] = $row;
-                    }
-                    if ($WhatIs == 'Thursday') {
-                        $Thursday[] = $row;
-                    }
-                    if ($WhatIs == 'Friday') {
-                        $Firday[] = $row;
-                    }
-                }
-            }
-            //////////////////////////////////////////SplitOntheBasisOFDays////////////////////////
-            function convertTo24HourFormat($time)
-            {
-                return date("H:i:s", strtotime($time));
-            }
-            $Success = [];
-            $Error = [];
-            $RawDataWithAllRequiredAttributes = [];
-
-            foreach ($Monday as $MondayRows) {
-                $Time = $MondayRows['A'];
-                $Day = 'Monday';
-                list($startTime, $endTime) = explode(' - ', $Time);
-                $startTimeFormatted = convertTo24HourFormat($startTime);
-                $endTimeFormatted = convertTo24HourFormat($endTime);
-
-                $dayslot = dayslot::firstOrCreate(
-                    [
-                        'day' => $Day,
-                        'start_time' => $startTimeFormatted,
-                        'end_time' => $endTimeFormatted,
-                    ]
-                );
-
-                $dayslotId = $dayslot->id;
-
-                foreach ($MondayRows as $index => $value) {
-
-                    if ($value == $Time) {
-                        continue;
-                    } else if ($value != null && $value != '') {
-
-                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
-                        if ($timetable) {
-                            if($timetable['issue']=='error'){
-                                $Error[]=$timetable;
-                            }
-                            $Success[] = $timetable;
-                        } else if ($timetable == null || !$timetable) {
-                            $Error[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
-                        }
-                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
-                    } else {
-                        continue;
-                    }
-                }
-            }
-
-
-
-
-            foreach ($Tuesday as $TuesdayRows) {
-                $Time = $TuesdayRows['A'];
-                $Day = 'Tuesday';
-                list($startTime, $endTime) = explode(' - ', $Time);
-                $startTimeFormatted = convertTo24HourFormat($startTime);
-                $endTimeFormatted = convertTo24HourFormat($endTime);
-
-                $dayslot = dayslot::firstOrCreate(
-                    [
-                        'day' => $Day,
-                        'start_time' => $startTimeFormatted,
-                        'end_time' => $endTimeFormatted,
-                    ]
-                );
-                $dayslotId = $dayslot->id;
-
-                foreach ($TuesdayRows as $index => $value) {
-                    if ($value == $Time) {
-                        continue;
-                    } else if ($value != null && $value != '') {
-                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
-                        if ($timetable) {
-                            if($timetable['issue']=='error'){
-                                $Error[]=$timetable;
-                            }
-                            $Success[] = $timetable;
-                        } else if ($timetable == null || !$timetable) {
-                            $Error[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
-                        }
-                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
-                    } else {
-                        continue;
-                    }
-                }
-            }
-
-
-
-
-            /////////////////////////////////////////////////wed///////////////////////////
-            foreach ($Wednesday as $WedRows) {
-                $Time = $WedRows['A'];
-                $Day = 'Wednesday';
-                list($startTime, $endTime) = explode(' - ', $Time);
-                $startTimeFormatted = convertTo24HourFormat($startTime);
-                $endTimeFormatted = convertTo24HourFormat($endTime);
-
-                $dayslot = dayslot::firstOrCreate(
-                    [
-                        'day' => $Day,
-                        'start_time' => $startTimeFormatted,
-                        'end_time' => $endTimeFormatted,
-                    ]
-                );
-                $dayslotId = $dayslot->id;
-
-                foreach ($WedRows as $index => $value) {
-                    if ($value == $Time) {
-                        continue;
-                    } else if ($value != null && $value != '') {
-                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
-                        if ($timetable) {
-                            if($timetable['issue']=='error'){
-                                $Error[]=$timetable;
-                            }
-                            $Success[] = $timetable;
-                        } else if ($timetable == null || !$timetable) {
-                            $Error[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
-                        }
-                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
-                    } else {
-                        continue;
-                    }
-                }
-            }
-
-            foreach ($Thursday as $ThuRows) {
-                $Time = $ThuRows['A'];
-                $Day = 'Thursday';
-                list($startTime, $endTime) = explode(' - ', $Time);
-                $startTimeFormatted = convertTo24HourFormat($startTime);
-                $endTimeFormatted = convertTo24HourFormat($endTime);
-
-                $dayslot = dayslot::firstOrCreate(
-                    [
-                        'day' => $Day,
-                        'start_time' => $startTimeFormatted,
-                        'end_time' => $endTimeFormatted,
-                    ]
-                );
-                $dayslotId = $dayslot->id;
-
-                foreach ($ThuRows as $index => $value) {
-                    if ($value == $Time) {
-                        continue;
-                    } else if ($value != null && $value != '') {
-                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
-                        if ($timetable) {
-                            if($timetable['issue']=='error'){
-                                $Error[]=$timetable;
-                            }
-                            $Success[] = $timetable;
-                        } else if ($timetable == null || !$timetable) {
-                            $Error[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
-                        }
-                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
-                    } else {
-                        continue;
-                    }
-                }
-            }
-
-            foreach ($Firday as $FriRows) {
-                $Time = $FriRows['A'];
-                $Day = 'Friday';
-                list($startTime, $endTime) = explode(' - ', $Time);
-                $startTimeFormatted = convertTo24HourFormat($startTime);
-                $endTimeFormatted = convertTo24HourFormat($endTime);
-
-                $dayslot = dayslot::firstOrCreate(
-                    [
-                        'day' => $Day,
-                        'start_time' => $startTimeFormatted,
-                        'end_time' => $endTimeFormatted,
-                    ]
-                );
-                $dayslotId = $dayslot->id;
-
-                foreach ($FriRows as $index => $value) {
-                    if ($value == $Time) {
-                        continue;
-                    } else if ($value != null && $value != '') {
-                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
-                        if ($timetable) {
-                            if($timetable['issue']=='error'){
-                                $Error[]=$timetable;
-                            }
-                            $Success[] = $timetable;
-                        } else if ($timetable == null || !$timetable) {
-                            $Error[] = [
-                                "Day" => $Day,
-                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
-                                "Raw Data" => $value
-                            ];
-                        }
-                        $RawDataWithAllRequiredAttributes[] = ["Value" => $value, "DaySlot" => $dayslotId, "Day" => $dayslot->day];
-                    } else {
-                        continue;
-                    }
-                }
-            }
-            return response()->json(
-                [
-                    'Message' => 'Data Inserted Successfully !',
-                    'data' => [
-                        "Sucess" => $Success,
-                        "Error" => $Error,
-                        "Raw Data"=>$RawDataWithAllRequiredAttributes
-                    ]
-                ],
-                200
-            );
-        } catch (ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-
-        } catch (ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid username or password'
-            ], 404);
-
-        } catch (Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
     ///////////////////////////////////////////////////////UNDER TEST///////////////////
     public function getTimetableGroupedBySection(Request $request)
     {
@@ -994,30 +661,30 @@ class DatacellController extends Controller
                 $status = $singleRow['I'];
                 $InTake = $singleRow['J'];
                 $Discipline = $singleRow['K'];
-                $dob= (new DateTime($dob))->format('Y-m-d');
-                $password=Action::generateUniquePassword($Name);
-                $user_id=Action::addOrUpdateUser($regNo,$password,$email,'Student');
-                $section_id=section::addNewSection($currentSection);
-              
-                if(!$section_id){
-                    $status[]=["status"=>'failed',"reason"=>"The Field Current Section {$currentSection} Format is Not Correct !"];
+                $dob = (new DateTime($dob))->format('Y-m-d');
+                $password = Action::generateUniquePassword($Name);
+                $user_id = Action::addOrUpdateUser($regNo, $password, $email, 'Student');
+                $section_id = section::addNewSection($currentSection);
+
+                if (!$section_id) {
+                    $status[] = ["status" => 'failed', "reason" => "The Field Current Section {$currentSection} Format is Not Correct !"];
                 }
-                $session_id=(new session())->getSessionIdByName($InTake);
-                if(!$session_id){
-                    $status[]=["status"=>'failed',"reason"=>"The Field Current Session  {$InTake} Format is Not Correct !"];
+                $session_id = (new session())->getSessionIdByName($InTake);
+                if (!$session_id) {
+                    $status[] = ["status" => 'failed', "reason" => "The Field Current Session  {$InTake} Format is Not Correct !"];
                 }
-                $program_id=program::where('name',$Discipline)->value('id');
-                if(!$program_id){
-                    $status[]=["status"=>'failed',"reason"=>"The Field Disciplein  {$Discipline} Format is Not Correct !"];
+                $program_id = program::where('name', $Discipline)->value('id');
+                if (!$program_id) {
+                    $status[] = ["status" => 'failed', "reason" => "The Field Disciplein  {$Discipline} Format is Not Correct !"];
                 }
-                $student=StudentManagement::addOrUpdateStudent($regNo,$Name,$cgpa,$gender,$dob,$guardian,null,$user_id,$section_id,$program_id,$session_id,$status);
-                
-                if($student){
-                    $status[]=["status"=>'success',"Logs"=>"The Student with RegNo : {$regNo} ,Name : {$Name}  is added to Record !","Username"=>$regNo , "Password"=>$password];
-                }else{
-                    $status[]=["status"=>'failed','Reason'=>'Unknown'];
+                $student = StudentManagement::addOrUpdateStudent($regNo, $Name, $cgpa, $gender, $dob, $guardian, null, $user_id, $section_id, $program_id, $session_id, $status);
+
+                if ($student) {
+                    $status[] = ["status" => 'success', "Logs" => "The Student with RegNo : {$regNo} ,Name : {$Name}  is added to Record !", "Username" => $regNo, "Password" => $password];
+                } else {
+                    $status[] = ["status" => 'failed', 'Reason' => 'Unknown'];
                 }
-             
+
             }
             $successMessages = [];
             $errorMessages = [];
@@ -1031,8 +698,8 @@ class DatacellController extends Controller
             return response()->json(
                 [
                     'Message' => 'Data Inserted Successfully !',
-                    'success' =>$successMessages,
-                    'failed'=>$errorMessages
+                    'success' => $successMessages,
+                    'failed' => $errorMessages
                 ],
                 200
             );
@@ -1060,392 +727,396 @@ class DatacellController extends Controller
 
     }
     public function AddOrUpdateCourses(Request $request)
-{
-    try {
-        $request->validate([
-            'excel_file' => 'required|mimes:xlsx,xls'
-        ]);
-
-        $file = $request->file('excel_file');
-        $spreadsheet = IOFactory::load($file->getPathname());
-        $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
-
-        $filteredData = [];
-        foreach ($sheetData as $row) {
-            $filteredData[] = array_slice($row, 0, 8); // Fetch only necessary columns
-        }
-
-        $nonEmpty = [];
-        foreach ($filteredData as $row) {
-            if (array_filter($row, function ($value) {
-                return !is_null($value);
-            })) {
-                if ($row['A'] != 'code') {
-                    $row = array_map('trim', $row);
-                    $nonEmpty[] = $row;
-                }
-            }
-        }
-
-        $RowNo = 1;
-        $status = [];
-
-        foreach ($nonEmpty as $singleRow) {
-            $RowNo++;
-
-            $code = $singleRow['A'];
-            $name = $singleRow['B'];
-            $creditHours = $singleRow['C'];
-            $preReqMain = $singleRow['D'] === 'Null' ? null : $singleRow['D'];
-            $program = $singleRow['E'];
-            $type = $singleRow['F'];
-            $shortform = $singleRow['G']; // Map to 'description'
-            $lab = $singleRow['H'];
-
-            // Fetch the program ID
-            $programId = Program::where('name', $program)->value('id');
-
-            if (!$programId) {
-                $status[] = ["status" => 'failed', "reason" => "The Field Program {$program} does not exist!"];
-                continue;
-            }
-
-            // Fetch the prerequisite course ID if applicable
-            $preReqId = null;
-            if ($preReqMain !== null) {
-                $preReqId = Course::where('name', $preReqMain)->value('id');
-                if (!$preReqId) {
-                    $status[] = ["status" => 'failed', "reason" => "The prerequisite course {$preReqMain} does not exist!"];
-                    continue;
-                }
-            }
-
-            // Check if the course already exists
-            $course = Course::where('name', $name)->where('code',$code)->first();
-           
-            if ($course) {
-                $course->update([
-                    'code' => $code,
-                    'credit_hours' => $creditHours,
-                    'pre_req_main' => $preReqId,
-                    'program_id' => $programId,
-                    'type' => $type,
-                    'description' => $shortform,
-                    'lab' => $lab,
-                ]);
-                $status[] = ["status" => 'success', "Logs" => "The course with Name: {$name} was updated."];
-            } else {
-                Course::create([
-                    'code' => $code,
-                    'name' => $name,
-                    'credit_hours' => $creditHours,
-                    'pre_req_main' => $preReqId,
-                    'program_id' => $programId,
-                    'type' => $type,
-                    'description' => $shortform,
-                    'lab' => $lab,
-                ]);
-                $status[] = ["status" => 'success', "Logs" => "The course with Name: {$name} was added."];
-            }
-        }
-
-        $successMessages = [];
-        $errorMessages = [];
-        foreach ($status as $stat) {
-            if ($stat['status'] === 'success') {
-                $successMessages[] = $stat;
-            } else {
-                $errorMessages[] = $stat;
-            }
-        }
-
-        return response()->json(
-            [
-                'Message' => 'Courses Processed Successfully!',
-                'success' => $successMessages,
-                'failed' => $errorMessages
-            ],
-            200
-        );
-
-    } catch (ValidationException $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Validation failed',
-            'errors' => $e->errors()
-        ], 422);
-
-    } catch (ModelNotFoundException $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Data not found'
-        ], 404);
-
-    } catch (Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'An unexpected error occurred',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-}
-public function AddOrUpdateTeachers(Request $request)
-{
-    try {
-        $request->validate([
-            'excel_file' => 'required|mimes:xlsx,xls'
-        ]);
-        $file = $request->file('excel_file');
-        $spreadsheet = IOFactory::load($file->getPathname());
-        $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
-
-        $filteredData = [];
-        foreach ($sheetData as $row) {
-            $filteredData[] = array_slice($row, 0, 4); // Fetch only necessary columns
-        }
-
-        $nonEmpty = [];
-        foreach ($filteredData as $row) {
-            if (array_filter($row, function ($value) {
-                return !is_null($value);
-            })) {
-                if ($row['A'] != 'Name') {
-                    $row = array_map('trim', $row);
-                    $nonEmpty[] = $row;
-                }
-            }
-        }
-
-        $RowNo = 1;
-        $status = [];
-
-        foreach ($nonEmpty as $singleRow) {
-            $RowNo++;
-
-            $name = $singleRow['A'];
-            $dateOfBirth = $singleRow['B'];
-            $gender = $singleRow['C'];
-            $email = $singleRow['D'];
-            $username = strtolower(str_replace(' ', '', $name)) . '@biit.edu';
-            $userExists = User::where('username', $username)->exists();
-
-            if ($userExists) {
-                $status[] = ["status" => 'failed', "reason" => "Username {$username} already exists!"];
-                continue;
-            }
-            $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
-            $password = Action::generateUniquePassword($name);
-            $userId = Action::addOrUpdateUser($username, $password, $email, 'Teacher');
-
-            if (!$userId) {
-                $status[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
-                continue;
-            }
-            $teacher = Teacher::where('name', $name)->first();
-
-            if ($teacher) {
-                $teacher->update([
-                    'user_id' => $userId,
-                    'name' => $name,
-                    'date_of_birth' => $formattedDOB,
-                    'gender' => $gender
-                ]);
-                $status[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated."];
-            } else {
-                Teacher::create([
-                    'user_id' => $userId,
-                    'name' => $name,
-                    'date_of_birth' => $formattedDOB,
-                    'gender' => $gender
-                ]);
-                $status[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was added."];
-            }
-        }
-
-        $successMessages = [];
-        $errorMessages = [];
-        foreach ($status as $stat) {
-            if ($stat['status'] === 'success') {
-                $successMessages[] = $stat;
-            } else {
-                $errorMessages[] = $stat;
-            }
-        }
-
-        return response()->json(
-            [
-                'Message' => 'Teachers Processed Successfully!',
-                'success' => $successMessages,
-                'failed' => $errorMessages
-            ],
-            200
-        );
-
-    } catch (ValidationException $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Validation failed',
-            'errors' => $e->errors()
-        ], 422);
-
-    } catch (ModelNotFoundException $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Data not found'
-        ], 404);
-
-    } catch (Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'An unexpected error occurred',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-}
-public function assignGrader(Request $request)
-{
-    try {
-        $request->validate([
-            'excel_file' => 'required|mimes:xlsx,xls',
-            'session_name' => 'required|string'
-        ]);
-
-        $file = $request->file('excel_file');
-        $sessionName = $request->input('session_name');
-
-        $spreadsheet = IOFactory::load($file->getPathname());
-        $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
-
-        $filteredData = [];
-        foreach ($sheetData as $row) {
-            $filteredData[] = array_slice($row, 0, 5); // Fetch relevant columns
-        }
-
-        $nonEmpty = [];
-        foreach ($filteredData as $row) {
-            if (array_filter($row, function ($value) {
-                return !is_null($value);
-            })) {
-                if ($row['A'] != 'RegNo') {
-                    $row = array_map('trim', $row);
-                    $nonEmpty[] = $row;
-                }
-            }
-        }
-
-        $sessionId = (new Session())->getSessionIdByName($sessionName);
-
-        if (!$sessionId) {
-            return response()->json([
-                'status' => 'failed',
-                'message' => "Invalid session name: {$sessionName}"
-            ], 400);
-        }
-
-        // Set all grader statuses to inactive
-        Grader::query()->update(['status' => 'in-active']);
-
-        $status = [];
-
-        foreach ($nonEmpty as $row) {
-            $regNo = $row['A'];
-            $name = $row['D'];
-            $type = $row['E'];
-            $studentId = Student::where('RegNo', $regNo)->value('id');
-
-            if (!$studentId) {
-                $status[] = ["status" => 'failed', "reason" => "Student with RegNo {$regNo} not found."];
-                continue;
-            }
-            $grader = Grader::where('student_id', $studentId)->first();
-
-            if ($grader) {
-                $grader->update([
-                    'type' => $type,
-                    'status' => 'active'
-                ]);
-            } else {
-                // Insert new grader
-                $grader = grader::create([
-                    'student_id' => $studentId,
-                    'type' => $type,
-                    'status' => 'active'
-                ]);
-            }
-
-            $teacherId = Teacher::where('name', $name)->value('id');
-
-            if (!$teacherId) {
-                $status[] = ["status" => 'failed', "reason" => "Teacher with name {$name} not found."];
-                continue;
-            }
-
-            // Check if the teacher_grader record exists
-            $teacherGrader = teacher_grader::where([
-                'grader_id' => $grader->id,
-                'teacher_id' => $teacherId,
-                'session_id' => $sessionId
-            ])->first();
-
-            if (!$teacherGrader) {
-                // Insert new teacher_grader record
-                teacher_grader::create([
-                    'grader_id' => $grader->id,
-                    'teacher_id' => $teacherId,
-                    'session_id' => $sessionId,
-                    'feedback' => '' // Insert empty string as feedback if none provided
-                ]);
-            }
-
-            $status[] = ["status" => 'success', "message" => "Grader assigned for RegNo {$regNo}.", "teacher" => $name, "session" => $sessionName];
-        }
-
-        $successMessages = [];
-        $errorMessages = [];
-        foreach ($status as $stat) {
-            if ($stat['status'] === 'success') {
-                $successMessages[] = $stat;
-            } else {
-                $errorMessages[] = $stat;
-            }
-        }
-
-        return response()->json([
-            'Message' => 'Grader assignment processed.',
-            'success' => $successMessages,
-            'failed' => $errorMessages
-        ], 200);
-
-    } catch (ValidationException $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Validation failed',
-            'errors' => $e->errors()
-        ], 422);
-
-    } catch (ModelNotFoundException $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Data not found'
-        ], 404);
-
-    } catch (Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'An unexpected error occurred',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-}
-public function assignJuniorLecturer(Request $request)
     {
         try {
-            // Validate the uploaded Excel file
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls'
+            ]);
+
+            $file = $request->file('excel_file');
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+
+            $filteredData = [];
+            foreach ($sheetData as $row) {
+                $filteredData[] = array_slice($row, 0, 8); // Fetch only necessary columns
+            }
+
+            $nonEmpty = [];
+            foreach ($filteredData as $row) {
+                if (
+                    array_filter($row, function ($value) {
+                        return !is_null($value);
+                    })
+                ) {
+                    if ($row['A'] != 'code') {
+                        $row = array_map('trim', $row);
+                        $nonEmpty[] = $row;
+                    }
+                }
+            }
+
+            $RowNo = 1;
+            $status = [];
+
+            foreach ($nonEmpty as $singleRow) {
+                $RowNo++;
+
+                $code = $singleRow['A'];
+                $name = $singleRow['B'];
+                $creditHours = $singleRow['C'];
+                $preReqMain = $singleRow['D'] === 'Null' ? null : $singleRow['D'];
+                $program = $singleRow['E'];
+                $type = $singleRow['F'];
+                $shortform = $singleRow['G']; // Map to 'description'
+                $lab = $singleRow['H'];
+
+                // Fetch the program ID
+                $programId = Program::where('name', $program)->value('id');
+
+                if (!$programId) {
+                    $status[] = ["status" => 'failed', "reason" => "The Field Program {$program} does not exist!"];
+                    continue;
+                }
+
+                // Fetch the prerequisite course ID if applicable
+                $preReqId = null;
+                if ($preReqMain !== null) {
+                    $preReqId = Course::where('name', $preReqMain)->value('id');
+                    if (!$preReqId) {
+                        $status[] = ["status" => 'failed', "reason" => "The prerequisite course {$preReqMain} does not exist!"];
+                        continue;
+                    }
+                }
+
+                // Check if the course already exists
+                $course = Course::where('name', $name)->where('code', $code)->first();
+
+                if ($course) {
+                    $course->update([
+                        'code' => $code,
+                        'credit_hours' => $creditHours,
+                        'pre_req_main' => $preReqId,
+                        'program_id' => $programId,
+                        'type' => $type,
+                        'description' => $shortform,
+                        'lab' => $lab,
+                    ]);
+                    $status[] = ["status" => 'success', "Logs" => "The course with Name: {$name} was updated."];
+                } else {
+                    Course::create([
+                        'code' => $code,
+                        'name' => $name,
+                        'credit_hours' => $creditHours,
+                        'pre_req_main' => $preReqId,
+                        'program_id' => $programId,
+                        'type' => $type,
+                        'description' => $shortform,
+                        'lab' => $lab,
+                    ]);
+                    $status[] = ["status" => 'success', "Logs" => "The course with Name: {$name} was added."];
+                }
+            }
+
+            $successMessages = [];
+            $errorMessages = [];
+            foreach ($status as $stat) {
+                if ($stat['status'] === 'success') {
+                    $successMessages[] = $stat;
+                } else {
+                    $errorMessages[] = $stat;
+                }
+            }
+
+            return response()->json(
+                [
+                    'Message' => 'Courses Processed Successfully!',
+                    'success' => $successMessages,
+                    'failed' => $errorMessages
+                ],
+                200
+            );
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Data not found'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function AddOrUpdateTeachers(Request $request)
+    {
+        try {
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls'
+            ]);
+            $file = $request->file('excel_file');
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+
+            $filteredData = [];
+            foreach ($sheetData as $row) {
+                $filteredData[] = array_slice($row, 0, 4); // Fetch only necessary columns
+            }
+
+            $nonEmpty = [];
+            foreach ($filteredData as $row) {
+                if (
+                    array_filter($row, function ($value) {
+                        return !is_null($value);
+                    })
+                ) {
+                    if ($row['A'] != 'Name') {
+                        $row = array_map('trim', $row);
+                        $nonEmpty[] = $row;
+                    }
+                }
+            }
+
+            $RowNo = 1;
+            $status = [];
+
+            foreach ($nonEmpty as $singleRow) {
+                $RowNo++;
+
+                $name = $singleRow['A'];
+                $dateOfBirth = $singleRow['B'];
+                $gender = $singleRow['C'];
+                $email = $singleRow['D'];
+                $username = strtolower(str_replace(' ', '', $name)) . '@biit.edu';
+                $userExists = User::where('username', $username)->exists();
+
+                if ($userExists) {
+                    $status[] = ["status" => 'failed', "reason" => "Username {$username} already exists!"];
+                    continue;
+                }
+                $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
+                $password = Action::generateUniquePassword($name);
+                $userId = Action::addOrUpdateUser($username, $password, $email, 'Teacher');
+
+                if (!$userId) {
+                    $status[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+                    continue;
+                }
+                $teacher = Teacher::where('name', $name)->first();
+
+                if ($teacher) {
+                    $teacher->update([
+                        'user_id' => $userId,
+                        'name' => $name,
+                        'date_of_birth' => $formattedDOB,
+                        'gender' => $gender
+                    ]);
+                    $status[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated."];
+                } else {
+                    Teacher::create([
+                        'user_id' => $userId,
+                        'name' => $name,
+                        'date_of_birth' => $formattedDOB,
+                        'gender' => $gender
+                    ]);
+                    $status[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was added."];
+                }
+            }
+
+            $successMessages = [];
+            $errorMessages = [];
+            foreach ($status as $stat) {
+                if ($stat['status'] === 'success') {
+                    $successMessages[] = $stat;
+                } else {
+                    $errorMessages[] = $stat;
+                }
+            }
+
+            return response()->json(
+                [
+                    'Message' => 'Teachers Processed Successfully!',
+                    'success' => $successMessages,
+                    'failed' => $errorMessages
+                ],
+                200
+            );
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Data not found'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function assignGrader(Request $request)
+    {
+        try {
             $request->validate([
                 'excel_file' => 'required|mimes:xlsx,xls',
                 'session_name' => 'required|string'
             ]);
 
+            $file = $request->file('excel_file');
+            $sessionName = $request->input('session_name');
+
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+
+            $filteredData = [];
+            foreach ($sheetData as $row) {
+                $filteredData[] = array_slice($row, 0, 5); // Fetch relevant columns
+            }
+
+            $nonEmpty = [];
+            foreach ($filteredData as $row) {
+                if (
+                    array_filter($row, function ($value) {
+                        return !is_null($value);
+                    })
+                ) {
+                    if ($row['A'] != 'RegNo') {
+                        $row = array_map('trim', $row);
+                        $nonEmpty[] = $row;
+                    }
+                }
+            }
+
+            $sessionId = (new Session())->getSessionIdByName($sessionName);
+
+            if (!$sessionId) {
+                return response()->json([
+                    'status' => 'failed',
+                    'message' => "Invalid session name: {$sessionName}"
+                ], 400);
+            }
+
+            // Set all grader statuses to inactive
+            Grader::query()->update(['status' => 'in-active']);
+
+            $status = [];
+
+            foreach ($nonEmpty as $row) {
+                $regNo = $row['A'];
+                $name = $row['D'];
+                $type = $row['E'];
+                $studentId = Student::where('RegNo', $regNo)->value('id');
+
+                if (!$studentId) {
+                    $status[] = ["status" => 'failed', "reason" => "Student with RegNo {$regNo} not found."];
+                    continue;
+                }
+                $grader = Grader::where('student_id', $studentId)->first();
+
+                if ($grader) {
+                    $grader->update([
+                        'type' => $type,
+                        'status' => 'active'
+                    ]);
+                } else {
+                    // Insert new grader
+                    $grader = grader::create([
+                        'student_id' => $studentId,
+                        'type' => $type,
+                        'status' => 'active'
+                    ]);
+                }
+
+                $teacherId = Teacher::where('name', $name)->value('id');
+
+                if (!$teacherId) {
+                    $status[] = ["status" => 'failed', "reason" => "Teacher with name {$name} not found."];
+                    continue;
+                }
+
+                // Check if the teacher_grader record exists
+                $teacherGrader = teacher_grader::where([
+                    'grader_id' => $grader->id,
+                    'teacher_id' => $teacherId,
+                    'session_id' => $sessionId
+                ])->first();
+
+                if (!$teacherGrader) {
+                    // Insert new teacher_grader record
+                    teacher_grader::create([
+                        'grader_id' => $grader->id,
+                        'teacher_id' => $teacherId,
+                        'session_id' => $sessionId,
+                        'feedback' => '' // Insert empty string as feedback if none provided
+                    ]);
+                }
+
+                $status[] = ["status" => 'success', "message" => "Grader assigned for RegNo {$regNo}.", "teacher" => $name, "session" => $sessionName];
+            }
+
+            $successMessages = [];
+            $errorMessages = [];
+            foreach ($status as $stat) {
+                if ($stat['status'] === 'success') {
+                    $successMessages[] = $stat;
+                } else {
+                    $errorMessages[] = $stat;
+                }
+            }
+
+            return response()->json([
+                'Message' => 'Grader assignment processed.',
+                'success' => $successMessages,
+                'failed' => $errorMessages
+            ], 200);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Data not found'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function assignJuniorLecturer(Request $request)
+    {
+        try {
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls',
+                'session_name' => 'required|string'
+            ]);
             $file = $request->file('excel_file');
             $spreadsheet = IOFactory::load($file->getPathname());
             $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
@@ -1512,13 +1183,13 @@ public function assignJuniorLecturer(Request $request)
                     'section_id' => $sectionId,
                     'offered_course_id' => $offeredCourseId
                 ])->first();
-                
+
                 if (!$teacherOfferedCourse) {
                     $status[] = [
                         'status' => 'failed',
                         'message' => "Teacher Offered Course not found for Teacher '$teacherName', Course '$courseTitle', Section '$sectionName'."
                     ];
-                    continue; 
+                    continue;
                 }
                 $juniorLecturerId = juniorlecturer::where('name', $juniorLecturerName)->value('id');
                 if (!$juniorLecturerId) {
@@ -1528,7 +1199,7 @@ public function assignJuniorLecturer(Request $request)
                     ];
                     continue;
                 }
-                $teacherJuniorLecturer =teacher_juniorlecturer::updateOrCreate(
+                $teacherJuniorLecturer = teacher_juniorlecturer::updateOrCreate(
                     [
                         'teacher_offered_course_id' => $teacherOfferedCourse->id,
                     ],
@@ -1570,8 +1241,8 @@ public function assignJuniorLecturer(Request $request)
                 'TL_receiver_id' => 'nullable|integer',
                 'TL_sender_id' => 'nullable|integer',
             ]);
-            
-          
+
+
             $sender = $request->sender;
 
             $data = [
@@ -1586,7 +1257,7 @@ public function assignJuniorLecturer(Request $request)
                 'TL_receiver_id' => $request->TL_receiver_id == 0 ? null : $request->TL_receiver_id,
                 'TL_sender_id' => $request->TL_sender_id == 0 ? null : $request->TL_sender_id,
             ];
-            
+
             if ($sender === 'Teacher' || $sender === 'JuniorLecturer') {
                 $data['TL_sender_id'] = $request->TL_sender_id ?? 113;
             } elseif ($sender === 'Admin' || $sender === 'Datacell') {
@@ -1594,13 +1265,334 @@ public function assignJuniorLecturer(Request $request)
             } else {
                 return response()->json(['message' => 'Invalid sender role.'], 400);
             }
-            
-            $notification =notification::create($data);
+
+            $notification = notification::create($data);
 
             return response()->json(['message' => 'Notification sent successfully!', 'data' => $notification], 201);
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json(['message' => 'Failed to send notification.', 'error' => $e->getMessage()], 500);
+        }
+    }
+    /////////////////////////////////////////////////////////////EXCEL~UPLOADING/////////////////////////////////
+    //////////////Improved Code////////////
+    public function UploadTimetableExcel(Request $request)
+    {
+        try {
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls',
+                'session' => 'required'
+            ]);
+
+            $session_name = $request->session;
+            $session_id = (new session())->getSessionIdByName($session_name);
+            if (!$session_id) {
+                $session_id = (new session())->getUpcomingSessionId();
+            }
+            $file = $request->file('excel_file');
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+            $NonEmptyRow = [];
+            foreach ($sheetData as $row) {
+                if (
+                    array_filter($row, function ($value) {
+                        return !is_null($value);
+                    })
+                ) {
+                    $row = array_map('trim', $row);
+                    $NonEmptyRow[] = $row;
+                }
+            }
+            $sectionList = [];
+            foreach ($NonEmptyRow[0] as $firstRowCell) {
+                if ($firstRowCell != null || $firstRowCell != '') {
+                    $sectionList[] = $firstRowCell;
+                }
+            }
+            $ColumnEmptyCheck = [];
+            $sliceLength = count($sectionList);
+            foreach ($NonEmptyRow as $row) {
+                $slicedRow = array_slice($row, 0, $sliceLength);
+                $ColumnEmptyCheck[] = $slicedRow;
+            }
+            $Monday = [];
+            $Tuesday = [];
+            $Wednesday = [];
+            $Thursday = [];
+            $Firday = [];
+            $WhatIs = '';
+            foreach ($ColumnEmptyCheck as $row) {
+                if ($row['A'] == 'Monday') {
+                    $WhatIs = 'Monday';
+                    continue;
+                } else if ($row['A'] == 'Tuesday') {
+                    $WhatIs = 'Tuesday';
+                    continue;
+                } else if ($row['A'] == 'Wednesday') {
+                    $WhatIs = 'Wednesday';
+                    continue;
+                } else if ($row['A'] == 'Thursday') {
+                    $WhatIs = 'Thursday';
+                    continue;
+                } else if ($row['A'] == 'Friday') {
+                    $WhatIs = 'Friday';
+                    continue;
+                } else {
+                    if ($WhatIs == 'Monday') {
+                        $Monday[] = $row;
+                    }
+                    if ($WhatIs == 'Tuesday') {
+                        $Tuesday[] = $row;
+                    }
+                    if ($WhatIs == 'Wednesday') {
+                        $Wednesday[] = $row;
+                    }
+                    if ($WhatIs == 'Thursday') {
+                        $Thursday[] = $row;
+                    }
+                    if ($WhatIs == 'Friday') {
+                        $Firday[] = $row;
+                    }
+                }
+            }
+            function convertTo24HourFormat($time)
+            {
+                return date("H:i:s", strtotime($time));
+            }
+            $Success = [];
+            $Error = [];
+            foreach ($Monday as $MondayRows) {
+                $Time = $MondayRows['A'];
+                $Day = 'Monday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+
+                $dayslotId = $dayslot->id;
+
+                foreach ($MondayRows as $index => $value) {
+
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            if ($timetable['status'] == 'error'){
+                                $Error[] = $timetable;
+                            }else{
+                                $Success[] = $timetable;
+                            }
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            }
+            foreach ($Tuesday as $TuesdayRows) {
+                $Time = $TuesdayRows['A'];
+                $Day = 'Tuesday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+                $dayslotId = $dayslot->id;
+
+                foreach ($TuesdayRows as $index => $value) {
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            if ($timetable['status'] == 'error'){
+                                $Error[] = $timetable;
+                            }else{
+                                $Success[] = $timetable;
+                            }
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            }
+            foreach ($Wednesday as $WedRows) {
+                $Time = $WedRows['A'];
+                $Day = 'Wednesday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+                $dayslotId = $dayslot->id;
+
+                foreach ($WedRows as $index => $value) {
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            if ($timetable['status'] == 'error') {
+                                $Error[] = $timetable;
+                            }else{
+                                $Success[] = $timetable;
+                            }
+                            
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            }
+            foreach ($Thursday as $ThuRows) {
+                $Time = $ThuRows['A'];
+                $Day = 'Thursday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+                $dayslotId = $dayslot->id;
+
+                foreach ($ThuRows as $index => $value) {
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            if ($timetable['status'] == 'error'){
+                                $Error[] = $timetable;
+                            }else{
+                                $Success[] = $timetable;
+                            }
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            }
+
+            foreach ($Firday as $FriRows) {
+                $Time = $FriRows['A'];
+                $Day = 'Friday';
+                list($startTime, $endTime) = explode(' - ', $Time);
+                $startTimeFormatted = convertTo24HourFormat($startTime);
+                $endTimeFormatted = convertTo24HourFormat($endTime);
+
+                $dayslot = dayslot::firstOrCreate(
+                    [
+                        'day' => $Day,
+                        'start_time' => $startTimeFormatted,
+                        'end_time' => $endTimeFormatted,
+                    ]
+                );
+                $dayslotId = $dayslot->id;
+
+                foreach ($FriRows as $index => $value) {
+                    if ($value == $Time) {
+                        continue;
+                    } else if ($value != null && $value != '') {
+                        $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
+                        if ($timetable) {
+                            if ($timetable['status'] == 'error'){
+                                $Error[] = $timetable;
+                            }else{
+                                $Success[] = $timetable;
+                            }
+                        } else if ($timetable == null || !$timetable) {
+                            $Error[] = [
+                                "Day" => $Day,
+                                "Time" => $startTimeFormatted . '' . $endTimeFormatted,
+                                "Raw Data" => $value
+                            ];
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            }
+            $successCount = count($Success);
+            $errorCount = count($Error);
+            return response()->json(
+                [
+                    'Message' => 'Data Inserted Successfully !',
+                    'data' => [
+                        "Successfully Added Records Count :"=>$successCount,
+                        "Faulty Records Count :"=>$errorCount,
+                        "Sucess" => $Success,
+                        "Error" => $Error,
+                    ]
+                ],
+                200
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

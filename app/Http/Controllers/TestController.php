@@ -72,7 +72,7 @@ class TestController extends Controller
     public function Empty(Request $request)
     {
         try {
-            $task_id =(new session())->getCurrentSessionId();
+            $task_id =(new session())->getSessionIdByName('Fall-2021');
             return response()->json(
                 [
                     'message' => 'Fetched Successfully',

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Exception;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\offered_courses;
 use Carbon\Carbon;
@@ -42,16 +43,14 @@ class session extends Model
         }
         $split = explode('-', $Name);
         if (count($split) !== 2) {
-            return 0; // Return 0 if the format is invalid
+            return 0;
         }
         $name = $split[0];
         $year = $split[1];
-        $session = self::where('name', $name)
+        $session =session::where('name', $name)
             ->where('year', $year)
-            ->value('id');
-
-        // Return the session ID or 0 if not found
-        return $session ?: 0;
+            ->first();
+        return $session->id ?: 0;
     }
     public function getUpcomingSessionId(): int
     {

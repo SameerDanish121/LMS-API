@@ -11,12 +11,21 @@ class StudentManagement extends Model
     // 'guardian', 'image', 'user_id', 'section_id', 'program_id', 
     // 'session_id', 'status'
     public static function addOrUpdateStudent(
-        $regNo, $name, $cgpa, $gender, $date_of_birth, $guardian, 
-        $image = null, $user_id, $section_id, $program_id, $session_id, $status
+        $regNo,
+        $name,
+        $cgpa,
+        $gender,
+        $date_of_birth,
+        $guardian,
+        $image = null,
+        $user_id,
+        $section_id,
+        $program_id,
+        $session_id,
+        $status
     ) {
-        try{
+        try {
             $student = student::where('RegNo', $regNo)->first();
-           
             $data = [
                 'RegNo' => $regNo,
                 'name' => $name,
@@ -24,22 +33,56 @@ class StudentManagement extends Model
                 'gender' => $gender,
                 'date_of_birth' => $date_of_birth,
                 'guardian' => $guardian,
-                'image' => $image,
                 'user_id' => $user_id,
                 'section_id' => $section_id,
                 'program_id' => $program_id,
                 'session_id' => $session_id,
                 'status' => $status,
             ];
-            $student = student::updateOrCreate(
-                ['RegNo' => $regNo], 
-                $data             
-            );
+            if ($student) {
+                if(!$student->image){
+                    $data['image'] = $student->image;
+                }
+                $student->update($data);
+            } else {
+                $student = student::create($data);
+            }
             return $student->id;
-        }catch(Exception $exception){
-            throw new Exception($exception->getMessage());
+        } catch (Exception $exception) {
+           return null;
         }
     }
+    
+    // public static function addOrUpdateStudent(
+    //     $regNo, $name, $cgpa, $gender, $date_of_birth, $guardian, 
+    //     $image = null, $user_id, $section_id, $program_id, $session_id, $status
+    // ) {
+    //     try{
+    //         $student = student::where('RegNo', $regNo)->first();
+           
+    //         $data = [
+    //             'RegNo' => $regNo,
+    //             'name' => $name,
+    //             'cgpa' => $cgpa,
+    //             'gender' => $gender,
+    //             'date_of_birth' => $date_of_birth,
+    //             'guardian' => $guardian,
+    //             'image' => $image,
+    //             'user_id' => $user_id,
+    //             'section_id' => $section_id,
+    //             'program_id' => $program_id,
+    //             'session_id' => $session_id,
+    //             'status' => $status,
+    //         ];
+    //         $student = student::updateOrCreate(
+    //             ['RegNo' => $regNo], 
+    //             $data             
+    //         );
+    //         return $student->id;
+    //     }catch(Exception $exception){
+    //         throw new Exception($exception->getMessage());
+    //     }
+    // }
     public static function getSessionIdsByStudentId($student_id)
     {
         if (!$student_id) {

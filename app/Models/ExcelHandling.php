@@ -6,11 +6,5 @@ use Illuminate\Database\Eloquent\Model;
 
 class ExcelHandling extends Model
 {
-      public static function UploadEnrollmentExcel(){
-        try{
-
-        }catch(Exception $ex){
-          
-        }
-      }
+  
 }
