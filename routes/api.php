@@ -147,14 +147,7 @@ Route::prefix('Datacell')->group(function () {
 
 
 Route::prefix('Uploading')->group(function () {
-    // $request->validate([
-    //     'excel_file' => 'required|mimes:xlsx,xls',
-    //     'session' => 'required'
-    // ]);
     Route::post('/excel-upload/offeredcourse_teacherallocation', [DatacellModuleController::class, 'OfferedCourseTeacheruploadExcel']);
-     // $request->validate([
-    //     'excel_file' => 'required|mimes:xlsx,xls'
-    // ]);
     Route::post('/excel-upload/excluded_days', [DatacellModuleController::class, 'ExcludedDays']);
     Route::post('/excel-upload/session', [DatacellModuleController::class, 'processSessionRecords']);
     Route::post('/excel-upload/venues', [DatacellModuleController::class, 'importVenues']);
@@ -164,6 +157,13 @@ Route::prefix('Uploading')->group(function () {
     Route::post('/excel-upload/add-or-update-teacher', [DatacellModuleController::class, 'addOrUpdateTeacher']);
     Route::post('/excel-upload/upload-junior-lecturers', [DatacellModuleController::class, 'AddOrUpdateJuniorLecturers']);
     Route::post('/excel-uploading/graders-assign', [DatacellModuleController::class, 'assignGrader']);
+    Route::post('/excel-upload/add-or-update-courses', [DatacellModuleController::class, 'AddOrUpdateCourses']);
+    Route::post('/excel-upload/assign-juniorlecturer', [DatacellModuleController::class, 'assignJuniorLecturer']);
+    Route::post('/uplaod/Exam', [DatacellModuleController::class, 'CreateExam']);
+    Route::post('/uplaod/Topic', [DatacellModuleController::class, 'UploadCourseContentTopic']);
+    Route::post('/uplaod/Result', [DatacellModuleController::class, 'UploadExamAwardList']);
+    Route::post('/uplaod/timetable', [DatacellModuleController::class, 'UploadTimetableExcel']);
+    Route::post('/timetable/section', [DatacellModuleController::class, 'getTimetableGroupedBySection']);
     
 });
 

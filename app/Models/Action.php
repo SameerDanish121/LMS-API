@@ -256,6 +256,7 @@ class Action extends Model
         if (preg_match('/\(([^)]+)\)/', $section, $matches)) {
             $section = $matches[1];
         } else {
+          
             return ["status" => "error", "issue" => "Format of {$RawDATA} is not Correct"];
         }
 
@@ -276,6 +277,7 @@ class Action extends Model
         } else if (count($parts) == 3) {
             $teacherInfo = $teachervenueparts[0];
         }
+      
         $teacherInfo = str_replace(['(', ')'], '', subject: $teacherInfo);
         if (strpos($teacherInfo, ',') !== false) {
             $parts = explode(',', $teacherInfo);
@@ -285,6 +287,7 @@ class Action extends Model
             $teacherName = $teacherInfo;
             $juniorLecturerName = null;
         }
+       
         $course = Course::where('description', $course)->first();
         if (!$course) {
             return ["status" => "error", "issue" => "no course exsist for this {$course} / {$RawDATA}"];
@@ -323,15 +326,18 @@ class Action extends Model
             }
             $type = 'Class';
         }
-        if (!$teacher_id || !$juniorLecture_id) {
+        if (!$teacher_id && !$juniorLecture_id) {
             return ["status" => "error", "issue" => "No instructor found for /|/// {$RawDATA}"];
         }
         $timetable = [];
         $section = explode(',', $section);
+       
         foreach ($section as $s) {
             $section_id = section::addNewSection($s);
+            
             if (!$section_id) {
-                return ["status" => "error", "issue" => "no section is created for this {$section} / {$RawDATA}"];
+             
+                return ["status" => "error", "issue" => "no section is created for this {$s} / {$RawDATA}"];
             }
             $timetable = Timetable::firstOrCreate(
                 [

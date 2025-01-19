@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('coursecontent', function (Blueprint $table) {
             $table->integer('id', true);
             $table->string('type', 50);
-            $table->string('content');
+            $table->string('content')->nullable();
             $table->integer('week')->nullable();
             $table->string('title', 100);
             $table->integer('offered_course_id')->index('offered_course_id');
