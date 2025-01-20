@@ -12,6 +12,7 @@ use App\Models\grader;
 use App\Models\juniorlecturer;
 use App\Models\program;
 use App\Models\question;
+use App\Models\quiz_questions;
 use App\Models\student_exam_result;
 use App\Models\StudentManagement;
 use App\Models\teacher;
@@ -21,6 +22,7 @@ use App\Models\topic;
 use App\Models\venue;
 use Exception;
 use GrahamCampbell\ResultType\Success;
+use Laravel\Pail\Options;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Http\Request;
 use App\Models\attendance;
@@ -1489,7 +1491,7 @@ class DatacellModuleController extends Controller
             }
             $course_name = $offered_course->course->name;
             $session_name = $offered_course->session->name . '-' . $offered_course->session->year;
-            $directory = 'Exam/' . $type . '/' . $session_name;
+            $directory = $session_name . '/' . 'Exam/' . $type;
             $madeupname = $course_name . '-(' . $session_name . ')-' . $type;
             $path = FileHandler::storeFile($madeupname, $directory, $questionPaperFile);
             $exam = exam::where('offered_course_id', $offered_course_id)
@@ -1546,7 +1548,6 @@ class DatacellModuleController extends Controller
     public function UploadCourseContentTopic(Request $request)
     {
         try {
-            // Validate the incoming request
             $request->validate([
                 'excel_file' => 'required|mimes:xlsx,xls',
                 'offered_course_id' => 'required|exists:offered_courses,id',
@@ -1699,70 +1700,70 @@ class DatacellModuleController extends Controller
             if (!empty($extraInValues)) {
                 throw new Exception("Extra questions in header data: " . implode(", ", $extraInValues));
             }
-            $filteredData=[];
+            $filteredData = [];
             foreach ($rows as $row) {
-                $filteredData[] = array_slice($row, 0, count($format)+2);
+                $filteredData[] = array_slice($row, 0, count($format) + 2);
             }
-            $excelID=[];
-            $RowCount=1;
-            $faultyData=[];
-            $successfull=[];
-            
-            foreach(array_slice($filteredData,1)  as $eachRow){
-                
-               $RegNo=$eachRow[0];
-               $Name=$eachRow[1];
-               $students=student::where('RegNo',$RegNo)->first();
-               
-               $excelID[]=$students->id;
-               if(!$students){
-                 $faultyData[]=["status"=>"error","issue"=>"No STUDET FOUND WITH {$RegNo}/{$Name}"];
-                 $RowCount++;
-                 continue;
-               }
-              
-               foreach(array_slice($eachRow,2) as $index =>$record){
-                $question_id=question::where('exam_id',$exam->id)->where('q_no',($index+1))->value('id');
-                if($question_id){
-                    student_exam_result::updateOrCreate(
-                        [
-                            'question_id' => $question_id,
-                            'student_id' => $students->id,
-                            'exam_id' => $exam->id,
-                        ],
-                        [
-                            'obtained_marks' => $record,
-                        ]
-                    );
-                    $qno=$index+1;
-                    $successfull[]=["status"=>"success","Added"=>" Qno {$qno} : Marks For {$RegNo}/{$Name} Added Successfully"];
+            $excelID = [];
+            $RowCount = 1;
+            $faultyData = [];
+            $successfull = [];
+
+            foreach (array_slice($filteredData, 1) as $eachRow) {
+
+                $RegNo = $eachRow[0];
+                $Name = $eachRow[1];
+                $students = student::where('RegNo', $RegNo)->first();
+
+                $excelID[] = $students->id;
+                if (!$students) {
+                    $faultyData[] = ["status" => "error", "issue" => "No STUDET FOUND WITH {$RegNo}/{$Name}"];
+                    $RowCount++;
+                    continue;
                 }
-                
-                
-               
-               }
-              
+
+                foreach (array_slice($eachRow, 2) as $index => $record) {
+                    $question_id = question::where('exam_id', $exam->id)->where('q_no', ($index + 1))->value('id');
+                    if ($question_id) {
+                        student_exam_result::updateOrCreate(
+                            [
+                                'question_id' => $question_id,
+                                'student_id' => $students->id,
+                                'exam_id' => $exam->id,
+                            ],
+                            [
+                                'obtained_marks' => $record,
+                            ]
+                        );
+                        $qno = $index + 1;
+                        $successfull[] = ["status" => "success", "Added" => " Qno {$qno} : Marks For {$RegNo}/{$Name} Added Successfully"];
+                    }
+
+
+
+                }
+
             }
             $missingStudentIds = array_diff($studentIds, $excelID);
-            foreach($missingStudentIds as $miss){
-                $student=student::find($miss);
-                if($student){
-                    $faultyData[]=["status"=>"error","issue"=>" You Missed the Record of  {$student->RegNo}/{$student->name}"];
-                    foreach($examQuestions as $qno){
-                        $question_id=question::where('exam_id',$exam->id)->where('q_no',$qno)->value('id');
-                    student_exam_result::updateOrCreate(
-                    [
-                        'question_id' => $question_id,
-                        'student_id' => $miss,
-                        'exam_id' => $exam->id ,
-                    ],
-                    [
-                        'obtained_marks' => 0,
-                    ]
-                );
+            foreach ($missingStudentIds as $miss) {
+                $student = student::find($miss);
+                if ($student) {
+                    $faultyData[] = ["status" => "error", "issue" => " You Missed the Record of  {$student->RegNo}/{$student->name}"];
+                    foreach ($examQuestions as $qno) {
+                        $question_id = question::where('exam_id', $exam->id)->where('q_no', $qno)->value('id');
+                        student_exam_result::updateOrCreate(
+                            [
+                                'question_id' => $question_id,
+                                'student_id' => $miss,
+                                'exam_id' => $exam->id,
+                            ],
+                            [
+                                'obtained_marks' => 0,
+                            ]
+                        );
                     }
-                
-                }else{
+
+                } else {
                     continue;
                 }
             }
@@ -1874,7 +1875,7 @@ class DatacellModuleController extends Controller
                     }
                 }
             }
-           
+
             function convertTo24HourFormat($time)
             {
                 return date("H:i:s", strtotime($time));
@@ -1905,11 +1906,11 @@ class DatacellModuleController extends Controller
                     } else if ($value != null && $value != '') {
                         $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
                         if ($timetable) {
-                            if ($timetable['status'] == 'error'){
+                            if ($timetable['status'] == 'error') {
                                 $Error[] = $timetable;
-                            }else{
+                            } else {
                                 $Success[] = $Error[] = [
-                                    "status"=>"success",
+                                    "status" => "success",
                                     "Day" => $Day,
                                     "Time" => $startTimeFormatted . '-' . $endTimeFormatted,
                                     "Record" => $value
@@ -1949,11 +1950,11 @@ class DatacellModuleController extends Controller
                     } else if ($value != null && $value != '') {
                         $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
                         if ($timetable) {
-                            if ($timetable['status'] == 'error'){
+                            if ($timetable['status'] == 'error') {
                                 $Error[] = $timetable;
-                            }else{
+                            } else {
                                 $Success[] = $Error[] = [
-                                    "status"=>"success",
+                                    "status" => "success",
                                     "Day" => $Day,
                                     "Time" => $startTimeFormatted . '-' . $endTimeFormatted,
                                     "Record" => $value
@@ -1995,15 +1996,15 @@ class DatacellModuleController extends Controller
                         if ($timetable) {
                             if ($timetable['status'] == 'error') {
                                 $Error[] = $timetable;
-                            }else{
+                            } else {
                                 $Success[] = $Error[] = [
-                                    "status"=>"success",
+                                    "status" => "success",
                                     "Day" => $Day,
                                     "Time" => $startTimeFormatted . '-' . $endTimeFormatted,
                                     "Record" => $value
                                 ];
                             }
-                            
+
                         } else if ($timetable == null || !$timetable) {
                             $Error[] = [
                                 "Day" => $Day,
@@ -2038,11 +2039,11 @@ class DatacellModuleController extends Controller
                     } else if ($value != null && $value != '') {
                         $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
                         if ($timetable) {
-                            if ($timetable['status'] == 'error'){
+                            if ($timetable['status'] == 'error') {
                                 $Error[] = $timetable;
-                            }else{
+                            } else {
                                 $Success[] = $Error[] = [
-                                    "status"=>"success",
+                                    "status" => "success",
                                     "Day" => $Day,
                                     "Time" => $startTimeFormatted . '-' . $endTimeFormatted,
                                     "Record" => $value
@@ -2079,14 +2080,14 @@ class DatacellModuleController extends Controller
                 foreach ($FriRows as $index => $value) {
                     if ($value == $Time) {
                         continue;
-                    }else if ($value != null && $value != '') {
+                    } else if ($value != null && $value != '') {
                         $timetable = Action::insertOrCreateTimetable($value, $dayslotId);
                         if ($timetable) {
-                            if ($timetable['status'] == 'error'){
+                            if ($timetable['status'] == 'error') {
                                 $Error[] = $timetable;
-                            }else{
+                            } else {
                                 $Success[] = $Error[] = [
-                                    "status"=>"success",
+                                    "status" => "success",
                                     "Day" => $Day,
                                     "Time" => $startTimeFormatted . '-' . $endTimeFormatted,
                                     "Record" => $value
@@ -2110,8 +2111,8 @@ class DatacellModuleController extends Controller
                 [
                     'Message' => 'Data Inserted Successfully !',
                     'data' => [
-                        "Successfully Added Records Count :"=>$successCount,
-                        "Faulty Records Count :"=>$errorCount,
+                        "Successfully Added Records Count :" => $successCount,
+                        "Faulty Records Count :" => $errorCount,
                         "Sucess" => $Success,
                         "Error" => $Error,
                     ]
@@ -2175,4 +2176,134 @@ class DatacellModuleController extends Controller
             "timetable" => $timetable,
         ], 200);
     }
+    public function CreateCourseContent(Request $request)
+    {
+        try {
+            $request->validate([
+                'data' => 'required|array',
+                'offered_course_id' => 'required|exists:offered_courses,id',
+            ]);
+
+            $offeredCourse = offered_courses::where('id', $request->offered_course_id)
+                ->with(['course', 'session'])
+                ->first();
+
+            if (!$offeredCourse) {
+                return response()->json(['message' => 'Offered course not found'], 404);
+            }
+
+            $successfull = [];
+            $index = 0;
+            foreach ($request->data as $row) {
+                $type = $row['type'] ?? null;
+                $weekNo = $row['WeekNo'] ?? null;
+                $file = $row['file'] ?? null;
+                if (is_null($type) || is_null($weekNo)) {
+                    $successfull[] = [
+                        "status" => "error",
+                        "logs" => "Row skipped: Missing type or WeekNo.",
+                    ];
+                    continue;
+                }
+
+                $weekNo = (int) $weekNo;
+                $title = $offeredCourse->course->description . '-Week' . $weekNo;
+                if (in_array($type, ['Quiz', 'Assignment'])) {
+                    $existingCount = coursecontent::where('week', $weekNo)
+                        ->where('offered_course_id', $offeredCourse->id)
+                        ->where('type', $type)
+                        ->count();
+                    $title .= '-' . $type . '#(' . ($existingCount + 1) . ')';
+                }
+                if ($type === 'Notes') {
+                    $lecNo = ($weekNo * 2) - 1;
+                    $lecNo1 = $weekNo * 2;
+                    $title .= '-Lec(' . $lecNo . '-' . $lecNo1 . ')';
+                }
+                $courseContent = coursecontent::updateOrCreate(
+                    [
+                        'title' => $title,
+                        'week' => $weekNo,
+                        'offered_course_id' => $offeredCourse->id,
+                        'type' => $type,
+                    ],
+                    []
+                );
+                if ($file === 'MCQS' && isset($row['MCQS']) && is_array($row['MCQS'])) {
+                    $courseContent->type = 'Quiz';
+                    $courseContent->content = 'MCQS';
+                    $courseContent->save();
+                    foreach ($row['MCQS'] as $mcq) {
+                        $questionNo = $mcq['qNO'] ?? null;
+                        $questionText = $mcq['question_text'] ?? null;
+                        $points = $mcq['points'] ?? null;
+                        $options = [
+                            $mcq['option1'] ?? null,
+                            $mcq['option2'] ?? null,
+                            $mcq['option3'] ?? null,
+                            $mcq['option4'] ?? null,
+                        ];
+                        $answer = $mcq['Answer'] ?? null;
+                        if (!$questionNo || !$questionText || !$points || !$answer) {
+                            $successfull[] = [
+                                "status" => "error",
+                                "logs" => "Row skipped: Missing MCQS question data.",
+                            ];
+                            continue;
+                        }
+                        $quizQuestion = quiz_questions::create([
+                            'question_no' => $questionNo,
+                            'question_text' => $questionText,
+                            'points' => $points,
+                            'coursecontent_id' => $courseContent->id,
+                        ]);
+
+                        foreach ($options as $index => $optionText) {
+                            if ($optionText) {
+                                \App\Models\options::create([
+                                    'quiz_question_id' => $quizQuestion->id,
+                                    'option_text' => $optionText,
+                                    'is_correct' => trim($optionText) === trim($answer),
+                                ]);
+                            }
+                        }
+                    }
+                } else {
+                    if (in_array($file->getClientOriginalExtension(), ['pdf', 'doc', 'docx', 'xlsx', 'xls'])) {
+                        $directory = $offeredCourse->session->name . '-' . $offeredCourse->session->year . '/Course Content' . '/' . $offeredCourse->course->description;
+                        $filePath = FileHandler::storeFile($title, $directory, $file);
+                        $courseContent->content = $filePath;
+                        $courseContent->save();
+                    } else {
+                        $successfull[] = [
+                            "status" => "error",
+                            "logs" => "Row skipped: Invalid file type.",
+                        ];
+                        continue;
+                    }
+                }
+                $successfull[] = [
+                    "status" => "success",
+                    "logs" => "The content for Week {$weekNo} ({$type}) has been added successfully."
+                ];
+            }
+            return response()->json([
+                'message' => 'Successfully added course content!',
+                'Stats' => $successfull,
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
 }

@@ -42,9 +42,6 @@ use Illuminate\Support\Facades\DB;
 use function Laravel\Prompts\select;
 class StudentController extends Controller
 {
-
-     
-    
     public function AttendancePerSubject(Request $request)
     {
         try {
@@ -113,7 +110,7 @@ class StudentController extends Controller
                     return [
                         'total_credit_points' => $sessionResult->ObtainedCreditPoints,
                         'GPA' => $sessionResult->GPA,
-                        'session_name' => $sessionResult->session->name,
+                        'session_name' => $sessionResult->session->name.'-'.$sessionResult->session->year,
                         'subjects' => $subjects,
                     ];
                 });
@@ -130,20 +127,33 @@ class StudentController extends Controller
     {
         try {
             $section_id = $request->section_id;
+            $student_id=$request->student_id;
+            $student=student::find($student_id);
             $Notification = notification::with(['senderUser:id,username'])
                 ->where('Student_Section', $section_id)
+                ->orWhere('TL_receiver_id',$student->user_id
+                )
                 ->where('reciever', 'Student')
                 ->orWhere('Brodcast', 1)
                 ->select('title', 'description', 'url', 'notification_date', 'sender', 'TL_sender_id')
                 ->get();
-
             $Notification = $Notification->map(function ($item) {
+                if($item->sender=='Teacher'){
+                    $teacherName=teacher::where('user_id',$item->senderUser->id)->first()->name;
+                }else if($item->sender=='JuniorLecturer'){
+                    $teacherName=juniorlecturer::where('user_id',$item->senderUser->id)->first()->name;
+                }else if($item->sender=='DataCell'){
+                    $teacherName=datacell::where('user_id',$item->senderUser->id)->first()->name;
+                }else if($item->sender=='Admin'){
+                    $teacherName=admin::where('user_id',$item->senderUser->id)->first()->name;
+                }
                 return [
+                    'sender' => $item->sender,
+                    'Sender Name'=>$teacherName??'N/A',
                     'title' => $item->title,
                     'description' => $item->description,
                     'url' => $item->url,
                     'notification_date' => $item->notification_date,
-                    'sender' => $item->sender,
                     'TL_sender_id' => $item->senderUser->username ?? 'N/A',
                 ];
             });
@@ -402,27 +412,6 @@ class StudentController extends Controller
             ], 500);
         }
     }
-
-
-    public function AcademicReport(Request $request)
-    {
-        try {
-            $student_id = $request->student_id;
-            $course_id = $request->course_id;
-            if (!$student_id) {
-                throw new Exception('Student ID IS Required');
-            }
-            if (!$course_id) {
-                throw new Exception('Course ID IS Required');
-            }
-        } catch (Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
     public function Sample(Request $request)
     {
         try {
@@ -590,14 +579,11 @@ class StudentController extends Controller
             $studentId = $request->student_id;
             $offerId = $request->offered_course_id;
             $responseMessage = StudentManagement::getExamResultsGroupedByTypeWithStats($studentId, $offerId);
-    
-            // Return successful response
             return response()->json([
                 'success' => 'Fetched Successfully!',
                 'ExamDetails' => $responseMessage
             ], 200);
         } catch (ValidationException $e) {
-            // Handle validation exception
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
@@ -885,14 +871,13 @@ class StudentController extends Controller
             ], 500);
         }
     }
-
     public function Notifications(Request $request)
     {
         try {
             $section_id = $request->section_id;
-            $student_id = $request->student_id;  // Get the student ID from the request
-    
-            // Fetch Section-Wide Notifications for a specific Section (reciever = 'Student')
+            $student_id = $request->student_id;
+            $student=student::find($student_id);
+          
             $sectionNotifications = notification::with(['senderUser:id,username'])
                 ->where('Student_Section', $section_id) // Filter by section_id
                 ->where('reciever', 'Student') // Filter by recipient type (Student)
@@ -903,7 +888,7 @@ class StudentController extends Controller
     
             // Fetch Direct Notifications to a specific Student (by TL_receiver_id)
             $studentNotifications = notification::with(['senderUser:id,username'])
-                ->where('TL_receiver_id', $student_id) // Filter by TL_receiver_id (student-specific)
+                ->where('TL_receiver_id',   $student->user_id) // Filter by TL_receiver_id (student-specific)
                 ->where('reciever', 'Student') // Filter by recipient type (Student)
                 ->select('title', 'description', 'url', 'notification_date', 'sender', 'TL_sender_id')
                 ->get();
@@ -914,8 +899,6 @@ class StudentController extends Controller
                 ->where('reciever', 'Student') // Filter by recipient type (Student)
                 ->select('title', 'description', 'url', 'notification_date', 'sender', 'TL_sender_id')
                 ->get();
-    
-            // Combine and remove duplicates from section and student notifications
             $notifications = $sectionNotifications->merge($studentNotifications)->unique('id'); // Assuming 'id' is unique
     
             // Map all notifications (section and student-specific) to the desired format
@@ -929,8 +912,6 @@ class StudentController extends Controller
                     'TL_sender_id' => $item->senderUser->username ?? 'N/A',
                 ];
             });
-    
-            // Map broadcast notifications separately
             $broadcastNotifications = $broadcastNotifications->map(function ($item) {
                 return [
                     'title' => $item->title,
@@ -969,7 +950,6 @@ class StudentController extends Controller
             ], 500);
         }
     }
-   
     ////////////////////////////////////////////////////EXTRASSSSSSSSSSSSSSSSSSSS///////////////////
     public function sendForgotPasswordEmail(Request $request)
     {

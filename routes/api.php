@@ -11,10 +11,7 @@ use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\JuniorLecturerController;
 use App\Http\Controllers\DatacellController;
 use App\Http\Controllers\DatacellModuleController;
-
-////////////////////////////////////////////////////////~api/~////////////////////////////////////////
-Route::get('/Login', [StudentController::class, 'Login']);
-
+use App\Http\Controllers\TeacherModuleController;
 //////////////////////////////////////////////////////~api/Student///////////////////////////////////////////////
 Route::prefix('Student')->group(function () {
     Route::get('/FullTimetable', [StudentController::class, 'FullTimetable']);
@@ -39,15 +36,7 @@ Route::prefix('Student')->group(function () {
     
     //18
 });
-//////////////////////////////////////////////////////~api/Grader////////////////////////////////////////////////
-Route::prefix('Grader')->group(function () {
-    Route::get('/GraderInfo', [GraderController::class, 'GraderOf']);
-    Route::get('/YourTask', [GraderController::class, 'GraderTask']);
-    Route::get('/ListOfStudent', [GraderController::class, 'ListOfStudentForTask']);
-    Route::post('/SubmitTaskResult', [GraderController::class, 'SubmitNumber']);
-    Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);
-    //5
-});
+
 //////////////////////////////////////////////////////~api/JuniorLecturer////////////////////////////////////////////////
 Route::prefix('JuniorLecturer')->group(function () {
     Route::get('/full-timetable', [JuniorLecturerController::class, 'FullTimetable']);
@@ -70,11 +59,6 @@ Route::prefix('JuniorLecturer')->group(function () {
     Route::get('/today-lab-classes', [JuniorLecturerController::class, 'getTodayLabClassesWithTeacherCourseAndVenue']);
     //16
 });
-
-
-
-
-
 //////////////////////////////////////////////////////~api/Admin///////////////////////////////////////////////
 Route::prefix('Admin')->group(function () {
     Route::get('/AllStudent', [AdminController::class, 'AllStudent']);
@@ -89,9 +73,18 @@ Route::prefix('Admin')->group(function () {
     Route::get('/course-content', [AdminController::class, 'getCourseContent']);
     Route::get('/search-admin', [AdminController::class, 'searchAdminByName']);
     Route::get('/search-datacell', [AdminController::class, 'GetDatacell']);
+
+    Route::get('/Current-Courses/{sessionId}', [AdminController::class, 'getCoursesInCurrentSession']);
+    Route::get('/Courses-Not-In-Session/{sessionId}', [AdminController::class, 'getCoursesNotInSession']);
+    // Route to get teachers with no courses in a particular session
+    Route::get('/Teachers-With-No-Courses/{sessionId}', [AdminController::class, 'getTeachersWithNoCourses']);
+
+    // Route to get courses a particular teacher is enrolled in for a specific session
+    Route::get('/Teacher-Courses/{teacherId}/{sessionId}', [AdminController::class, 'getTeacherEnrolledCourses']);
+    Route::get('/Students-Not-Enrolled-Courses/{sessionId}', [AdminController::class, 'getStudentsNotEnrolledInSession']);
+    Route::get('/Student-Courses/{studentName}/{sessionId}', [AdminController::class, 'getStudentCoursesInSession']);
     //12
 });
-
 //////////////////////////////////////////////////////~api/Teacher///////////////////////////////////////////////
 Route::prefix('Teacher')->group(function () {
     Route::post('/markAttendance', [TeacherController::class, 'markAttendance']);
@@ -121,10 +114,6 @@ Route::get('/good', [TestController::class, 'upload']);
 //////////////////////////////////////////////////////~api/Datacell////////////////////////////////////////////////
 
 Route::prefix('Datacell')->group(function () {
-    ////~Archives~/////////
-    Route::get('/getArchivesDetails', [DatacellController::class, 'Archives']);
-    Route::delete('/DeleteFolderByPath', [DatacellController::class, 'DeleteFolderByPath']);
-    ///~Excel-Upload~//////
     Route::post('/excel/offered-course', [DatacellController::class, 'OfferedCourseTeacheruploadExcel']);
     Route::post('/excel/session-timetable', [DatacellController::class, 'UploadTimetableExcel']);
     Route::post('/excel/student-enrollment', [DatacellController::class, 'UploadStudentEnrollments']);
@@ -140,12 +129,34 @@ Route::prefix('Datacell')->group(function () {
     Route::get('/AllStudent', [DatacellController::class, 'AllStudent']);
     Route::post('/NewOfferedCourse', [DatacellController::class, 'AddNewOfferedCourse']);
     Route::post('/send/notification', [DatacellController::class, 'sendNotification']);
-
-    
-    //14
 });
 
 
+Route::prefix('/TeacherTesting')->group( function() {
+    Route::get('/contest-list', [TeacherModuleController::class, 'ContestList']);
+    Route::post('/process-contest', [TeacherModuleController::class,'ProcessContest']);
+    Route::get('/task/get', [TeacherModuleController::class, 'YourTaskInfo']);
+    Route::get('/tasks/unassigned-to-grader', [TeacherModuleController::class, 'UnAssignedTaskToGrader']);
+    Route::post('/tasks/assign-grader', [TeacherModuleController::class, 'assignTaskToGrader']);
+    Route::get('/teacher-graders', [TeacherModuleController::class, 'getAssignedGraders']);
+    Route::get('/teacher-unassigned-task', [TeacherModuleController::class, 'getListofUnassignedTask']);
+    Route::post('/store-task', [TeacherModuleController::class, 'storeTask']);
+});
+
+
+
+
+///////////////////////////////////////////////////////////////Considered+Checked////////////////////////////////////////////////////////////////////////
+Route::get('/Login', [StudentController::class, 'Login']);
+//1
+Route::prefix('Grader')->group(function () {
+    Route::get('/GraderInfo', [GraderController::class, 'GraderOf']);
+    Route::get('/YourTask', [GraderController::class, 'GraderTask']);
+    Route::get('/ListOfStudent', [GraderController::class, 'ListOfStudentForTask']);
+    Route::post('/SubmitTaskResult', [GraderController::class, 'SubmitNumber']);
+    Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);
+    //5
+});
 Route::prefix('Uploading')->group(function () {
     Route::post('/excel-upload/offeredcourse_teacherallocation', [DatacellModuleController::class, 'OfferedCourseTeacheruploadExcel']);
     Route::post('/excel-upload/excluded_days', [DatacellModuleController::class, 'ExcludedDays']);
@@ -164,7 +175,10 @@ Route::prefix('Uploading')->group(function () {
     Route::post('/uplaod/Result', [DatacellModuleController::class, 'UploadExamAwardList']);
     Route::post('/uplaod/timetable', [DatacellModuleController::class, 'UploadTimetableExcel']);
     Route::post('/timetable/section', [DatacellModuleController::class, 'getTimetableGroupedBySection']);
-    
+    Route::post('/uplaod/course-content', [DatacellModuleController::class, 'CreateCourseContent']);
+    Route::get('/getArchivesDetails', [DatacellController::class, 'Archives']);
+    Route::delete('/DeleteFolderByPath', [DatacellController::class, 'DeleteFolderByPath']);
+    //20
 });
 
 

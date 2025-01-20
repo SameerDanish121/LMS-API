@@ -16,32 +16,7 @@ class Action extends Model
     // 'guardian', 'image', 'user_id', 'section_id', 'program_id', 
     // 'session_id', 'status'
 
-    public static function getMCQS($coursecontent_id)
-    {
-        if (!$coursecontent_id) {
-            return null;
-        }
-        $Question = quiz_questions::where('coursecontent_id', $coursecontent_id)->with(['Options'])->get();
-        if (!$Question) {
-            return null;
-        }
-        $Question_details = $Question->map(
-            function ($Question) {
-                return [
-                    "ID" => $Question->id,
-                    "Question NO" => $Question->question_no,
-                    "Question" => $Question->question_text,
-                    "Option 1" => $Question->Options[0]->option_text ?? null,
-                    "Option 2" => $Question->Options[1]->option_text ?? null,
-                    "Option 3" => $Question->Options[2]->option_text ?? null,
-                    "Option 4" => $Question->Options[3]->option_text ?? null,
-                    "Answer" => $Question->Options->firstWhere('is_correct', true)->option_text ?? null,
-                ];
-            }
-
-        );
-        return $Question_details;
-    }
+    
     public static function AddorUpdateNewStudent($RegNo, $name, $cgpa, $gender, $dateofBirth, $guradain, $image, $user_id, $section, $program, $session, $status)
     {
         student::updateOrCreate(
@@ -392,5 +367,28 @@ class Action extends Model
         }
         return $user->id;
     }
+    public static function getMCQS($coursecontent_id){
+        if(!$coursecontent_id){
+         return null;
+        }
+        $Question=quiz_questions::where('coursecontent_id',$coursecontent_id)->with(['Options'])->get();
+        if(!$Question){
+         return null;
+        }
+        $Question_details=$Question->map(function($Question){
+         return [
+             "ID" => $Question->id,
+             "Question NO" => $Question->question_no,
+             "Question" => $Question->question_text,
+             "Option 1" => $Question->Options[0]->option_text ?? null, 
+             "Option 2" => $Question->Options[1]->option_text ?? null,
+             "Option 3" => $Question->Options[2]->option_text ?? null,
+             "Option 4" => $Question->Options[3]->option_text ?? null,
+             "Answer" =>$Question->Options->firstWhere('is_correct', true)->option_text ?? null, 
+         ];
+        }
+     );
+        return $Question_details;
+     }
 
 }

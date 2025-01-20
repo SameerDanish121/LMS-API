@@ -80,6 +80,7 @@ class GraderController extends Controller
     //       }
     //     ]
     //   }
+
     public function SubmitNumberList(Request $request)
     {
         try {
@@ -112,7 +113,7 @@ class GraderController extends Controller
             ], 500);
         }
     }
-
+     //task_id;
     public function ListOfStudentForTask(Request $request)
     {
         try {
@@ -128,7 +129,7 @@ class GraderController extends Controller
                     ->join('offered_courses', 'student_offered_courses.offered_course_id', '=', 'offered_courses.id')
                     ->where('student_offered_courses.section_id', $section)
                     ->where('offered_courses.session_id', (new session())->getCurrentSessionId())
-                    ->get()->unique('student.RegNo');
+                    ->get();
                 $submissions = student_task_submission::select(
                     'student_task_submission.Student_id',
                     'student.name',
@@ -178,6 +179,7 @@ class GraderController extends Controller
             ], 500);
         }
     }
+    //grader_id;
     public function GraderTask(Request $request)
     {
         try {
@@ -259,7 +261,6 @@ class GraderController extends Controller
             ], 500);
         }
     }
-
     private function getMarkingInfo($taskId)
     {
         $marks = student_task_result::where('Task_id', $taskId)
@@ -292,6 +293,7 @@ class GraderController extends Controller
             ],
         ];
     }
+    //student_id;
     public function GraderOf(Request $request)
     {
         try {

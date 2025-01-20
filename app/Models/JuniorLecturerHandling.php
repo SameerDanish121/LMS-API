@@ -206,7 +206,7 @@ class JuniorLecturerHandling extends Model
         try {
             $activeCourses = self::getActiveCoursesForJuniorLecturer($juniorLecturerId);
             $teacherOfferedCourseIds = collect($activeCourses)->pluck('teacher_offered_course_id');
-            $tasks = task::whereIn('teacher_offered_course_id', $teacherOfferedCourseIds)
+            $tasks = task::with('courseContent')->whereIn('teacher_offered_course_id', $teacherOfferedCourseIds)
                 ->where('CreatedBy', 'Junior Lecturer')
                 ->get();
             $completedTasks = [];
@@ -225,7 +225,9 @@ class JuniorLecturerHandling extends Model
                     'task_id' => $task->id,
                     'title' => $task->title,
                     'type' => $task->type,
-                    'path' => $task->path,
+                    ($task->courseContent->content=='MCQS')?'MCQS':'File'=>($task->courseContent->content=='MCQS')
+                    ?Action::getMCQS($task->courseContent->id)
+                    :FileHandler::getFileByPath($task->courseContent->content),
                     'created_by' => $task->CreatedBy,
                     'points' => $task->points,
                     'start_date' => $task->start_date,
@@ -235,7 +237,6 @@ class JuniorLecturerHandling extends Model
                     'marking_info' => $markingInfo,
                 ];
                 if ($task->isMarked) {
-
                     $completedTasks[] = $taskInfo;
                 } elseif ($startDate > $currentDate) {
                     $upcomingTasks[] = $taskInfo;

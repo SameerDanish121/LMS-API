@@ -1,7 +1,9 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Eloquent\Model;
 use App\Models\admin;
 use App\Models\Course;
 use App\Models\coursecontent;
@@ -19,6 +21,130 @@ use Carbon\Carbon;
 use App\Models\user;
 class AdminController extends Controller
 {
+    public function getStudentsNotEnrolledInSession($sessionId)
+    {
+        $students = DB::table('student as s')
+            ->leftJoin('student_offered_courses as soc', 's.id', '=', 'soc.student_id')
+            ->leftJoin('offered_courses as oc', 'soc.offered_course_id', '=', 'oc.id')
+            ->whereNull('soc.id') // Ensures the student has no enrollment in any course
+            ->orWhere(function ($query) use ($sessionId) {
+                $query->whereNull('oc.id') // Ensures the student is not in any course for the given session
+                    ->where('oc.session_id', $sessionId); // Specifically for the given session
+            })
+            ->select('s.id as student_id', 's.name as student_name', 's.RegNo as registration_number')
+            ->get();
+
+        // Check if no students found
+        if ($students->isEmpty()) {
+            return response()->json(['message' => 'No students found who are not enrolled in any course in this session'], 200);
+        }
+
+        return response()->json($students);
+    }
+    public function getStudentCoursesInSession($studentName, $sessionId)
+    {
+        $courses = DB::table('student as s')
+            ->join('student_offered_courses as soc', 's.id', '=', 'soc.student_id')
+            ->join('offered_courses as oc', 'soc.offered_course_id', '=', 'oc.id')
+            ->join('course as c', 'oc.course_id', '=', 'c.id')
+            ->join('section as sec', 'soc.section_id', '=', 'sec.id')
+            ->where('s.name', 'LIKE', "%$studentName%")
+            ->where('oc.session_id', $sessionId)
+            ->select('s.name as student_name', 'c.name as course_name', DB::raw("CONCAT(sec.semester, sec.`group`) as section_details"))
+            ->get();
+
+        // Check if no courses found
+        if ($courses->isEmpty()) {
+            return response()->json(['message' => 'No courses found for this student in the given session'], 200);
+        }
+
+        return response()->json($courses);
+    }
+    public function getTeacherEnrolledCourses($teacherId, $sessionId)
+    {
+        $courses = DB::table('teacher as t')
+            ->join('teacher_offered_courses as toc', 't.id', '=', 'toc.teacher_id')
+            ->join('offered_courses as oc', 'toc.offered_course_id', '=', 'oc.id')
+            ->join('course as c', 'oc.course_id', '=', 'c.id')
+            ->join('section as s', 'toc.section_id', '=', 's.id')
+            ->leftJoin('student_offered_courses as soc', function ($join) {
+                $join->on('soc.section_id', '=', 's.id')
+                    ->on('soc.offered_course_id', '=', 'oc.id');
+            })
+            ->where('t.id', $teacherId)
+            ->where('oc.session_id', $sessionId)
+            ->select(
+                't.id as teacher_id',
+                't.name as teacher_name',
+                'c.name as course_name',
+                DB::raw("CONCAT(s.program, ' ', s.semester, s.`group`) as section"), // Updated line
+                DB::raw('COUNT(soc.id) as total_students')
+            )
+            ->groupBy('t.id', 't.name', 'c.name', 'section')
+            ->get();
+
+        if ($courses->isEmpty()) {
+            return response()->json(['message' => 'No courses found for this teacher'], 200);
+        }
+
+        return response()->json($courses);
+    }
+    public function getTeachersWithNoCourses($sessionId)
+    {
+        // Fetch teachers who are not enrolled in the specified session
+        $teachers = DB::table('teacher as t')
+            ->leftJoin('teacher_offered_courses as toc', 't.id', '=', 'toc.teacher_id')
+            ->leftJoin('offered_courses as oc', 'toc.offered_course_id', '=', 'oc.id')
+            ->whereNull('oc.session_id')  // Check if the teacher is not associated with any course in the given session
+            ->orWhere('oc.session_id', '!=', $sessionId)  // Ensure that the teacher is not enrolled in the provided session
+            ->select('t.id as teacher_id', 't.name as teacher_name')
+            ->groupBy('t.id', 't.name')
+            ->get();
+
+        // Check if the teachers array is empty and return a custom message
+        if ($teachers->isEmpty()) {
+            return response()->json(['message' => 'All teachers are enrolled in courses for this session'], 200);
+        }
+
+        // Return the teachers if found
+        return response()->json($teachers);
+    }
+    public function getCoursesNotInSession($sessionId)
+    {
+
+        $courses = DB::table('course as c')
+            ->whereNotIn('c.id', function ($query) use ($sessionId) {
+                $query->select('oc.course_id')
+                    ->from('offered_courses as oc')
+                    ->where('oc.session_id', $sessionId);
+            })
+            ->select('c.id', 'c.code', 'c.name', 'c.credit_hours')
+            ->get();
+
+        // Check if the courses array is empty and return a custom message
+        if ($courses->isEmpty()) {
+            return response()->json(['message' => 'NO COURSES TO SHOW'], 200);
+        }
+
+        // Return the courses if found
+        return response()->json($courses);
+    }
+    public function getCoursesInCurrentSession($sessionId)
+    {
+        // Get the current session ID using the getCurrentSessionId function
+
+
+        // Fetch courses based on the current session ID
+        $courses = DB::table('course as c')
+            ->join('offered_courses as oc', 'c.id', '=', 'oc.course_id')
+            ->where('oc.session_id', $sessionId)
+            ->select('c.id', 'c.code', 'c.name', 'c.credit_hours')
+            ->get();
+        if ($courses->isEmpty()) {
+            return response()->json(['message' => 'No course enrolled in this session'], 200);
+        }
+        return response()->json($courses);
+    }
     public function AllStudent(Request $request)
     {
         try {
