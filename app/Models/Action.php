@@ -384,7 +384,7 @@ class Action extends Model
              "Option 2" => $Question->Options[1]->option_text ?? null,
              "Option 3" => $Question->Options[2]->option_text ?? null,
              "Option 4" => $Question->Options[3]->option_text ?? null,
-             "Answer" =>$Question->Options->firstWhere('is_correct', true)->option_text ?? null, 
+             "Answer"=>$Question->Options->firstWhere('is_correct', true)->option_text ?? null, 
          ];
         }
      );

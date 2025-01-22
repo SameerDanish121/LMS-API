@@ -913,7 +913,7 @@ class DatacellModuleController extends Controller
                 $Discipline = $singleRow['K'];
                 $dob = (new DateTime($dob))->format('Y-m-d');
                 $password = Action::generateUniquePassword($Name);
-
+                
                 $user_id = Action::addOrUpdateUser($regNo, $password, $email, 'Student');
                 $section_id = section::addNewSection($currentSection);
                 if (!$section_id) {
@@ -2297,7 +2297,7 @@ class DatacellModuleController extends Controller
                 'message' => 'Validation failed',
                 'errors' => $e->errors(),
             ], 422);
-        } catch (Exception $e) {
+        }catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
@@ -2305,5 +2305,4 @@ class DatacellModuleController extends Controller
             ], 500);
         }
     }
-
 }

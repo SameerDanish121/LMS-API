@@ -14,6 +14,7 @@ use App\Models\offered_courses;
 use App\Models\section;
 use App\Models\student;
 use App\Models\student_task_result;
+use App\Models\task_consideration;
 use App\Models\teacher;
 use App\Models\teacher_grader;
 use App\Models\teacher_offered_courses;
@@ -312,8 +313,6 @@ class TeacherModuleController extends Controller
             ], 500);
         }
     }
-
-
     public static function categorizeTasksForTeacher(int $teacher_id)
     {
         try {
@@ -541,7 +540,7 @@ class TeacherModuleController extends Controller
                 $courseContents = coursecontent::where('offered_course_id', $offered_course_id->id)
                     ->whereIn('type', ['Assignment', 'Quiz', 'LabTask'])
                     ->get();
-                
+
                 $taskIds = \App\Models\task::where('teacher_offered_course_id', $singleSection['teacher_offered_course_id'])
                     ->pluck('coursecontent_id');
                 $missingTasks = $courseContents->filter(function ($courseContent) use ($taskIds) {
@@ -556,16 +555,16 @@ class TeacherModuleController extends Controller
                             'week' => $task->week,
                             'offered_course_id' => $task->offered_course_id,
                             ($task->content == 'MCQS') ? 'MCQS' : 'File' => ($task->content == 'MCQS')
-                        ? Action::getMCQS($task->id)
-                        : FileHandler::getFileByPath($task->content),
-                            
+                                ? Action::getMCQS($task->id)
+                                : FileHandler::getFileByPath($task->content),
+
                         ];
                     });
-                
+
                     $unassignedTasks[] = [
                         'teacher_offered_course_id' => $singleSection['teacher_offered_course_id'],
                         'section_name' => $singleSection['section_name'],
-                        'unassigned_tasks' => $customMissingTasks->toArray(), 
+                        'unassigned_tasks' => $customMissingTasks->toArray(),
                     ];
                 }
             }
@@ -603,36 +602,36 @@ class TeacherModuleController extends Controller
             $coursecontent_id = $validatedData['coursecontent_id'];
             $sections = explode(',', $sectionInfo);
             $course = Course::where('name', $courseName)->first();
-           
+
             if (!$course) {
                 return response()->json([
                     'status' => 'error',
                     'message' => "Course '{$courseName}' not found.",
                 ], 404);
             }
-          
-            $course_content=coursecontent::find($coursecontent_id);
-                if(!$course_content){
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => "No Task is Found with given Cradentails ",
-                    ], 404);
-                }
-               
+
+            $course_content = coursecontent::find($coursecontent_id);
+            if (!$course_content) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "No Task is Found with given Cradentails ",
+                ], 404);
+            }
+
             $type = $course_content->type;
             $insertedTasks = [];
             foreach ($sections as $sectionName) {
                 $sectionName = trim($sectionName);
                 $section = section::addNewSection($sectionName);
-               
-                if (!$section||$section==0) {
-                    $insertedTasks[]=[
+
+                if (!$section || $section == 0) {
+                    $insertedTasks[] = [
                         'status' => 'error',
                         'message' => "Section '{$sectionName}' not found.",
                     ];
                     continue;
                 }
-                
+
                 $sectionId = $section;
 
                 $courseId = $course->id;
@@ -641,28 +640,28 @@ class TeacherModuleController extends Controller
 
                 $offered_course_id = offered_courses::where('session_id', $currrentSession)
                     ->where('course_id', $course->id)->value('id');
-                
+
                 $teacherOfferedCourse = teacher_offered_courses::where('section_id', $sectionId)
                     ->where('offered_course_id', $offered_course_id)
                     ->first();
 
                 if (!$teacherOfferedCourse) {
-                    $insertedTasks[]=[
+                    $insertedTasks[] = [
                         'status' => 'error',
                         'message' => "Teacher-offered course not found for section '{$sectionName}' and course '{$courseName}'.",
                     ];
                     continue;
                 }
-               
+
                 $taskNo = Action::getTaskCount($teacherOfferedCourse->id, $type);
                 if ($taskNo > 0 && $taskNo < 10) {
                     $taskNo = "0" . $taskNo;
                 }
-                
-                $filename = $course->description.'-' . $type . $taskNo . '-' . $sectionName;
+
+                $filename = $course->description . '-' . $type . $taskNo . '-' . $sectionName;
                 $title = $filename;
                 $teacherOfferedCourseId = $teacherOfferedCourse->id;
-                
+
                 $taskData = [
                     'title' => $title,
                     'type' => $type,
@@ -674,18 +673,18 @@ class TeacherModuleController extends Controller
                     'teacher_offered_course_id' => $teacherOfferedCourseId,
                     'isMarked' => false,
                 ];
-               
-                $task=\App\Models\task::where('teacher_offered_course_id',$teacherOfferedCourse)
-                ->where('coursecontent_id',$coursecontent_id)->first();
-                
-                if($task){
+
+                $task = \App\Models\task::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                    ->where('coursecontent_id', $coursecontent_id)->first();
+
+                if ($task) {
                     $task->update($taskData);
-                    $insertedTasks[] = ['status'=>'Task is Already Allocated ! Just Updated the informations','task'=>$task];
-                }else{
+                    $insertedTasks[] = ['status' => 'Task is Already Allocated ! Just Updated the informations', 'task' => $task];
+                } else {
                     $task = \App\Models\task::create($taskData);
-                    $insertedTasks[] = ['status'=>'Task Allocated Successfully','task'=>$task];
+                    $insertedTasks[] = ['status' => 'Task Allocated Successfully', 'task' => $task];
                 }
-               
+
             }
             return response()->json([
                 'status' => 'success',
@@ -706,4 +705,135 @@ class TeacherModuleController extends Controller
             ], 500);
         }
     }
+    public function storeOrUpdateTaskConsiderations(Request $request)
+    {
+        $responses = [];
+        try {
+            $validatedData = $request->validate([
+                'teacher_offered_course_id' => 'required|integer|exists:teacher_offered_courses,id',
+                'records' => 'required|array|min:1',
+                'records.*.type' => 'required|string|in:Quiz,Assignment,LabTask',
+                'records.*.top' => 'required|integer|min:0',
+                'records.*.jl_task_count' => 'nullable|integer|min:0',
+            ]);
+            $teacherOfferedCourseId = $validatedData['teacher_offered_course_id'];
+            $teacherOfferedCourse = teacher_offered_courses::with('offeredCourse.course')->find($teacherOfferedCourseId);
+            if (!$teacherOfferedCourse) {
+                throw new Exception('No record found in teacher allocation!');
+            }
+            $course = $teacherOfferedCourse->offeredCourse->course;
+            foreach ($validatedData['records'] as $record) {
+                try {
+                    if ($course->lab) {
+                        $jlTaskCount = $record['jl_task_count'] ?? 0;
+                        $taskCount = \App\Models\task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                            ->where('type', $record['type'])
+                            ->count();
+                        if ($record['top'] > $taskCount) {
+                            $responses[] = [
+                                'status' => 'error',
+                                'teacher_offered_course_id' => $teacherOfferedCourseId,
+                                'type' => $record['type'],
+                                'message' => "You have conducted $taskCount {$record['type']} tasks. You cannot consider more tasks than conducted.",
+                            ];
+                            continue;
+                        }
+                        $teacherTaskCount = \App\Models\task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                            ->where('type', $record['type'])
+                            ->where('CreatedBy', 'Teacher')
+                            ->count();
+                        $jlTaskCountFromDb = \App\Models\task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                            ->where('type', $record['type'])
+                            ->where('CreatedBy', 'JuniorLecturer')
+                            ->count();
+                        $teacherCount = $record['top'] - $jlTaskCount;
+                        $jlCount = $jlTaskCount;
+                        if ($teacherTaskCount < $teacherCount || $jlTaskCountFromDb < $jlCount) {
+                            $responses[] = [
+                                'status' => 'error',
+                                'teacher_offered_course_id' => $teacherOfferedCourseId,
+                                'type' => $record['type'],
+                                'message' => "Task count exceeds limits. Teacher tasks allowed: $teacherCount, Junior Lecturer tasks allowed: $jlCount.",
+                            ];
+                            continue;
+                        }
+
+                        $taskConsideration = task_consideration::updateOrCreate(
+                            [
+                                'teacher_offered_course_id' => $teacherOfferedCourse->id,
+                                'type' => $record['type']
+                            ],
+                            [
+                                'top' => $record['top'],
+                                'jl_consider_count' => $jlTaskCount,
+                            ]
+                        );
+                    } else {
+                        $taskCount = \App\Models\task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                            ->where('type', $record['type'])
+                            ->count();
+                        if ($record['top'] > $taskCount) {
+                            $responses[] = [
+                                'status' => 'error',
+                                'teacher_offered_course_id' => $teacherOfferedCourseId,
+                                'type' => $record['type'],
+                                'message' => "You have conducted $taskCount {$record['type']} tasks. You cannot consider more tasks than conducted.",
+                            ];
+                            continue;
+                        }
+
+                        $taskConsideration = task_consideration::updateOrCreate(
+                            [
+                                'teacher_offered_course_id' => $teacherOfferedCourse->id,
+                                'type' => $record['type']
+                            ],
+                            [
+                                'top' => $record['top'],
+                                'jl_consider_count' => 0,
+                            ]
+                        );
+                    }
+
+                    $responses[] = [
+                        'status' => 'success',
+                        'teacher_offered_course_id' => $teacherOfferedCourseId,
+                        'type' => $record['type'],
+                        'message' => 'Task consideration created or updated successfully.',
+                        'data' => $taskConsideration,
+                    ];
+                } catch (Exception $e) {
+                    $responses[] = [
+                        'status' => 'error',
+                        'teacher_offered_course_id' => $teacherOfferedCourseId,
+                        'type' => $record['type'],
+                        'message' => 'An unexpected error occurred while processing this record.',
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            }
+
+            return response()->json([
+                'status' => 'completed',
+                'results' => $responses,
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed for the entire request.',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred while processing the request.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    
+
+
+
+
+
 }

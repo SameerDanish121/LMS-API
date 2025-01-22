@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Exception;
 use Carbon\Carbon;
+use function PHPUnit\Framework\isEmpty;
 class StudentManagement extends Model
 {
     // 'RegNo', 'name', 'cgpa', 'gender', 'date_of_birth', 
@@ -40,7 +41,7 @@ class StudentManagement extends Model
                 'status' => $status,
             ];
             if ($student) {
-                if(!$student->image){
+                if (!$student->image) {
                     $data['image'] = $student->image;
                 }
                 $student->update($data);
@@ -49,17 +50,17 @@ class StudentManagement extends Model
             }
             return $student->id;
         } catch (Exception $exception) {
-           return null;
+            return null;
         }
     }
-    
+
     // public static function addOrUpdateStudent(
     //     $regNo, $name, $cgpa, $gender, $date_of_birth, $guardian, 
     //     $image = null, $user_id, $section_id, $program_id, $session_id, $status
     // ) {
     //     try{
     //         $student = student::where('RegNo', $regNo)->first();
-           
+
     //         $data = [
     //             'RegNo' => $regNo,
     //             'name' => $name,
@@ -129,7 +130,7 @@ class StudentManagement extends Model
         $student->update(['image' => $storedFilePath]);
         return "Image updated successfully for Student : $student->name";
     }
- 
+
     public static function StudentInfoById($student_id)
     {
         $student = student::where('id', $student_id)->with(['program', 'user'])
@@ -217,7 +218,7 @@ class StudentManagement extends Model
 
         $enrolledCourses = self::getActiveEnrollmentCoursesName($student_id);
         $tasksGrouped = [
-            'Pending Tasks' => [],
+            'Active Tasks' => [],
             'Upcoming Tasks' => [],
             'Completed Tasks' => [],
         ];
@@ -229,7 +230,7 @@ class StudentManagement extends Model
                 ->first();
             if ($teacherOfferedCourse) {
                 $teacherOfferedCourseId = $teacherOfferedCourse->id;
-                $tasks = task::where('teacher_offered_course_id', $teacherOfferedCourseId)->get();
+                $tasks = task::with(['courseContent', 'teacherOfferedCourse.section', 'teacherOfferedCourse.offeredCourse.course'])->where('teacher_offered_course_id', $teacherOfferedCourseId)->get();
                 foreach ($tasks as $task) {
                     $currentDate = now();
                     $taskDetails = [
@@ -239,7 +240,6 @@ class StudentManagement extends Model
                         'points' => $task->points,
                         'start_date' => $task->start_date,
                         'due_date' => $task->due_date,
-                        $task->type => FileHandler::getFileByPath($task->path) ?? null
                     ];
                     if ($task->CreatedBy === 'Teacher') {
                         $teacher = teacher::where('id', $teacherOfferedCourse->teacher_id)->first();
@@ -255,7 +255,24 @@ class StudentManagement extends Model
                             ->where('Student_id', $student_id)
                             ->first();
                         $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
+
+                        if ($studentTaskResult && $task->courseContent->content == 'MCQS') {
+                            $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
+                            $type = 'MCQS';
+                            $taskDetails[$type] = Action::getMCQS($task->courseContent->id);
+                            $taskDetails['Is Attempted'] = 'Yes';
+                            $taskDetails['Is Marked'] = 'Yes';
+                        } else if ($studentTaskResult) {
+                            $type = 'File';
+                            $studentSubmission = student_task_submission::where('task_id', $task->id)->where('student_id', $student_id)->first();
+                            $taskDetails[$type] = FileHandler::getFileByPath($task->courseContent->content);
+                            $taskDetails['Submission Date Time'] = $studentSubmission->DateTime ?? 'N/A';
+                            $taskDetails['Your Submission'] = FileHandler::getFileByPath($studentSubmission->Answer ?? null);
+                            $task['Is Attempted'] = 'Yes';
+                            $taskDetails['Is Marked'] = 'Yes';
+                        }
                     }
+
                     $offeredCourse = offered_courses::where('id', $teacherOfferedCourse->offered_course_id)->first();
                     $course = $offeredCourse ? Course::where('id', $offeredCourse->course_id)->first() : null;
                     $taskDetails['course_name'] = $course->name ?? 'Unknown';
@@ -264,11 +281,53 @@ class StudentManagement extends Model
                         $taskDetails['Time Remaining in Task to Start'] = ($remainingTime->d ?? '0') . 'D ' . ($remainingTime->h ?? '0') . 'H ' . ($remainingTime->i ?? '0') . 'M';
                         $tasksGrouped['Upcoming Tasks'][] = $taskDetails;
                     } else if ($task->due_date < $currentDate) {
+                        $type = ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File';
+                        if (!$task->isMarked) {
+                            $studentTaskResult = student_task_result::where('Task_id', $task->id)
+                                ->where('Student_id', $student_id)
+                                ->first();
+                            $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
+                            if ($studentTaskResult && $task->courseContent->content == 'MCQS') {
+                                $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
+                              
+                            
+                                $taskDetails['Is Attempted'] = 'Yes';
+                                $taskDetails['Is Marked'] = 'Yes';
+                            }else if ($studentTaskResult) {
+                                $type = 'File';
+                                $studentSubmission = student_task_submission::where('task_id', $task->id)->where('student_id', $student_id)->first();
+                                $taskDetails[$type] = FileHandler::getFileByPath($task->courseContent->content);
+                                $taskDetails['Submission Date Time'] = $studentSubmission->DateTime ?? 'N/A';
+                                $taskDetails['Your Submission'] = FileHandler::getFileByPath($studentSubmission->Answer ?? null);
+                                $task['Is Attempted'] = 'Yes';
+                                $taskDetails['Is Marked'] = 'No';
+                            }
+                            
+                        }
+                        $taskDetails[$type] = ($task->courseContent->content == 'MCQS')
+                            ? Action::getMCQS($task->courseContent->id)
+                            : FileHandler::getFileByPath($task->courseContent->content);
                         $tasksGrouped['Completed Tasks'][] = $taskDetails;
                     } else {
+                        $studentTaskResult = student_task_result::where('Task_id', $task->id)
+                            ->where('Student_id', $student_id)
+                            ->first();
+                        if ($studentTaskResult && $task->courseContent->content == 'MCQS') {
+                            $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
+                            $type = 'MCQS';
+                            $taskDetails[$type] = Action::getMCQS($task->courseContent->id);
+                            $task['Is Attempted'] = 'Yes';
+                        } else if ($studentTaskResult) {
+                            $type = 'File';
+                            $studentSubmission = student_task_submission::where('task_id', $task->id)->where('student_id', $student_id)->first();
+                            $taskDetails[$type] = FileHandler::getFileByPath($task->courseContent->content);
+                            $taskDetails['Submission Date Time'] = $studentSubmission->DateTime ?? 'N/A';
+                            $taskDetails['Your Submission'] = FileHandler::getFileByPath($studentSubmission->Answer ?? null);
+                            $task['Is Attempted'] = 'Yes';
+                        }
                         $remainingTime = $currentDate->diff($task->start_date);
                         $taskDetails['Time Remaining in Task to End'] = ($remainingTime->d ?? '0') . 'D ' . ($remainingTime->h ?? '0') . 'H ' . ($remainingTime->i ?? '0') . 'M';
-                        $tasksGrouped['Pending Tasks'][] = $taskDetails;
+                        $tasksGrouped['Active Tasks'][] = $taskDetails;
                     }
                 }
             }
@@ -276,6 +335,7 @@ class StudentManagement extends Model
         return $tasksGrouped;
     }
 
+    
     public static function getSubmittedTasksGroupedByTypeWithStats($student_id, $offered_course_id)
     {
         $groupedTasks = [
@@ -356,34 +416,50 @@ class StudentManagement extends Model
         $courseContents = coursecontent::where('offered_course_id', $offered_course_id)->get();
         $result = [];
         foreach ($courseContents as $courseContent) {
-            $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
-            $topics = [];
-            foreach ($courseContentTopics as $courseContentTopic) {
-                $topic = topic::find($courseContentTopic->topic_id);
-
-                if ($topic) {
-                    $status = t_coursecontent_topic_status::where('coursecontent_id', $courseContent->id)
-                        ->where('topic_id', $topic->id)
-                        ->where('teacher_offered_courses_id', $teacher_offered_course_id)
-                        ->first();
-
-                    $topics[] = [
-                        'topic_id' => $topic->id,
-                        'topic_name' => $topic->title,
-                        'status' => $status->Status == 1 ? 'Covered' : 'Not-Covered',
-                    ];
+            if($courseContent->type==='Notes'){
+                $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
+                $topics = [];
+                foreach ($courseContentTopics as $courseContentTopic) {
+                    $topic = topic::find($courseContentTopic->topic_id);
+    
+                    if ($topic) {
+                        $status = t_coursecontent_topic_status::where('coursecontent_id', $courseContent->id)
+                            ->where('topic_id', $topic->id)
+                            ->where('teacher_offered_courses_id', $teacher_offered_course_id)
+                            ->first();
+                        $stat='Not-Covered';
+                        if($status){
+                            $stat=$status->Status==1?'Covered':'Not-Covered';
+                        }
+                        $topics[] = [
+                            'topic_id' => $topic->id,
+                            'topic_name' => $topic->title,
+                            'status' =>$stat,
+                        ];
+                    }
                 }
+                $result[] = [
+                    'course_content_id' => $courseContent->id,
+                    'title' => $courseContent->title,
+                    'type' => $courseContent->type,
+                    'week' => $courseContent->week,
+                    'File' => FileHandler::getFileByPath($courseContent->content),
+                    'topics' => $topics,
+                ];
+            }else{
+                $result[] = [
+                    'course_content_id' => $courseContent->id,
+                    'title' => $courseContent->title,
+                    'type' => $courseContent->type,
+                    'week' => $courseContent->week,
+                    $courseContent->type=='MCQS'?'MCQS':'File' =>$courseContent->type=='MCQS'? Action::getMCQS($courseContent->id):FileHandler::getFileByPath($courseContent->content),
+                ];
             }
-            $result[] = [
-                'course_content_id' => $courseContent->id,
-                'title' => $courseContent->title,
-                'type' => $courseContent->type,
-                'week' => $courseContent->week,
-                'File' => FileHandler::getFileByPath($courseContent->content),
-                'topics' => $topics,
-            ];
+           
         }
-
+        usort($result, function ($a, $b) {
+            return $a['week'] <=> $b['week'];
+        });
         return $result;
     }
     public static function getCourseContentForSpecificWeekWithTopicsAndStatus($section_id, $offered_course_id, $weekNo = null)
@@ -407,36 +483,47 @@ class StudentManagement extends Model
         $result = [];
 
         foreach ($courseContents as $courseContent) {
-            $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
-            $topics = [];
-
-            foreach ($courseContentTopics as $courseContentTopic) {
-                $topic = topic::find($courseContentTopic->topic_id);
-
-                if ($topic) {
-                    $status = t_coursecontent_topic_status::where('coursecontent_id', $courseContent->id)
-                        ->where('topic_id', $topic->id)
-                        ->where('teacher_offered_courses_id', $teacher_offered_course_id)
-                        ->first();
-
-                    $topics[] = [
-                        'topic_id' => $topic->id,
-                        'topic_name' => $topic->title,
-                        'status' => $status && $status->Status == 1 ? 'Covered' : 'Not-Covered',
-                    ];
+            if($courseContent->type=='Notes'){
+                $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
+                $topics = [];
+                foreach ($courseContentTopics as $courseContentTopic) {
+                    $topic = topic::find($courseContentTopic->topic_id);
+    
+                    if ($topic) {
+                        $status = t_coursecontent_topic_status::where('coursecontent_id', $courseContent->id)
+                            ->where('topic_id', $topic->id)
+                            ->where('teacher_offered_courses_id', $teacher_offered_course_id)
+                            ->first();
+                        $stat='Not-Covered';
+                        if($status){
+                            $stat=$status->Status==1?'Covered':'Not-Covered';
+                        }
+                        $topics[] = [
+                            'topic_id' => $topic->id,
+                            'topic_name' => $topic->title,
+                            'status' =>$stat,
+                        ];
+                    }
                 }
+                $result[] = [
+                    'course_content_id' => $courseContent->id,
+                    'title' => $courseContent->title,
+                    'type' => $courseContent->type,
+                    'week' => $courseContent->week,
+                    'File' => FileHandler::getFileByPath($courseContent->content),
+                    'topics' => $topics,
+                ];
+            }else{
+                $result[] = [
+                    'course_content_id' => $courseContent->id,
+                    'title' => $courseContent->title,
+                    'type' => $courseContent->type,
+                    'week' => $courseContent->week,
+                    $courseContent->type=='MCQS'?'MCQS':'File' =>$courseContent->type=='MCQS'? Action::getMCQS($courseContent->id):FileHandler::getFileByPath($courseContent->content),
+                ];
             }
-
-            $result[] = [
-                'course_content_id' => $courseContent->id,
-                'title' => $courseContent->title,
-                'type' => $courseContent->type,
-                'week' => $courseContent->week,
-                'File' => FileHandler::getFileByPath($courseContent->content),
-                'topics' => $topics,
-            ];
+           
         }
-
         return $result;
     }
     public static function createContestedAttendance($attendanceId)

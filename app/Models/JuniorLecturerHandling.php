@@ -273,7 +273,7 @@ class JuniorLecturerHandling extends Model
                 ->join('offered_courses', 'student_offered_courses.offered_course_id', '=', 'offered_courses.id')
                 ->where('student_offered_courses.section_id', $section)
                 ->where('offered_courses.session_id', (new session())->getCurrentSessionId())
-                ->get()->unique('student.RegNo');
+                ->get();
 
             $submissions = student_task_submission::select(
                 'student_task_submission.Student_id',

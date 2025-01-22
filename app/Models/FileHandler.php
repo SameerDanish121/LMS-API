@@ -8,9 +8,46 @@ use Exception;
 use Illuminate\Support\Facades\Response;
 use ZipArchive;
 use Illuminate\Support\Facades\File;
+use Nette\Utils\FileInfo;
 
 class FileHandler extends Model
 {
+    public static function storeFileUsingContent($base64Data, $fileName, $remainingDirectory = null)
+    {
+        try {
+            $baseDirectory = 'storage/BIIT';
+            $directoryPath = $baseDirectory . ($remainingDirectory ? '/' . $remainingDirectory : '');
+            $storagePath = public_path($directoryPath);
+            if (!File::exists($storagePath)) {
+                File::makeDirectory($storagePath, 0777, true);
+            }
+            $base64Parts = explode(",", $base64Data);
+            $decodedData = base64_decode(end($base64Parts));
+            $tempFile = tmpfile();
+            fwrite($tempFile, $decodedData);
+            fseek($tempFile, 0);
+            $mimeType = mime_content_type(stream_get_meta_data($tempFile)['uri']); // Get MIME type
+            fclose($tempFile); 
+            $fileExtension = self::getExtensionFromMimeType($mimeType);
+            if (!$fileExtension) {
+                throw new Exception('Unsupported file type.');
+            }
+            $filePath = $storagePath . '/' . $fileName . '.' . $fileExtension;
+            File::put($filePath, $decodedData);
+            return $directoryPath . '/' . $fileName . '.' . $fileExtension;
+        } catch (Exception $e) {
+            throw new Exception('Error storing file: ' . $e->getMessage());
+        }
+    }
+    protected static function getExtensionFromMimeType($mimeType)
+    {
+        $mimeMap = [
+            'application/pdf' => 'pdf',
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+        ];
+        return $mimeMap[$mimeType] ?? null;
+    }
     public static function storeFile($fileName, $remainingDirectory, $file)
     {
         try {
@@ -22,15 +59,15 @@ class FileHandler extends Model
                 File::makeDirectory($storagePath, 0777, true);
             }
             $filePath = 'storage/BIIT/' . $remainingDirectory;
-             $file->move($storagePath, $fileName . '.' . $getfileExtension);
+            $file->move($storagePath, $fileName . '.' . $getfileExtension);
             return $filePath . '/' . $fileName . '.' . $getfileExtension;
-        }catch (Exception $e) {
+        } catch (Exception $e) {
             throw new Exception('Error storing file: ' . $e->getMessage());
         }
     }
     public static function getFileByPath($originalPath = null)
     {
-        if(!$originalPath){
+        if (!$originalPath) {
             return null;
         }
         if (file_exists(public_path($originalPath))) {
@@ -56,12 +93,12 @@ class FileHandler extends Model
         }
     }
 
-    public static function getFolderInfo($basePath=null)
+    public static function getFolderInfo($basePath = null)
     {
         try {
             if (!$basePath) {
                 $basePath = 'storage';
-            }else{
+            } else {
                 $basePath = "storage/{$basePath}";
             }
             $path = public_path($basePath);
@@ -136,20 +173,17 @@ class FileHandler extends Model
         try {
             $fullFolderPath = public_path('storage/' . $relativeFolderPath);
             if (File::exists($fullFolderPath)) {
-                $size=self::calculateFolderSize($fullFolderPath);
-                $size=self::formatSize($size);
+                $size = self::calculateFolderSize($fullFolderPath);
+                $size = self::formatSize($size);
                 File::deleteDirectory($fullFolderPath);
                 return $size;
-            }else{
+            } else {
                 throw new Exception('No Folder Exsist in Base Directory with provided path');
             }
         } catch (Exception $e) {
             return false;
         }
     }
-
-
-
     //////////////////////////////////////////////////////////Faltu Bakwas//////////////////////////////////////////////
 
     public static function sendDirectoryAsZip($directory)
@@ -195,7 +229,34 @@ class FileHandler extends Model
             self::addDirectoryToZip($zip, $directory, $baseFolder);
         }
     }
-
+    public static function copyFileToDestination($originalPath, $newFileName, $destinationDirectory=null)
+    {
+        try {
+            if (!$originalPath || !file_exists(public_path($originalPath))) {
+                throw new Exception('Source file does not exist.');
+            }
+            $fileExtension = pathinfo($originalPath, PATHINFO_EXTENSION);
+            if (!$fileExtension) {
+                throw new Exception('Unable to determine file extension.');
+            }
+            $baseDirectory = 'storage/BIIT';
+            $destinationPath = $baseDirectory . '/' . $destinationDirectory;
+            $storagePath = public_path($destinationPath);
+            if (!File::exists($storagePath)) {
+                File::makeDirectory($storagePath, 0777, true);
+            }
+            $destinationFilePath = $storagePath . '/' . $newFileName . '.' . $fileExtension;
+            
+            $copySucces= File::copy(public_path($originalPath), $destinationFilePath);
+            if (!$copySucces) {
+                return null; // Return null if file copying fails
+            }
+            return $baseDirectory. '/' . $destinationDirectory .'/'.$newFileName. '.' . $fileExtension;
+        } catch (Exception $e) {
+          return null;
+        }
+    }
+    
 }
 
 

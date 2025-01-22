@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\GraderController;
+use App\Http\Controllers\LogicController;
 use App\Http\Controllers\TestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -19,24 +20,28 @@ Route::prefix('Student')->group(function () {
     Route::get('/Transcript', [StudentController::class, 'Transcript']);
     Route::get('/attendance', [StudentController::class, 'getAttendance']);
     Route::get('/attendancePerSubject', [StudentController::class, 'AttendancePerSubject']);
-    Route::post('/submitTask', [StudentController::class, 'submitAnswer']);
+    Route::get('/get/notification', [StudentController::class, 'Notifications']);
     Route::post('/update-password', [StudentController::class, 'updatePassword']);
     Route::post('/update-student-image', [StudentController::class, 'updateStudentImage']);
     Route::get('/current-enrollments', [StudentController::class, 'StudentCurrentEnrollmentsName']);
     Route::get('/all-enrollments', [StudentController::class, 'StudentAllEnrollmentsName']);
-    Route::get('/task/details', [StudentController::class, 'getTaskDetails']);
-    Route::get('/subject/task-result', [StudentController::class, 'GetSubjectTaskResult']);
-    Route::get('/course-content', [StudentController::class, 'GetFullCourseContentOfSubject']);
-    Route::get('/course-content/week', [StudentController::class, 'GetFullCourseContentOfSubjectByWeek']);
     Route::post('/contest-attendance', [StudentController::class, 'ContestAttendance']);
     Route::get('/getActiveEnrollments', [StudentController::class, 'getActiveEnrollments']);
     Route::get('/getPreviousEnrollments', [StudentController::class, 'getYourPreviousEnrollments']);
     Route::get('/TranscriptSessionDropDown', [StudentController::class, 'TranscriptSessionDropDown']);
-    Route::get('/get/notification', [StudentController::class, 'Notifications']);
+    Route::get('/subject/task-result', [StudentController::class, 'GetSubjectTaskResult']);
+    Route::get('/subject/task-considered', action: [LogicController::class, 'getTaskConsiderations']);
+    Route::get('/task/details', [StudentController::class, 'getTaskDetails']);
+    Route::post('/submitTask', [StudentController::class, 'submitAnswer']);
+//////////////////////////////////////////Final////////////////////////////////////////////
+
+    Route::get('/course-content', [StudentController::class, 'GetFullCourseContentOfSubject']);
+    Route::get('/course-content/week', [StudentController::class, 'GetFullCourseContentOfSubjectByWeek']);
+  
+    Route::post('/chik', [LogicController::class, 'Sample']);
     
     //18
 });
-
 //////////////////////////////////////////////////////~api/JuniorLecturer////////////////////////////////////////////////
 Route::prefix('JuniorLecturer')->group(function () {
     Route::get('/full-timetable', [JuniorLecturerController::class, 'FullTimetable']);
@@ -106,9 +111,9 @@ Route::prefix('Teacher')->group(function () {
 });
 
 ////////////////////////////////////////////////////////~TESTING~///////////////////////////////
-
+Route::post('/status', [TestController::class,'CopySemester']);
 Route::get('/checking', [TestController::class,'Empty']);
-
+Route::post('/update-course-content-topic-status', [TestController::class, 'updateCourseContentTopicStatus']);
 Route::get('/good', [TestController::class, 'upload']);
 
 //////////////////////////////////////////////////////~api/Datacell////////////////////////////////////////////////
@@ -141,11 +146,10 @@ Route::prefix('/TeacherTesting')->group( function() {
     Route::get('/teacher-graders', [TeacherModuleController::class, 'getAssignedGraders']);
     Route::get('/teacher-unassigned-task', [TeacherModuleController::class, 'getListofUnassignedTask']);
     Route::post('/store-task', [TeacherModuleController::class, 'storeTask']);
+    Route::post('/consider-task', [TeacherModuleController::class, 'storeOrUpdateTaskConsiderations']);
+     
+    //28
 });
-
-
-
-
 ///////////////////////////////////////////////////////////////Considered+Checked////////////////////////////////////////////////////////////////////////
 Route::get('/Login', [StudentController::class, 'Login']);
 //1

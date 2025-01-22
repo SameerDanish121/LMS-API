@@ -47,7 +47,7 @@ class session extends Model
         }
         $name = $split[0];
         $year = $split[1];
-        $session =session::where('name', $name)
+        $session = session::where('name', $name)
             ->where('year', $year)
             ->first();
         return $session->id ?: 0;
@@ -84,5 +84,35 @@ class session extends Model
         // Return the ID of the session with the least days left
         return $upcomingSession ? $upcomingSession['id'] : 0;
     }
+    public static function getCurrentSessionWeek(): ?int
+    {
+        try {
+            $currentSessionId = (new self)->getCurrentSessionId();
+            if ($currentSessionId === 0) {
+                return null;
+            }
+            $currentSession = self::find($currentSessionId);
+            if (!$currentSession || !$currentSession->start_date) {
+                return null;
+            }
+            $startDate = Carbon::parse($currentSession->start_date);
+            $currentDate = Carbon::now();
+            $daysDifference = $startDate->diffInDays($currentDate, false);
+            $weekNumber = (int) floor($daysDifference / 7) + 1;
+            if ($weekNumber <= 0) {
+                return null;
+            }
+            if ($weekNumber >= 9) {
+                $weekNumber--;
+            }
+            if ($weekNumber >= 11) {
+                $weekNumber--;
+            }
+            return $weekNumber <= 16 ? $weekNumber : null;
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+
 
 }

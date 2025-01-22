@@ -85,21 +85,20 @@ class GraderController extends Controller
     {
         try {
             $submissions = $request->submissions; 
+            $task_id=$request->task_id;
             $Logs=[];
             foreach ($submissions as $submission) {
-                $task_id = $submission['task_id'];
                 $student_RegNo = $submission['regNo'];
-                $obtainedMarks = $submission['obtainedMarks'];
-               
-                if ($task_id) {
-                    task::ChangeStatusOfTask($task_id);
-                }
+                $obtainedMarks = $submission['obtainedMarks']; 
                 $result = student_task_result::storeOrUpdateResult($task_id, $student_RegNo, $obtainedMarks);
                 if (!$result) {
                     $Logs[]=["Message"=>"Error in Uploading the Number of $student_RegNo","Data"=>$submission];
                 }else{
                     $Logs[]=["Message"=>"successfully Uploaded the Number of $student_RegNo","Data"=>$submission];
                 }
+            }
+            if ($task_id) {
+                task::ChangeStatusOfTask($task_id);
             }
             return response()->json([
                 'message' => 'All submissions processed successfully!',

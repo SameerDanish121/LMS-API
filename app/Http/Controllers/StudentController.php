@@ -7,6 +7,7 @@ use App\Models\excluded_days;
 use App\Models\FileHandler;
 use App\Models\juniorlecturer;
 use App\Models\program;
+use App\Models\quiz_questions;
 use App\Models\StudentManagement;
 use App\Models\subjectresult;
 use App\Models\teacher_juniorlecturer;
@@ -182,8 +183,32 @@ class StudentController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+    public static function calculateQuizMarks($answers, $coursecontent_id, $points)
+    {
+        $totalMarks = 0;
+        $totalQuizMarks = 0; 
+        foreach ($answers as $answer) {
+            $questionNo = $answer['QNo']; 
+            $studentAnswer = $answer['StudentAnswer'];
+            $question = quiz_questions::with('Options')->where('coursecontent_id', $coursecontent_id)->where('question_no', $questionNo)->first();
+            if ($question) {
+                $totalQuizMarks += $question->points;  
+                $correctOption = $question->Options->firstWhere('is_correct', true);
+                if ($correctOption && $studentAnswer === $correctOption->option_text) {
+                    $totalMarks += $question->points;
+                }
+            }
+        }
+        $solidMarks = ($totalMarks / $totalQuizMarks) * $points;
+        return (int) $solidMarks; 
+    }
+    
     public function submitAnswer(Request $request)
     {
+        $request->validate([
+            'student_id' => 'required',
+            'task_id' => 'required'
+        ]);
         $studentId = $request->student_id;
         $taskId = $request->task_id;
         try {
@@ -197,7 +222,7 @@ class StudentController extends Controller
             $sessionName = $sessionIs->name;
             $sessionYear = $sessionIs->year;
             $studentRegNo = $student->RegNo;
-            $task = Task::with('teacherOfferedCourse')->findOrFail($taskId);
+            $task = task::with(['teacherOfferedCourse','courseContent'])->findOrFail($taskId);
             $teacherOfferedCourseId = $task->teacher_offered_course_id;
             $teacherOfferedCourse = teacher_offered_courses::findOrFail($teacherOfferedCourseId);
             $sectionId = $teacherOfferedCourse->section_id;
@@ -206,36 +231,75 @@ class StudentController extends Controller
             $section = Section::findOrFail($sectionId);
             $taskSectionName = $section->program . '-' . $section->semester . $section->group;
             $taskTitle = $task->title;
+            if($task->courseContent->content=='MCQS'){
+                 $number=self::calculateQuizMarks($request->input('Answer'),$task->courseContent->id,$task->points);
+                 $data = [
+                    'ObtainedMarks' => $number??0, 
+                    'Task_id' => $task->id,      
+                    'Student_id' => $studentId
+                ];
+                
+                $result = student_task_result::updateOrInsert(
+                    [
+                        'Task_id' => $task->id,
+                        'Student_id' =>$student->id
+                        
+                    ],[
+                        'ObtainedMarks' => $number??0
+                    ]
+                );
+               
+                $studentCountofSectionforTask=student_offered_courses::where('section_id',$section->id)->where('offered_course_id',$offeredcourse->id)->count();
+                $countofsubmission=student_task_result::where('Task_id',$task->id)->count();
+                if($studentCountofSectionforTask===$countofsubmission){
+                    task::ChangeStatusOfTask($task->id);
+                }
+                return response()->json([
+                    'message' => 'Your Submission Has been Added !',
+                    'Obtained Marks' =>$number,
+                    'Total Marks of Task'=>$task->points,
+                    'Message After Submission'=>"You Got {$number} Out of {$task->points} ! ",
+                    'Quiz Data'=>Action::getMCQS($task->courseContent->id),
+                    'Your Submissions'=>$request->Answer
+                ], 200);
+            }
             $fileName = "({$studentRegNo})-{$taskTitle}";
             $directoryPath = "{$sessionName}-{$sessionYear}/{$taskSectionName}/{$course_name}/Task";
             if ($request->hasFile('Answer') && $request->file('Answer')->isValid()) {
                 $filePath = FileHandler::storeFile($fileName,$directoryPath,$request->file('Answer'));
-                
-
-                return student_task_submission::create([
+                student_task_submission::create([
                     'Answer' => $filePath, 
                     'DateTime' => now(),
                     'Student_id' => $studentId,
                     'Task_id' => $taskId,
                 ]);
+                return response()->json([
+                    'message' => 'Your Submission Has been Added !',
+                    'Total Marks of Task'=>$task->points,
+                    "{$task->type} Data"=>FileHandler::getFileByPath($task->courseContent->content),
+                    'Your Submissions'=>FileHandler::getFileByPath($filePath),
+
+                ], 200);
             }
-
             if ($request->has('Answer')) {
-                // Decode base64 PDF content
-                $base64Data = $request->input('Answer');
-                $base64 = explode(",", $base64Data)[1];
-                $pdfData = base64_decode($base64);
-
-                // Save file using Storage facade
-                $filePath = "{$directoryPath}{$fileName}";
-                Storage::disk('public')->put($filePath, $pdfData);
-
-                return student_task_submission::create([
+                // $base64Data = $request->input('Answer');
+                // $base64 = explode(",", $base64Data)[1];
+                // $pdfData = base64_decode($base64);
+                // $filePath = "{$directoryPath}{$fileName}";
+                // Storage::disk('public')->put($filePath, $pdfData);
+                $filePath=FileHandler::storeFileUsingContent( $request->input('Answer'),$fileName,$directoryPath);
+                student_task_submission::create([
                     'Answer' => $filePath,
                     'DateTime' => now(),
                     'Student_id' => $studentId,
                     'Task_id' => $taskId,
                 ]);
+                return response()->json([
+                    'message' => 'Your Submission Has been Added !',
+                    'Total Marks of Task'=>$task->points,
+                    "{$task->type} Data"=>FileHandler::getFileByPath($task->courseContent->id),
+                    'Your Submissions'=>FileHandler::getFileByPath($filePath),
+                ], 200);
             }
             throw new Exception('Invalid file or no file uploaded.');
         } catch (ModelNotFoundException $e) {
@@ -647,7 +711,7 @@ class StudentController extends Controller
             $responseMessage =StudentManagement:: getSubmittedTasksGroupedByTypeWithStats($studentId,$offer_id);
             return response()->json([
                 'success' => 'Fetcehd Successfully !',
-                'TaskDetails' => $responseMessage
+                'All Task' => $responseMessage
             ], 200);
         } catch (ValidationException $e) {
             return response()->json([
@@ -671,7 +735,6 @@ class StudentController extends Controller
         }
     }
 
-   
     public function GetFullCourseContentOfSubject(Request $request){
         try {
             $request->validate([

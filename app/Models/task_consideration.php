@@ -25,6 +25,7 @@ class task_consideration extends Model
         'teacher_offered_course_id',
         'type',
         'top',
+        'jl_consider_count',
     ];
 
     // Relationships
