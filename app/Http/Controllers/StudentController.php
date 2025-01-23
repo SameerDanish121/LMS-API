@@ -86,7 +86,7 @@ class StudentController extends Controller
         try {
             $studentId = $request->student_id;
             $sessionResults = sessionresult::with([
-                'session:id,name',
+                'session:id,name,year',
                 'student:id,name',
             ])
                 ->where('student_id', $studentId)

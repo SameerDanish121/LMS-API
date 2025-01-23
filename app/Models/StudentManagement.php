@@ -446,6 +446,7 @@ class StudentManagement extends Model
                     'File' => FileHandler::getFileByPath($courseContent->content),
                     'topics' => $topics,
                 ];
+                continue;
             }else{
                 $result[] = [
                     'course_content_id' => $courseContent->id,
@@ -455,7 +456,6 @@ class StudentManagement extends Model
                     $courseContent->type=='MCQS'?'MCQS':'File' =>$courseContent->type=='MCQS'? Action::getMCQS($courseContent->id):FileHandler::getFileByPath($courseContent->content),
                 ];
             }
-           
         }
         usort($result, function ($a, $b) {
             return $a['week'] <=> $b['week'];
@@ -473,7 +473,6 @@ class StudentManagement extends Model
                 'error' => 'No teacher offered course found for the given section and offered course.'
             ];
         }
-
         $teacher_offered_course_id = $teacherOfferedCourse->id;
         $query = coursecontent::where('offered_course_id', $offered_course_id);
         if (!is_null($weekNo)) {
@@ -481,7 +480,6 @@ class StudentManagement extends Model
         }
         $courseContents = $query->get();
         $result = [];
-
         foreach ($courseContents as $courseContent) {
             if($courseContent->type=='Notes'){
                 $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();

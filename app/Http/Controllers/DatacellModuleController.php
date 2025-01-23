@@ -13,6 +13,7 @@ use App\Models\juniorlecturer;
 use App\Models\program;
 use App\Models\question;
 use App\Models\quiz_questions;
+use App\Models\role;
 use App\Models\student_exam_result;
 use App\Models\StudentManagement;
 use App\Models\teacher;
@@ -2305,4 +2306,67 @@ class DatacellModuleController extends Controller
             ], 500);
         }
     }
+    public function sendNotification(Request $request)
+    {
+        try {
+            $validatedData = $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'required|string|max:1000',
+                'url' => 'nullable|url|max:255',
+                'sender' => 'required|in:Teacher,JuniorLecturer,Admin,Datacell',
+                'reciever' => 'required|in:Teacher,JuniorLecturer,Student,Datacell',
+                'Brodcast' => 'nullable|boolean',
+                'Student_Section' => 'nullable|integer',
+                'TL_receiver_id' => 'nullable|integer',
+                'TL_sender_id' => 'nullable|integer'
+            ]);
+    
+            $senderId = $request->TL_sender_id;
+            $receiverId = $request->TL_receiver_id;
+    
+            $sender = user::find($senderId);
+            if (!$sender) {
+                return response()->json(['message' => 'Sender not found.'], 404);
+            }
+    
+            $senderRole = role::find($sender->role_id);
+            if (!$senderRole || $senderRole->type != $request->sender) {
+                return response()->json(['message' => 'Sender role does not match the sender ID.'], 400);
+            }
+    
+            // Handle Broadcast logic
+            $isBroadcast = $request->Brodcast ?? 0; // Default to 0 if Brodcast is null
+            if ($isBroadcast == 1) {
+                $receiverId = null;
+            }
+    
+            $data = [
+                'title' => $request->title,
+                'description' => $request->description,
+                'url' => $request->url,
+                'notification_date' => now(),
+                'sender' => $request->sender,
+                'reciever' => $request->reciever,
+                'Brodcast' => $isBroadcast,
+                'Student_Section' => $isBroadcast == 0 && $request->Student_Section ? $request->Student_Section : null,
+                'TL_receiver_id' => $receiverId,
+                'TL_sender_id' => $senderId == 0 ? null : $senderId,
+            ];
+    
+            $notification = notification::create($data);
+    
+            return response()->json([
+                'message' => 'Notification sent successfully!',
+                'data' => $notification,
+            ], 201);
+        } catch (Exception $ex) {
+            return response()->json(['message' => 'Failed to send notification.', 'error' => $ex->getMessage()], 500);
+        }
+    }
+    
+
+
+
+    
 }
+    

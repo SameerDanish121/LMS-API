@@ -32,4 +32,5 @@ class juniorlecturer extends Model
     {
         return $this->hasMany(Timetable::class, 'junior_lecturer_id', 'id');
     }
+    
 }

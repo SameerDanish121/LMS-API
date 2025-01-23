@@ -28,7 +28,7 @@ class excluded_days extends Model
     public static function checkHolidayReason()
     {
         $today = Carbon::today()->toDateString();
-        $isHoliday = excluded_days::where('date', operator: $today)
+        $isHoliday = excluded_days::where('date',$today)
             ->where('type', 'Holiday')
             ->first();
         return $isHoliday?"Today is a holiday. Reason: " . $isHoliday->reason . ". There will be no classes as per the schedule.":$isHoliday;

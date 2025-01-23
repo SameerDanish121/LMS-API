@@ -533,10 +533,6 @@ class AdminController extends Controller
             ], 500);
         }
     }
-
-    /**
-     * Display a list of junior lectures with optional name search.
-     */
     public function allJuniorLecturers(Request $request)
     {
         try {

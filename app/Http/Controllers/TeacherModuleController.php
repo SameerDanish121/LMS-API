@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Action;
+use App\Models\attendance;
 use App\Models\contested_attendance;
 use App\Models\Course;
 use App\Models\coursecontent;
@@ -13,11 +14,14 @@ use App\Models\notification;
 use App\Models\offered_courses;
 use App\Models\section;
 use App\Models\student;
+use App\Models\student_offered_courses;
 use App\Models\student_task_result;
 use App\Models\task_consideration;
 use App\Models\teacher;
 use App\Models\teacher_grader;
+use App\Models\teacher_juniorlecturer;
 use App\Models\teacher_offered_courses;
+use App\Models\temp_enroll;
 use App\Models\venue;
 use Illuminate\Console\View\Components\Task;
 use Illuminate\Http\Request;
@@ -458,8 +462,8 @@ class TeacherModuleController extends Controller
     {
         try {
             $validated = $request->validate([
-                'task_id' => 'required|exists:tasks,id',
-                'grader_id' => 'required|exists:graders,id',
+                'task_id' => 'required|exists:task,id',
+                'grader_id' => 'required|exists:grader,id',
             ]);
             $existingAssignment = grader_task::where('Task_id', $request->task_id)
                 ->where('Grader_id', $request->grader_id)
@@ -503,6 +507,7 @@ class TeacherModuleController extends Controller
                         'id' => $grader->id,
                         'RegNo' => $grader->student->RegNo,
                         'name' => $grader->student->name,
+                        'section' => (new section())->getNameByID($grader->student->section_id),
                         'status' => $grader->status,
                         'feedback' => $teacherGrader->feedback,
                     ];
@@ -830,10 +835,227 @@ class TeacherModuleController extends Controller
             ], 500);
         }
     }
-    
+    public function AddRequestForTemporaryEnrollment(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'RegNo' => 'required|string|max:255',
+                'teacher_offered_course_id' => 'required|integer',
+                'date_time' => 'required|date',
+                'venue' => 'required|string|max:255',
+                'isLab' => 'required|boolean',
+                'status' => 'required|string|max:255',
+            ]);
+            if (!student::where('RegNo', $validated['RegNo'])->exists()) {
+                return response()->json([
+                    'error' => 'The provided registration number does not exist.',
+                ], 404);
+            }
+            $student = student::where('RegNo', $validated['RegNo'])->first();
+            $currentSession_id = (new session())->getCurrentSessionId();
+            $teacher_offered_course = teacher_offered_courses::with(['offeredCourse'])->find($validated['teacher_offered_course_id']);
+            $studentEnrollment = student_offered_courses::
+                where('offered_course_id', $teacher_offered_course->offeredCourse->id)
+                ->where('student_id', $student->id)->first();
+            if ($studentEnrollment) {
+                return response()->json([
+                    'message' => 'The Student is Already Enrolled in Above Subject in Different Section ! . Request Withrawed',
+                ], 409);
+            }
+            $exists = temp_enroll::where([
+                'RegNo' => $validated['RegNo'],
+                'teacher_offered_course_id' => $validated['teacher_offered_course_id'],
+                'date_time' => $validated['date_time'],
+                'venue' => $validated['venue'],
+                'isLab' => $validated['isLab'],
+                'status' => $validated['status'],
+            ])->exists();
 
+            if ($exists) {
+                return response()->json([
+                    'message' => 'A similar enrollment request already exists.',
+                ], 409);
+            }
+            $tempEnroll = temp_enroll::create([
+                'RegNo' => $validated['RegNo'],
+                'teacher_offered_course_id' => $validated['teacher_offered_course_id'],
+                'date_time' => $validated['date_time'],
+                'venue' => $validated['venue'],
+                'isLab' => $validated['isLab'],
+                'status' => $validated['status'],
+            ]);
 
+            return response()->json([
+                'message' => 'Temporary enrollment request added successfully.',
+                'data' => $tempEnroll,
+            ], 201); // 201 Created
+        } catch (Exception $e) {
+            return response()->json([
+                'error' => 'An unexpected error occurred: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function getTemporaryEnrollmentsRequest()
+    {
+        try {
+            $tempEnrollments = temp_enroll::whereNull('Request_Status')
+                ->where('isVerified', 0)
+                ->with([
+                    'teacherOfferedCourse.teacher',
+                    'teacherOfferedCourse.section',
+                    'teacherOfferedCourse.offeredCourse.course',
+                    'venue',
+                ])
+                ->get();
 
+            $formattedData = $tempEnrollments->map(function ($enrollment) {
+                $student = student::where('RegNo', $enrollment->RegNo)->first();
+                $teacherOfferedCourse = $enrollment->teacherOfferedCourse;
+                $courseName = optional(optional($teacherOfferedCourse->offeredCourse)->course)->name;
+                $sectionName = optional($teacherOfferedCourse->section)->getNameByID($teacherOfferedCourse->section_id);
+                $teacherName = optional($teacherOfferedCourse->teacher)->name;
+                $session = optional($student->session)->name . '-' . optional($student->session)->year;
+                return [
+                    'Request id' => $enrollment->id,
+                    'RegNo' => $enrollment->RegNo,
+                    'Student Name' => optional($student)->name,
+                    'Teacher Name' => $teacherName,
+                    'Course Name' => $courseName,
+                    'Section Name' => $sectionName,
+                    'Session Name' => $session,
+                    'Date Time' => $enrollment->date_time,
+                    'Venue' => venue::find($enrollment->venue)->venue ?? null,
+                    'Message' => sprintf(
+                        'Teacher %s requests to enroll student %s (%s) in section %s for the course %s in the session %s.',
+                        $teacherName,
+                        optional($student)->name,
+                        $enrollment->RegNo,
+                        $sectionName,
+                        $courseName,
+                        $session
+                    ),
+                ];
+            });
 
+            return response()->json([
+                'message' => 'Temporary enrollments fetched successfully.',
+                'data' => $formattedData,
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch temporary enrollments.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function ProcessTemporaryEnrollments(Request $request)
+    {
+        try {
+            $request->validate([
+                'verification' => 'required|in:Accepted,Rejected',
+                'temp_enroll_id' => 'required|exists:temp_enroll,id',
+            ]);
+            $verification = $request->verification;
+            $tempEnrollId = $request->temp_enroll_id;
+            $tempEnrollment = temp_enroll::with([
+                'teacherOfferedCourse.offeredCourse.course',
+                'teacherOfferedCourse.section',
+                'teacherOfferedCourse.teacher',
+            ])->find($tempEnrollId);
+            if (!$tempEnrollment) {
+                throw new Exception('Temporary enrollment record not found.');
+            }
+            $teacherOfferedCourse = $tempEnrollment->teacherOfferedCourse;
+            $student = student::where('RegNo', $tempEnrollment->RegNo)->first();
+            if (!$teacherOfferedCourse || !$student) {
+                throw new Exception('Related data not found for temporary enrollment.');
+            }
+            $courseName = optional($teacherOfferedCourse->offeredCourse->course)->name;
+            $sectionName = optional($teacherOfferedCourse->section)->getNameByID($teacherOfferedCourse->section_id);
+            $teacherName = optional($teacherOfferedCourse->teacher)->name;
+            $message = "Student {$student->name} ({$student->RegNo}): Your request for enrollment in course '{$courseName}' ";
+            $message .= "for section '{$sectionName}' by teacher '{$teacherName}' ";
 
+            if ($verification === 'Accepted') {
+                // Handle insertion or updating in `student_offered_courses`
+                student_offered_courses::updateOrCreate(
+                    [
+                        'student_id' => $student->id,
+                        'offered_course_id' => $teacherOfferedCourse->offered_course_id,
+                    ],
+                    [
+                        'section_id' => $teacherOfferedCourse->section_id,
+                        'grade' => null, // Default grade
+                        'attempt_no' => 0, // Default attempt number
+                    ]
+                );
+                attendance::updateOrCreate(
+                    [
+                        'student_id' => $student->id,
+                        'teacher_offered_course_id' => $teacherOfferedCourse->id,
+                        'date_time' => $tempEnrollment->date_time,
+                    ],
+                    [
+                        'status' => 'p',
+                        'isLab' => $tempEnrollment->isLab, // Use the `isLab` from temp_enroll
+                        'venue_id' => $tempEnrollment->venue, // Ensure venue ID is set
+                    ]
+                );
+                $message .= 'has been Accepted.';
+            } else {
+                $message .= 'has been Rejected.';
+            }
+            if ($tempEnrollment->isLab == 1) {
+                $juniorLecturerRecord = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
+
+                if ($juniorLecturerRecord) {
+                    $juniorLecturer = $juniorLecturerRecord->juniorLecturer; // Fetch juniorLecturer details
+                    $juniorLecturerUserId = optional($juniorLecturer)->user_id;
+                    notification::create([
+                        'title' => 'Enrollment Request Verification',
+                        'description' => $message,
+                        'url' => null,
+                        'notification_date' => now(),
+                        'sender' => 'JuniorLecturer',
+                        'reciever' => 'Student',
+                        'Brodcast' => 0,
+                        'TL_sender_id' => $juniorLecturerUserId,
+                        'TL_receiver_id' => $student->user_id,
+                    ]);
+                }
+            } else {
+                notification::create([
+                    'title' => 'Enrollment Request Verification',
+                    'description' => $message,
+                    'url' => null,
+                    'notification_date' => now(),
+                    'sender' => 'Teacher',
+                    'reciever' => 'Student',
+                    'Brodcast' => 0,
+                    'TL_sender_id' => $teacherOfferedCourse->teacher->user_id,
+                    'TL_receiver_id' => $student->user_id,
+                ]);
+            }
+
+            // Delete the temporary enrollment record
+            $tempEnrollment->delete();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => $message,
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    } 
 }

@@ -14,6 +14,30 @@ use App\Http\Controllers\DatacellController;
 use App\Http\Controllers\DatacellModuleController;
 use App\Http\Controllers\TeacherModuleController;
 //////////////////////////////////////////////////////~api/Student///////////////////////////////////////////////
+Route::prefix('Students')->group(function () {
+
+});
+
+Route::prefix('Teachers')->group(function () {
+
+});
+
+Route::prefix('JuniorLec')->group(function () {
+
+});
+Route::prefix('Admins')->group(function () {
+
+});
+Route::prefix('Datacells')->group(function () {
+
+});
+Route::prefix('Graders')->group(function () {
+
+});
+
+
+
+
 Route::prefix('Student')->group(function () {
     Route::get('/FullTimetable', [StudentController::class, 'FullTimetable']);
     Route::get('/Notification', [StudentController::class, 'Notification']);
@@ -34,10 +58,8 @@ Route::prefix('Student')->group(function () {
     Route::get('/task/details', [StudentController::class, 'getTaskDetails']);
     Route::post('/submitTask', [StudentController::class, 'submitAnswer']);
 //////////////////////////////////////////Final////////////////////////////////////////////
-
     Route::get('/course-content', [StudentController::class, 'GetFullCourseContentOfSubject']);
-    Route::get('/course-content/week', [StudentController::class, 'GetFullCourseContentOfSubjectByWeek']);
-  
+    Route::get('/course-content/week', [StudentController::class, 'getCourseContentForSpecificWeekWithTopicsAndStatus']);
     Route::post('/chik', [LogicController::class, 'Sample']);
     
     //18
@@ -78,7 +100,6 @@ Route::prefix('Admin')->group(function () {
     Route::get('/course-content', [AdminController::class, 'getCourseContent']);
     Route::get('/search-admin', [AdminController::class, 'searchAdminByName']);
     Route::get('/search-datacell', [AdminController::class, 'GetDatacell']);
-
     Route::get('/Current-Courses/{sessionId}', [AdminController::class, 'getCoursesInCurrentSession']);
     Route::get('/Courses-Not-In-Session/{sessionId}', [AdminController::class, 'getCoursesNotInSession']);
     // Route to get teachers with no courses in a particular session
@@ -134,6 +155,8 @@ Route::prefix('Datacell')->group(function () {
     Route::get('/AllStudent', [DatacellController::class, 'AllStudent']);
     Route::post('/NewOfferedCourse', [DatacellController::class, 'AddNewOfferedCourse']);
     Route::post('/send/notification', [DatacellController::class, 'sendNotification']);
+    Route::post('/send/notification/student', [DatacellModuleController::class, 'sendNotification']);
+    
 });
 
 
@@ -141,13 +164,15 @@ Route::prefix('/TeacherTesting')->group( function() {
     Route::get('/contest-list', [TeacherModuleController::class, 'ContestList']);
     Route::post('/process-contest', [TeacherModuleController::class,'ProcessContest']);
     Route::get('/task/get', [TeacherModuleController::class, 'YourTaskInfo']);
-    Route::get('/tasks/unassigned-to-grader', [TeacherModuleController::class, 'UnAssignedTaskToGrader']);
+    Route::get('/tasks/unassigned-to-grader', action: [TeacherModuleController::class, 'UnAssignedTaskToGrader']);
     Route::post('/tasks/assign-grader', [TeacherModuleController::class, 'assignTaskToGrader']);
     Route::get('/teacher-graders', [TeacherModuleController::class, 'getAssignedGraders']);
     Route::get('/teacher-unassigned-task', [TeacherModuleController::class, 'getListofUnassignedTask']);
     Route::post('/store-task', [TeacherModuleController::class, 'storeTask']);
     Route::post('/consider-task', [TeacherModuleController::class, 'storeOrUpdateTaskConsiderations']);
-     
+    Route::post('/temporary-enrollment', [TeacherModuleController::class, 'AddRequestForTemporaryEnrollment']);
+    Route::get('/temporary-enrollments', [TeacherModuleController::class, 'getTemporaryEnrollmentsRequest']);
+    Route::post('/process-temporary-enrollments', [TeacherModuleController::class, 'ProcessTemporaryEnrollments']);
     //28
 });
 ///////////////////////////////////////////////////////////////Considered+Checked////////////////////////////////////////////////////////////////////////
