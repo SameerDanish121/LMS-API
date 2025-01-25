@@ -38,8 +38,6 @@ class teacher extends Model
 
         // Use 'first' to retrieve the first matching record
         $record = self::where('name', $Name)->select('id')->first();
-
-        // Return the ID if the record is found, otherwise return null
         return $record ? $record->id : null;
     }
     

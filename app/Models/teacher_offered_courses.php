@@ -43,4 +43,8 @@ class teacher_offered_courses extends Model
     {
         return $this->hasMany(Task::class, 'teacher_offered_course_id', 'id');
     }
+    public function teacherJuniorLecturer()
+    {
+        return $this->hasOne(teacher_juniorlecturer::class, 'teacher_offered_course_id');
+    }
 }

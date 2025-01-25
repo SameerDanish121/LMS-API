@@ -8,7 +8,7 @@ class t_coursecontent_topic_status extends Model
 {
     // The table name is explicitly set to 't_coursecontent_topic_status'
     protected $table = 't_coursecontent_topic_status';
-
+    protected $primaryKey = null;
     // Disable timestamps if not present in the table (no created_at/updated_at columns)
     public $timestamps = false;
 

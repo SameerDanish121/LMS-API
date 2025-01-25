@@ -6,85 +6,144 @@ use App\Http\Controllers\LogicController;
 use App\Http\Controllers\TestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\StudentController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\TeacherController;
-use App\Http\Controllers\JuniorLecturerController;
+use App\Http\Controllers\JuniorLecController;
 use App\Http\Controllers\DatacellController;
 use App\Http\Controllers\DatacellModuleController;
 use App\Http\Controllers\TeacherModuleController;
-//////////////////////////////////////////////////////~api/Student///////////////////////////////////////////////
+use App\Http\Controllers\TeachersController;
+use App\Http\Controllers\StudentsController;
+
+Route::get('/load-file', [TeachersController::class, 'LoadFile']);
+Route::get('/Login', [StudentsController::class, 'Login']);
 Route::prefix('Students')->group(function () {
-
+    Route::get('/Transcript', [StudentsController::class, 'Transcript']);
+    Route::get('/TranscriptPDF', [StudentsController::class, 'getTranscriptPdf']);
+    Route::get('/FullTimetable', [StudentsController::class, 'FullTimetable']);
+    Route::get('/Notification', [StudentsController::class, 'Notification']);
+    Route::get('/attendance', [StudentsController::class, 'getAttendance']);
+    Route::get('/attendancePerSubject', [StudentsController::class, 'AttendancePerSubject']);
+    Route::get('/get/notification', [StudentsController::class, 'Notifications']);
+    Route::post('/update-password', [StudentsController::class, 'updatePassword']);
+    Route::post('/update-student-image', [StudentsController::class, 'updateStudentImage']);
+    Route::get('/current-enrollments', [StudentsController::class, 'StudentCurrentEnrollmentsName']);
+    Route::get('/all-enrollments', [StudentsController::class, 'StudentAllEnrollmentsName']);
+    Route::post('/contest-attendance', [StudentsController::class, 'ContestAttendance']);
+    Route::get('/getActiveEnrollments', [StudentsController::class, 'getActiveEnrollments']);
+    Route::get('/getPreviousEnrollments', [StudentsController::class, 'getYourPreviousEnrollments']);
+    Route::get('/TranscriptSessionDropDown', [StudentsController::class, 'TranscriptSessionDropDown']);
+    Route::get('/subject/task-result', [StudentsController::class, 'GetSubjectTaskResult']);
+    Route::get('/subject/task-considered', [StudentsController::class, 'getTaskConsiderations']);
+    Route::get('/task/details', [StudentsController::class, 'getTaskDetails']);
+    Route::get('/course-content', [StudentsController::class, 'GetFullCourseContentOfSubject']);
+    Route::get('/course-content/week', [StudentsController::class, 'GetFullCourseContentOfSubjectByWeek']);
+    Route::post('/submitTask', [StudentsController::class, 'submitAnswer']);
 });
-
-Route::prefix('Teachers')->group(function () {
-
+Route::prefix('Grader')->group(function () {
+    Route::get('/GraderInfo', [GraderController::class, 'GraderOf']);
+    Route::get('/YourTask', [GraderController::class, 'GraderTask']);
+    Route::get('/ListOfStudent', [GraderController::class, 'ListOfStudentForTask']);
+    Route::post('/SubmitTaskResult', [GraderController::class, 'SubmitNumber']);
+    Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);
 });
-
 Route::prefix('JuniorLec')->group(function () {
-
+    Route::get('classestoday/{juniorLecturerId}', [JuniorLecController::class, 'juniorTodayClassesWithStatus']);
+    Route::get('/full-timetable', [JuniorLecController::class, 'FullTimetable']);
+    Route::get('/your-courses', [JuniorLecController::class, 'YourCourses']);
+    Route::get('/notifications', [JuniorLecController::class, 'YourNotification']);
+    Route::post('/send-notification', [JuniorLecController::class, 'sendNotification']);
+    Route::get('/dropdown/active-courses', [JuniorLecController::class, 'ActiveCourseInfo']);
+    Route::get('/get/tasks', [JuniorLecController::class, 'getTaskInfo']);
+    Route::get('/task-submissions', [JuniorLecController::class, 'getTaskSubmissionList']);
+    Route::post('/submit-number', [JuniorLecController::class, 'SubmitNumber']);
+    Route::post('/submit-number-list', [JuniorLecController::class, 'SubmitNumberList']);
+    Route::get('/attendance-list-lab', [JuniorLecController::class, 'attendanceListofLab']);
+    Route::get('/attendance-list/student', [JuniorLecController::class, 'attendanceListofSingleStudent']);
+    Route::post('/tasks/store', [JuniorLecController::class, 'storeTask']);
+    Route::get('/lab-attendance-list', [JuniorLecController::class, 'getLabAttendanceList']);
+    Route::post('/attendance/mark-single', [JuniorLecController::class, 'markSingleAttendance']);
+    Route::post('/attendance/mark-bulk', [JuniorLecController::class, 'markBulkAttendance']);
+    Route::get('/sections/info', [TeachersController::class, 'getSectionList']);
+    Route::get('/section-task-result', [TeachersController::class, 'getSectionTaskResult']);
+    Route::get('/get-single-student-task-result', [TeachersController::class, 'getSingleStudentTaskResult']);
+    Route::get('/section-attendance-list', [TeachersController::class, 'getAttendanceBySubjectForAllStudents']);
+    Route::get('/contest-list', [JuniorLecController::class, 'ContestList']);
+    Route::post('/process-contest', [JuniorLecController::class, 'ProcessContest']);
+    Route::get('/jl-unassigned-task', [JuniorLecController::class, 'getListofUnassignedTask']);
+    Route::post('/temporary-enrollment', [JuniorLecController::class, 'AddRequestForTemporaryEnrollment']);
 });
+Route::prefix('Teachers')->group(function () {
+    Route::post('/add-or-update-feedbacks', [TeachersController::class, 'AddFeedback']);
+    Route::post('/copy/previousSemesterCourseContent', [TeachersController::class, 'CopySemester']);
+    Route::post('/update/course-content-topic-status', [TeachersController::class, 'updateCourseContentTopicStatus']);
+    Route::get('/sections/info', [TeachersController::class, 'getSectionList']);
+    Route::get('/section-task-result', [TeachersController::class, 'getSectionTaskResult']);
+    Route::get('/get-single-student-task-result', [TeachersController::class, 'getSingleStudentTaskResult']);
+    Route::get('/section-attendance-list', [TeachersController::class, 'getAttendanceBySubjectForAllStudents']);
+    Route::get('/venues', [TeachersController::class, 'getAllVenues']);
+    Route::get('/FullTimetable', [TeachersController::class, 'FullTimetable']);
+    Route::get('classestoday/{teacher_id}', [TeachersController::class, 'getTodayClassesWithAttendanceStatus']);
+    Route::get('/All-courses/{teacher_id}', [TeachersController::class, 'getAllOfferedCourses']);
+    Route::get('/contest-list', [TeachersController::class, 'ContestList']);
+    Route::post('/process-contest', [TeachersController::class, 'ProcessContest']);
+    Route::get('/task/get', [TeachersController::class, 'YourTaskInfo']);
+    Route::get('/tasks/unassigned-to-grader', [TeachersController::class, 'UnAssignedTaskToGrader']);
+    Route::post('/tasks/assign-grader', [TeachersController::class, 'assignTaskToGrader']);
+    Route::get('/teacher-graders', [TeachersController::class, 'getAssignedGraders']);
+    Route::get('/teacher-unassigned-task', [TeachersController::class, 'getListofUnassignedTask']);
+    Route::post('/store-task', [TeachersController::class, 'storeTask']);
+    Route::post('/consider-task', [TeachersController::class, 'storeOrUpdateTaskConsiderations']);
+    Route::post('/temporary-enrollment', [TeachersController::class, 'AddRequestForTemporaryEnrollment']);
+    Route::post('/attendance/mark-single', [JuniorLecController::class, 'markSingleAttendance']);
+    Route::post('/attendance/mark-bulk', [JuniorLecController::class, 'markBulkAttendance']);
+
+
+
+
+
+
+    Route::get('/exam/section-result', [TeachersController::class, 'getSectionExamResult']);
+});
+
+Route::prefix('Teacher')->group(function () {
+    Route::post('/markAttendance', [TeacherController::class, 'markAttendance']);
+    Route::get('/currentcourses/{id}', [TeacherController::class, 'getCurrentOfferedCourses']);
+    Route::post('/markAttendance', [TeacherController::class, 'markAttendance']);
+    Route::post('/sendNotification', [TeacherController::class, 'sendNotification']);
+    Route::get('/Attendence', [TeacherController::class, 'getStudentsByTeacherAndSection']);
+    Route::get('/sortAttendence', [TeacherController::class, 'getSortedAttendance']);
+    Route::get('/teacher-course-details', [TeacherController::class, 'getCourseDetails']);
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Route::prefix('Admins')->group(function () {
 
 });
 Route::prefix('Datacells')->group(function () {
-
-});
-Route::prefix('Graders')->group(function () {
-
+    Route::get('/temporary-enrollments', [TeachersController::class, 'getTemporaryEnrollmentsRequest']);
+    Route::post('/process-temporary-enrollments', [TeachersController::class, 'ProcessTemporaryEnrollments']);
 });
 
-
-
-
-Route::prefix('Student')->group(function () {
-    Route::get('/FullTimetable', [StudentController::class, 'FullTimetable']);
-    Route::get('/Notification', [StudentController::class, 'Notification']);
-    Route::get('/Transcript', [StudentController::class, 'Transcript']);
-    Route::get('/attendance', [StudentController::class, 'getAttendance']);
-    Route::get('/attendancePerSubject', [StudentController::class, 'AttendancePerSubject']);
-    Route::get('/get/notification', [StudentController::class, 'Notifications']);
-    Route::post('/update-password', [StudentController::class, 'updatePassword']);
-    Route::post('/update-student-image', [StudentController::class, 'updateStudentImage']);
-    Route::get('/current-enrollments', [StudentController::class, 'StudentCurrentEnrollmentsName']);
-    Route::get('/all-enrollments', [StudentController::class, 'StudentAllEnrollmentsName']);
-    Route::post('/contest-attendance', [StudentController::class, 'ContestAttendance']);
-    Route::get('/getActiveEnrollments', [StudentController::class, 'getActiveEnrollments']);
-    Route::get('/getPreviousEnrollments', [StudentController::class, 'getYourPreviousEnrollments']);
-    Route::get('/TranscriptSessionDropDown', [StudentController::class, 'TranscriptSessionDropDown']);
-    Route::get('/subject/task-result', [StudentController::class, 'GetSubjectTaskResult']);
-    Route::get('/subject/task-considered', action: [LogicController::class, 'getTaskConsiderations']);
-    Route::get('/task/details', [StudentController::class, 'getTaskDetails']);
-    Route::post('/submitTask', [StudentController::class, 'submitAnswer']);
-//////////////////////////////////////////Final////////////////////////////////////////////
-    Route::get('/course-content', [StudentController::class, 'GetFullCourseContentOfSubject']);
-    Route::get('/course-content/week', [StudentController::class, 'getCourseContentForSpecificWeekWithTopicsAndStatus']);
-    Route::post('/chik', [LogicController::class, 'Sample']);
-    
-    //18
-});
 //////////////////////////////////////////////////////~api/JuniorLecturer////////////////////////////////////////////////
 Route::prefix('JuniorLecturer')->group(function () {
-    Route::get('/full-timetable', [JuniorLecturerController::class, 'FullTimetable']);
-    Route::get('/your-courses', [JuniorLecturerController::class, 'YourCourses']);
-    Route::get('/notifications', [JuniorLecturerController::class, 'YourNotification']);
-    Route::post('/send-notification', [JuniorLecturerController::class, 'sendNotification']);
-    Route::get('/dropdown/active-courses', [JuniorLecturerController::class, 'ActiveCourseInfo']);
-    Route::get('/get/tasks', [JuniorLecturerController::class, 'getTaskInfo']);
-    Route::get('/task-submissions', [JuniorLecturerController::class, 'getTaskSubmissionList']);
-    Route::post('/submit-number', [JuniorLecturerController::class, 'SubmitNumber']);
-    Route::post('/submit-number-list', [JuniorLecturerController::class, 'SubmitNumberList']);
-    Route::get('/attendance-list-lab', [JuniorLecturerController::class, 'attendanceListofLab']);
-    Route::get('/attendance-list/student', [JuniorLecturerController::class, 'attendanceListofSingleStudent']);
-    Route::post('/tasks/store', [JuniorLecturerController::class, 'storeTask']);
-    Route::get('/lab-attendance-list', [JuniorLecturerController::class, 'getLabAttendanceList']);
-    // Route for marking single attendance record
-    Route::post('/attendance/mark-single', [JuniorLecturerController::class, 'markSingleAttendance']);
-    // Route for marking multiple attendance records (bulk)
-    Route::post('/attendance/mark-bulk', [JuniorLecturerController::class, 'markBulkAttendance']);
-    Route::get('/today-lab-classes', [JuniorLecturerController::class, 'getTodayLabClassesWithTeacherCourseAndVenue']);
-    //16
+   
 });
 //////////////////////////////////////////////////////~api/Admin///////////////////////////////////////////////
 Route::prefix('Admin')->group(function () {
@@ -102,90 +161,30 @@ Route::prefix('Admin')->group(function () {
     Route::get('/search-datacell', [AdminController::class, 'GetDatacell']);
     Route::get('/Current-Courses/{sessionId}', [AdminController::class, 'getCoursesInCurrentSession']);
     Route::get('/Courses-Not-In-Session/{sessionId}', [AdminController::class, 'getCoursesNotInSession']);
-    // Route to get teachers with no courses in a particular session
     Route::get('/Teachers-With-No-Courses/{sessionId}', [AdminController::class, 'getTeachersWithNoCourses']);
-
-    // Route to get courses a particular teacher is enrolled in for a specific session
     Route::get('/Teacher-Courses/{teacherId}/{sessionId}', [AdminController::class, 'getTeacherEnrolledCourses']);
     Route::get('/Students-Not-Enrolled-Courses/{sessionId}', [AdminController::class, 'getStudentsNotEnrolledInSession']);
     Route::get('/Student-Courses/{studentName}/{sessionId}', [AdminController::class, 'getStudentCoursesInSession']);
-    //12
+    Route::get('/failed-courses', [AdminController::class, 'getFailedCourses']);
+    Route::get('/failed-students', [AdminController::class, 'getFailedStudents']);
+    Route::get('/TeacherJLec', [AdminController::class, 'getTeacherJuniorLecturers']);
+    Route::get('/assigned-graders', [AdminController::class, 'getTeachersWithAssignedGraders']);
+    Route::get('/TeacherwithNoGrader', [AdminController::class, 'getTeachersWithoutGraders']);
+    Route::get('/unassigned-graders', [AdminController::class, 'getUnassignedGraders']);
+    Route::get('/Teacherfreeslots', [AdminController::class, 'noClassesToday']);
+    Route::get('/TeacherJLecList', [AdminController::class, 'getAllTeachersWithJuniorLecturers']);
+    Route::get('/history', [AdminController::class, 'getGraderHistory']);
+    Route::post('/add-session', [AdminController::class, 'addSingleSession']);
 });
-//////////////////////////////////////////////////////~api/Teacher///////////////////////////////////////////////
-Route::prefix('Teacher')->group(function () {
-    Route::post('/markAttendance', [TeacherController::class, 'markAttendance']);
-    Route::get('/FullTimetable', [TeacherController::class, 'FullTimetable']);
-
-
-    /////////////////////////////////////////SharjeelCodeRoutes/////////////////////////////////////////////
-    Route::get('classestoday/{teacher_id}', [TeacherController::class, 'getTodayClasses']);
-    Route::get('/venues', [TeacherController::class, 'getAllVenues']);
-    Route::get('/currentcourses/{teacher_id}', [TeacherController::class, 'getCurrentOfferedCourses']);
-    Route::get('/courses/{teacher_id}', [TeacherController::class, 'getAllOfferedCourses']);
-    Route::post('/markAttendance', [TeacherController::class, 'markAttendance']);
-    Route::get('/FullTimetable', [TeacherController::class, 'FullTimetable']);
-    Route::post('/sendNotification', [TeacherController::class, 'sendNotification']);
-    Route::get('/Attendence', [TeacherController::class, 'getStudentsByTeacherAndSection']);
-    Route::get('/sortAttendence', [TeacherController::class, 'getSortedAttendance']);
-    Route::get('/teacher-course-details', [TeacherController::class, 'getCourseDetails']);
-    //12
-});
-
-////////////////////////////////////////////////////////~TESTING~///////////////////////////////
-Route::post('/status', [TestController::class,'CopySemester']);
-Route::get('/checking', [TestController::class,'Empty']);
-Route::post('/update-course-content-topic-status', [TestController::class, 'updateCourseContentTopicStatus']);
-Route::get('/good', [TestController::class, 'upload']);
-
-//////////////////////////////////////////////////////~api/Datacell////////////////////////////////////////////////
-
 Route::prefix('Datacell')->group(function () {
-    Route::post('/excel/offered-course', [DatacellController::class, 'OfferedCourseTeacheruploadExcel']);
-    Route::post('/excel/session-timetable', [DatacellController::class, 'UploadTimetableExcel']);
-    Route::post('/excel/student-enrollment', [DatacellController::class, 'UploadStudentEnrollments']);
-    Route::post('/excel/add-or-update-student', [DatacellController::class, 'AddOrUpdateStudent']);
-    Route::post('/excel/add-or-update-courses', [DatacellController::class, 'AddOrUpdateCourses']);
-    Route::post('/excel/add-or-update-teacher', [DatacellController::class, 'AddOrUpdateTeachers']);
-    Route::post('/excel/add-or-update-juniorLecturers', [DatacellController::class, 'AddOrUpdateJuniorLecturers']);
-    Route::post('/excel/graders-assign', [DatacellController::class, 'assignGrader']);
-    Route::post('/excel/assign-junior-lecturer', [DatacellController::class, 'assignJuniorLecturer']);
-    ///~View-Full~////////
     Route::post('/EnrollStudent', [DatacellController::class, 'NewEnrollment']);
     Route::get('/timetable/section', [DatacellController::class, 'getTimetableGroupedBySection']);
     Route::get('/AllStudent', [DatacellController::class, 'AllStudent']);
     Route::post('/NewOfferedCourse', [DatacellController::class, 'AddNewOfferedCourse']);
     Route::post('/send/notification', [DatacellController::class, 'sendNotification']);
     Route::post('/send/notification/student', [DatacellModuleController::class, 'sendNotification']);
-    
 });
 
-
-Route::prefix('/TeacherTesting')->group( function() {
-    Route::get('/contest-list', [TeacherModuleController::class, 'ContestList']);
-    Route::post('/process-contest', [TeacherModuleController::class,'ProcessContest']);
-    Route::get('/task/get', [TeacherModuleController::class, 'YourTaskInfo']);
-    Route::get('/tasks/unassigned-to-grader', action: [TeacherModuleController::class, 'UnAssignedTaskToGrader']);
-    Route::post('/tasks/assign-grader', [TeacherModuleController::class, 'assignTaskToGrader']);
-    Route::get('/teacher-graders', [TeacherModuleController::class, 'getAssignedGraders']);
-    Route::get('/teacher-unassigned-task', [TeacherModuleController::class, 'getListofUnassignedTask']);
-    Route::post('/store-task', [TeacherModuleController::class, 'storeTask']);
-    Route::post('/consider-task', [TeacherModuleController::class, 'storeOrUpdateTaskConsiderations']);
-    Route::post('/temporary-enrollment', [TeacherModuleController::class, 'AddRequestForTemporaryEnrollment']);
-    Route::get('/temporary-enrollments', [TeacherModuleController::class, 'getTemporaryEnrollmentsRequest']);
-    Route::post('/process-temporary-enrollments', [TeacherModuleController::class, 'ProcessTemporaryEnrollments']);
-    //28
-});
-///////////////////////////////////////////////////////////////Considered+Checked////////////////////////////////////////////////////////////////////////
-Route::get('/Login', [StudentController::class, 'Login']);
-//1
-Route::prefix('Grader')->group(function () {
-    Route::get('/GraderInfo', [GraderController::class, 'GraderOf']);
-    Route::get('/YourTask', [GraderController::class, 'GraderTask']);
-    Route::get('/ListOfStudent', [GraderController::class, 'ListOfStudentForTask']);
-    Route::post('/SubmitTaskResult', [GraderController::class, 'SubmitNumber']);
-    Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);
-    //5
-});
 Route::prefix('Uploading')->group(function () {
     Route::post('/excel-upload/offeredcourse_teacherallocation', [DatacellModuleController::class, 'OfferedCourseTeacheruploadExcel']);
     Route::post('/excel-upload/excluded_days', [DatacellModuleController::class, 'ExcludedDays']);
@@ -207,7 +206,7 @@ Route::prefix('Uploading')->group(function () {
     Route::post('/uplaod/course-content', [DatacellModuleController::class, 'CreateCourseContent']);
     Route::get('/getArchivesDetails', [DatacellController::class, 'Archives']);
     Route::delete('/DeleteFolderByPath', [DatacellController::class, 'DeleteFolderByPath']);
-    //20
+    Route::post('/uplaod/subject-result', [DatacellModuleController::class, 'AddSubjectResult']);
 });
 
 

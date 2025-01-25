@@ -4,6 +4,7 @@ use App\Models\Action;
 use App\Models\attendance;
 use App\Models\Attendance_Sheet_Sequence;
 use App\Models\notification;
+use App\Models\offered_courses;
 use App\Models\session;
 use App\Models\student;
 use App\Models\teacher;
@@ -17,76 +18,13 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 class TeacherController extends Controller
 {
-    // public function markAttendance(Request $request)
-    // {
-    //     $validatedData = $request->validate([
-    //         'student_id' => 'required',
-    //         'teacher_offered_course_id' =>'required',
-    //         'status' => 'required|in:p,a',
-    //     ]);
-    //     try {
-    //         $teacherCourse = teacher_offered_courses::find($validatedData['teacher_offered_course_id']);
-    //         $student = student::find($validatedData['student_id']);
-    //         if (!$teacherCourse || !$student) {
-    //             return response()->json(['message' => 'Invalid teacher course or student'], 404);
-    //         }
-    //         attendance::create([
-    //             'status' => $validatedData['status'],
-    //             'date_time' => now(), 
-    //             'isLab' =>false,
-    //             'student_id' => $validatedData['student_id'],
-    //             'teacher_offered_course_id' => $validatedData['teacher_offered_course_id'],
-    //         ]);
-
-    //         return response()->json(['message' => 'Attendance marked successfully'], 201);
-    //     } catch (\Exception $e) {
-    //         return response()->json(['message' => 'Error marking attendance', 'error' => $e->getMessage()], 500);
-    //     }
-    // }
-
-    // public function FullTimetable(Request $request)
-    // {
-    //     try {
-    //         $teacher_id=$request->teacher_id;
-    //         $timetable = timetable::getFullTimetableByTeacherId($teacher_id);
-    //         return response()->json([
-    //             'status' => 'success',
-    //             'data' => $timetable
-    //         ], 200);
-    //     } catch (ValidationException $e) {
-    //         return response()->json([
-    //             'status' => 'error',
-    //             'message' => 'Validation failed',
-    //             'errors' => $e->errors()
-    //         ], 422);
-
-    //     } catch (ModelNotFoundException $e) {
-    //         return response()->json([
-    //             'status' => 'error',
-    //             'message' => 'Invalid username or password'
-    //         ], 404);
-
-    //     } catch (\Exception $e) {
-    //         return response()->json([
-    //             'status' => 'error',
-    //             'message' => 'An unexpected error occurred',
-    //             'error' => $e->getMessage()
-    //         ], 500);
-    //     }
-    // }
-
-
     public function getCurrentOfferedCourses($id)
     {
         // Get the current session ID using the method getCurrentSessionId
         $currentSessionId = session::getCurrentSessionId();
-
-        // Check if the current session exists
         if ($currentSessionId == 0) {
             return response()->json(['error' => 'No active session found'], 404);
         }
-
-        // Update the query to filter by the current session
         $query = "
         SELECT 
             t.name AS teacher_name,
@@ -116,121 +54,17 @@ class TeacherController extends Controller
         AND 
             oc.session_id = :current_session_id
     ";
-
-        // Execute the query with the teacher ID and current session ID
         $courses = DB::select($query, [
             'teacher_id' => $id,
             'current_session_id' => $currentSessionId,
         ]);
-
-        // Check if any results were returned
         if (empty($courses)) {
             return response()->json(['error' => 'Teacher not found or no courses available for the current session'], 404);
         }
-
         return response()->json($courses);
     }
 
-
-
-
-    public function getAllOfferedCourses($id)
-    {
-        $query = "
-            SELECT 
-                t.name AS teacher_name,
-                toc.id AS teacher_offered_course_id,
-                toc.section_id,
-                toc.offered_course_id,
-                c.id AS course_id,
-                c.name AS course_name,
-                c.code AS course_code,
-                c.credit_hours,
-                CONCAT(s.name, ' ', s.year) AS Session,
-                CONCAT(sec.semester, sec.group) AS Section
-            FROM 
-                teacher_offered_courses toc
-            JOIN 
-                teacher t ON toc.teacher_id = t.id
-            JOIN 
-                offered_courses oc ON toc.offered_course_id = oc.id
-            JOIN 
-                course c ON oc.course_id = c.id
-            JOIN 
-                session s ON oc.session_id = s.id
-            JOIN 
-                section sec ON toc.section_id = sec.id
-            WHERE 
-                toc.teacher_id = :teacher_id
-        ";
-
-        // Execute the query with the teacher ID parameter
-        $courses = DB::select($query, ['teacher_id' => $id]);
-
-        // Check if any results were returned
-        if (empty($courses)) {
-            return response()->json(['error' => 'Teacher not found or no courses available'], 404);
-        }
-
-        return response()->json($courses);
-    }
-
-    public function getAllVenues()
-    {
-        // Get all venue names using the model
-        $venues = venue::select('id', 'venue')->get();
-
-        // Check if any venues are found
-        if ($venues->isEmpty()) {
-            return response()->json(['error' => 'No venues found'], 404);
-        }
-
-        return response()->json($venues);
-    }
-    public function getTodayClasses($teacherId)
-    {
-        // Get the current day name (e.g., 'Monday', 'Tuesday', etc.)
-        $currentDay = Carbon::now()->format('l');
-
-        // Get today's classes for the teacher
-        $classes = Timetable::join('venue', 'timetable.venue_id', '=', 'venue.id')
-            ->join('course', 'timetable.course_id', '=', 'course.id')
-            ->join('session', 'timetable.session_id', '=', 'session.id')
-            ->join('section', 'timetable.section_id', '=', 'section.id')
-            ->join('program', 'section.program', '=', 'program.name') // Join with the program table
-            ->join('dayslot', 'timetable.dayslot_id', '=', 'dayslot.id')
-            ->join('teacher', 'timetable.teacher_id', '=', 'teacher.id')
-            ->where('timetable.teacher_id', $teacherId)
-            ->where('dayslot.day', $currentDay)
-            ->select(
-                'timetable.id AS timetable_id',
-                'venue.venue AS venue_name',
-                'course.name AS course_name',
-
-                DB::raw("CONCAT(program.name, '-', section.semester, section.group) AS section"), // Concatenate program name
-                'dayslot.day AS day_slot',
-                'dayslot.start_time',
-                'dayslot.end_time',
-                'timetable.type AS class_type'
-            )
-            ->get();
-
-        // Check if there are any classes for today
-        if ($classes->isEmpty()) {
-            return response()->json(['message' => 'No classes found for today'], 404);
-        }
-
-        // Format start and end times using Carbon
-        $formattedClasses = $classes->map(function ($class) {
-            $class->start_time = Carbon::parse($class->start_time)->format('g:i A');
-            $class->end_time = Carbon::parse($class->end_time)->format('g:i A');
-            return $class;
-        });
-
-        // Return the formatted data in JSON format
-        return response()->json($formattedClasses);
-    }
-
+    ////////////Not Checked//////////////////
     public function getSortedAttendance(Request $request)
     {
         $validatedData = $request->validate([
@@ -286,7 +120,6 @@ class TeacherController extends Controller
 
 
     }
-
     public function getStudentsByTeacherAndSection(Request $request)
     {
         $validated = $request->validate([
@@ -342,7 +175,6 @@ class TeacherController extends Controller
             ], 500);
         }
     }
-
     public function getCourseDetails(Request $request)
     {
         $validated = $request->validate([
@@ -388,7 +220,6 @@ class TeacherController extends Controller
             'data' => $courseDetails
         ]);
     }
-
     public function sendNotification(Request $request)
     {
         try {
@@ -425,7 +256,7 @@ class TeacherController extends Controller
                 return response()->json(['message' => 'Invalid sender role.'], 400);
             }
 
-            $notification =notification::create($data);
+            $notification = notification::create($data);
 
             return response()->json(['message' => 'Notification sent successfully!', 'data' => $notification], 201);
 
@@ -461,32 +292,5 @@ class TeacherController extends Controller
         }
     }
 
-    public function FullTimetable(Request $request)
-    {
-        try {
-            $teacher_id = $request->teacher_id;
-            $timetable = timetable::getFullTimetableByTeacherId($teacher_id);
-            return response()->json([
-                'status' => 'success',
-                'data' => $timetable
-            ], 200);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-        } catch (ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid username or password'
-            ], 404);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
+
 }

@@ -29,4 +29,8 @@ class exam extends Model
     {
         return $this->belongsTo(offered_courses::class, 'offered_course_id', 'id');
     }
+    public function questions()
+    {
+        return $this->hasMany(question::class, 'exam_id', 'id');
+    }
 }

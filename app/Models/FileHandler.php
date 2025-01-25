@@ -18,6 +18,7 @@ class FileHandler extends Model
             $baseDirectory = 'storage/BIIT';
             $directoryPath = $baseDirectory . ($remainingDirectory ? '/' . $remainingDirectory : '');
             $storagePath = public_path($directoryPath);
+           
             if (!File::exists($storagePath)) {
                 File::makeDirectory($storagePath, 0777, true);
             }
@@ -32,6 +33,7 @@ class FileHandler extends Model
             if (!$fileExtension) {
                 throw new Exception('Unsupported file type.');
             }
+            
             $filePath = $storagePath . '/' . $fileName . '.' . $fileExtension;
             File::put($filePath, $decodedData);
             return $directoryPath . '/' . $fileName . '.' . $fileExtension;

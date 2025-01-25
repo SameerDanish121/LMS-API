@@ -40,15 +40,17 @@ class attendance extends Model
             ->with(['venue'])
             ->orderBy('date_time')
             ->get();
+
         $distinctCount = self::where('teacher_offered_course_id', $teacher_offered_course_id)
             ->distinct('date_time')
             ->count('date_time');
-        $distinctCountLab=self::where('teacher_offered_course_id', $teacher_offered_course_id)
-        ->where('isLab',1)->distinct('date_time')
-        ->count('date_time');
-        $distinctCountClass=self::where('teacher_offered_course_id', $teacher_offered_course_id)
-        ->where('isLab',0)->distinct('date_time')
-        ->count('date_time');
+
+        $distinctCountLab = self::where('teacher_offered_course_id', $teacher_offered_course_id)
+            ->where('isLab', 1)->distinct('date_time')
+            ->count('date_time');
+        $distinctCountClass = self::where('teacher_offered_course_id', $teacher_offered_course_id)
+            ->where('isLab', 0)->distinct('date_time')
+            ->count('date_time');
         $groupedAttendance = [
             'Class' => [
                 'total_classes' => 0,
@@ -68,6 +70,7 @@ class attendance extends Model
         $totalClasses = 0;
         $totalPresent = 0;
         $totalAbsent = 0;
+
         foreach ($attendanceRecords as $attendance) {
             $status = ($attendance->status == 'p') ? 'Present' : 'Absent';
             $dateTime = Carbon::parse($attendance->date_time);
@@ -94,8 +97,10 @@ class attendance extends Model
                 $totalAbsent++;
             }
         }
-        $groupedAttendance['Lab']['total_classes'][]=$distinctCountLab;
-        $groupedAttendance['Class']['total_classes'][]=$distinctCountClass;
+
+        $groupedAttendance['Lab']['total_classes'] = $distinctCountLab;
+        $groupedAttendance['Class']['total_classes'] = $distinctCountClass;
+
         foreach (['Class', 'Lab'] as $group) {
             if ($groupedAttendance[$group]['total_classes'] > 0) {
                 $groupedAttendance[$group]['percentage'] = ($groupedAttendance[$group]['total_present'] / $groupedAttendance[$group]['total_classes']) * 100;
@@ -103,10 +108,11 @@ class attendance extends Model
                 $groupedAttendance[$group]['percentage'] = 0;
             }
         }
+
         $combinedPercentage = ($distinctCount > 0) ? ($totalPresent / $distinctCount) * 100 : 0;
         $result = [
             'Total' => [
-                'total_classes' => $totalClasses,
+                'total_classes' => $distinctCount,
                 'total_present' => $totalPresent,
                 'total_absent' => $totalAbsent,
                 'percentage' => $combinedPercentage
@@ -133,7 +139,7 @@ class attendance extends Model
                 ->get();
             foreach ($enrollments as $enrollment) {
                 $offeredCourse = $enrollment->offeredCourse;
-                $teacherOfferedCourse = teacher_offered_courses::where('offered_course_id', $offeredCourse->id)->first();
+                $teacherOfferedCourse = teacher_offered_courses::with(['section'])->where('offered_course_id', $offeredCourse->id)->first();
 
                 if ($teacherOfferedCourse) {
                     $attendanceRecords = attendance::where('student_id', $studentId)
@@ -143,18 +149,21 @@ class attendance extends Model
                     $totalAbsent = $attendanceRecords->where('status', 'a')->count();
                     $total_Classes = $totalPresent + $totalAbsent;
                     $total_Classes = self::where('teacher_offered_course_id', $teacherOfferedCourse->id)
-                    ->distinct('date_time')
-                    ->count('date_time');
+                        ->distinct('date_time')
+                        ->count('date_time');
                     $percentage = $total_Classes > 0 ? ($totalPresent / $total_Classes) * 100 : 100;
-                   
+
                     $attendanceData[] = [
                         'course_name' => $offeredCourse->course->name,
-                        'teacher_offered_course_id' => $teacherOfferedCourse->id,
+                        'section_name'=>(new section())->getNameByID($teacherOfferedCourse->section->id),
                         'teacher_name' => $teacherOfferedCourse->teacher->name ?? 'N/A',
+                        'Total_classes_conducted'=>$total_Classes,
                         'total_present' => $totalPresent ?? '0',
                         'total_absent' => $totalAbsent ?? '0',
-                        'Percentage' => $percentage
+                        'Percentage' => $percentage,
+                        'teacher_offered_course_id' => $teacherOfferedCourse->id,
                     ];
+                    
                 }
             }
         } catch (Exception $ex) {

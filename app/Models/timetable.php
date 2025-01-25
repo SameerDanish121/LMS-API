@@ -2,6 +2,7 @@
 
 namespace App\Models;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Database\Eloquent\Model;
 
 class timetable extends Model
@@ -69,7 +70,7 @@ class timetable extends Model
     {
         return $this->belongsTo(JuniorLecturer::class, 'junior_lecturer_id');
     }
-    public static function getTodayTimetableBySectionId($section_id)
+    public static function getTodayTimetableBySectionId($section_id, $day = null)
     {
         if (!$section_id) {
             return [];
@@ -104,7 +105,7 @@ class timetable extends Model
             });
         return $timetable;
     }
-    public static function getTodayTimetableOfTeacherById($teacher_id = null)
+    public static function getTodayTimetableOfTeacherById($teacher_id = null, $day = null)
     {
         if (!$teacher_id) {
             return [];
@@ -121,7 +122,7 @@ class timetable extends Model
             'section:id'
         ])
             ->whereHas('dayslot', function ($query) {
-                $query->where('day', Carbon::now()->format('l'));
+                $query->where('day',$day??Carbon::now()->format('l'));
             })
             ->where('teacher_id', $teacher_id)
             ->where('session_id', (new session())->getCurrentSessionId())
@@ -145,7 +146,7 @@ class timetable extends Model
         if (!$section_id) {
             return [];
         }
-        $Timetable=Timetable::with([
+        $Timetable = Timetable::with([
             'course:name,id,description',
             'teacher:name,id',
             'venue:venue,id',
@@ -167,47 +168,57 @@ class timetable extends Model
                     'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
                 ];
             });
-            return $Timetable;
+        return $Timetable;
     }
     public static function getFullTimetableByTeacherId($teacher_id = null)
-    {
-        if (!$teacher_id) {
-            return [];
-
-        }
-        return timetable::with([
-            'course:name,id,description',
-            'teacher:name,id',
-            'venue:venue,id',
-            'dayslot:day,start_time,end_time,id',
-            'juniorLecturer:name',
-            'section'
-        ])
-            ->where('teacher_id', $teacher_id)
-            ->where('session_id', (new session())->getCurrentSessionId())
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'coursename' => $item->course->name,
-                    'description' => $item->course->description,
-                    'teachername' => $item->teacher->name ?? 'N/A',
-                    'juniorlecturername' => $item->juniorLecturer->name ?? 'N/A',
-                    'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
-                    'venue' => $item->venue->venue,
-                    'day' => $item->dayslot->day,
-                    'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
-                    'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
-                ];
-            });
+{
+    if (!$teacher_id) {
+        return [];
     }
 
-    public static function getTodayTimetableOfJuniorLecturerById($JuniorLecturer_id=null){
+    $timetable = timetable::with([
+        'course:name,id,description',
+        'teacher:name,id',
+        'venue:venue,id',
+        'dayslot:day,start_time,end_time,id',
+        'juniorLecturer:name',
+        'section'
+    ])
+        ->where('teacher_id', $teacher_id)
+        ->where('session_id', (new session())->getCurrentSessionId())
+        ->get()
+        ->map(function ($item) {
+            return [
+                'day' => $item->dayslot->day,
+                'coursename' => $item->course->name,
+                'description' => $item->course->description,
+                'teachername' => $item->teacher->name ?? 'N/A',
+                'juniorlecturername' => $item->juniorLecturer->name ?? 'N/A',
+                'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
+                'venue' => $item->venue->venue,
+                'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
+                'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
+            ];
+        });
+    $groupedByDay = $timetable->groupBy('day')->map(function ($items, $day) {
+        return [
+            'day' => $day,
+            'schedule' => $items->toArray()
+        ];
+    });
+
+    return $groupedByDay->values()->toArray();
+}
+
+    public static function getTodayTimetableOfJuniorLecturerById($JuniorLecturer_id = null, $day=null)
+    {
         if (!$JuniorLecturer_id) {
             return [];
         }
         if (!(new session())->getCurrentSessionId()) {
             return [];
         }
+    
         $timetable = Timetable::with([
             'course:name,id,description',
             'teacher:name,id',
@@ -216,7 +227,7 @@ class timetable extends Model
             'section:id'
         ])
             ->whereHas('dayslot', function ($query) {
-                $query->where('day', Carbon::now()->format('l'));
+                $query->where('day', $day??Carbon::now()->format('l'));
             })
             ->where('junior_lecturer_id', $JuniorLecturer_id)
             ->where('session_id', (new session())->getCurrentSessionId())
@@ -226,7 +237,7 @@ class timetable extends Model
                     'coursename' => $item->course->name ?? 'N/A',
                     'description' => $item->course->description ?? 'N/A',
                     'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
-                    'Teacher' => $item->teacher? $item->teacher->name : 'N/A',
+                    'Teacher' => $item->teacher ? $item->teacher->name : 'N/A',
                     'venue' => $item->venue->venue ?? 'N/A',
                     'day' => $item->dayslot->day ?? 'N/A',
                     'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
@@ -235,4 +246,127 @@ class timetable extends Model
             });
         return $timetable;
     }
+
+    public static function getTodayTimetableOfEnrollementsByStudentId($student_id, $todayDay = null)
+    {
+        if (!$student_id) {
+            return [];
+        }
+        $currentSessionId = (new Session())->getCurrentSessionId();
+        if (!$currentSessionId) {
+            return [];
+        }
+        $day = $todayDay ?? Carbon::now()->format('l');
+       
+        $enrollments = student_offered_courses::with(['offeredCourse:id,course_id', 'section:id'])
+            ->where('student_id', $student_id)
+            ->whereHas('offeredCourse', function ($query) use ($currentSessionId) {
+                $query->where('session_id', $currentSessionId);
+            })
+            ->get();
+        $courseSectionMapping = $enrollments->mapWithKeys(function ($enrollment) {
+            return [$enrollment->offeredCourse->course_id => $enrollment->section_id];
+        });
+
+        if ($courseSectionMapping->isEmpty()) {
+            return [];
+        }
+        $timetable = Timetable::with([
+            'course:id,name,description,lab', // Include the 'lab' attribute
+            'teacher:id,name',
+            'venue:id,venue',
+            'dayslot:id,day,start_time,end_time',
+            'juniorLecturer:id,name',
+        ])
+            ->where('session_id', $currentSessionId)
+            ->whereHas('dayslot', function ($query) use ($day) {
+                $query->where('day', $day);
+            })
+            ->get()
+            ->filter(function ($item) use ($courseSectionMapping) {
+                return isset($courseSectionMapping[$item->course_id]) &&
+                    $courseSectionMapping[$item->course_id] === $item->section_id;
+            })
+            ->map(function ($item) {
+                return [
+                    'coursename' => $item->course->name,
+                    'description' => $item->course->description,
+                    'teachername' => $item->teacher->name ?? 'N/A',
+                    'juniorlecturer' => $item->course->lab ? ($item->juniorLecturer->name ?? 'N/A') : null,
+                    'venue' => $item->venue->venue,
+                    'day' => $item->dayslot->day,
+                    'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
+                    'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
+                ];
+            });
+
+        return $timetable;
+    }
+    public static function getFullTimetableOfEnrollmentsByStudentId($student_id)
+    {
+        if (!$student_id) {
+            return [];
+        }
+    
+        $currentSessionId = (new Session())->getCurrentSessionId();
+        if (!$currentSessionId) {
+            return [];
+        }
+    
+        // Fetch the enrolled courses for the student in the current session
+        $enrollments = student_offered_courses::with(['offeredCourse:id,course_id', 'section:id'])
+            ->where('student_id', $student_id)
+            ->whereHas('offeredCourse', function ($query) use ($currentSessionId) {
+                $query->where('session_id', $currentSessionId);
+            })
+            ->get();
+    
+        // Map the courses to their respective sections
+        $courseSectionMapping = $enrollments->mapWithKeys(function ($enrollment) {
+            return [$enrollment->offeredCourse->course_id => $enrollment->section_id];
+        });
+    
+        if ($courseSectionMapping->isEmpty()) {
+            return [];
+        }
+    
+        // Fetch and group the timetable entries
+        $timetable = Timetable::with([
+            'course:id,name,description,lab', // Include 'lab' attribute
+            'teacher:id,name',
+            'venue:id,venue',
+            'dayslot:id,day,start_time,end_time',
+            'juniorLecturer:id,name',
+        ])
+            ->where('session_id', $currentSessionId)
+            ->get()
+            ->filter(function ($item) use ($courseSectionMapping) {
+                // Ensure the timetable entry matches both the course and section
+                return isset($courseSectionMapping[$item->course_id]) &&
+                    $courseSectionMapping[$item->course_id] === $item->section_id;
+            })
+            ->groupBy(function ($item) {
+                return $item->dayslot->day; // Group by day
+            })
+            ->map(function ($items, $day) {
+                return [
+                    'day' => $day,
+                    'schedule' => $items->map(function ($item) {
+                        return [
+                            'coursename' => $item->course->name,
+                            'description' => $item->course->description,
+                            'teachername' => $item->teacher->name ?? 'N/A',
+                            'juniorlecturer' => $item->course->lab ? ($item->juniorLecturer->name ?? 'N/A') : null,
+                            'venue' => $item->venue->venue,
+                            'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
+                            'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
+                        ];
+                    }),
+                ];
+            })
+            ->values();
+    
+        return $timetable;
+    }
+    
 }

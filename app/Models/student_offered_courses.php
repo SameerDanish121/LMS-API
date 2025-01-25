@@ -25,8 +25,6 @@ class student_offered_courses extends Model
     {
         return $this->belongsTo(Student::class, 'student_id');
     }
-
-    // Relationship to Section model
     public function section()
     {
         return $this->belongsTo(Section::class, 'section_id');
