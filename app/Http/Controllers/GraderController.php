@@ -29,8 +29,6 @@ use App\Models\session;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use function Laravel\Prompts\select;
-
-
 class GraderController extends Controller
 {
     public function SubmitNumber(Request $request)
@@ -178,7 +176,6 @@ class GraderController extends Controller
             ], 500);
         }
     }
-    //grader_id;
     public function GraderTask(Request $request)
     {
         try {

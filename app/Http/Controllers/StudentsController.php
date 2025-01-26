@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\contested_attendance;
 use App\Models\exam;
+use App\Models\grader;
 use App\Models\student_exam_result;
 use App\Models\task_consideration;
 use Illuminate\Http\Request;
@@ -50,6 +51,57 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\File;
 class StudentsController extends Controller
 {
+    public function sendNotification(Request $request)
+    {
+        try {
+            $validatedData = $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'required|string|max:1000',
+                'url' => 'nullable|url|max:255',
+                'sender' => 'required|in:Teacher,JuniorLecturer,Admin,Datacell',
+                'reciever' => 'required|string|max:255',
+                'Brodcast' => 'required|boolean',
+                'Student_Section' => 'nullable|integer',
+                'TL_receiver_id' => 'nullable|integer',
+                'TL_sender_id' => 'nullable|integer',
+            ]);
+            $sender = $request->sender;
+            $r= $request->reciever;
+            if ($r === 'Admin' || $r === 'Datacell') {
+                return response()->json(['message' => 'Cant Send Messages Between Admin and Datacell'], 400);
+            }
+            $data = [
+                'title' => $request->title,
+                'description' => $request->description,
+                'url' => $request->url,
+                'notification_date' => now(),
+                'sender' => $sender,
+                'reciever' => $request->reciever,
+                'Brodcast' => $request->Brodcast,
+                'Student_Section' => $request->Student_Section == 0 ? null : $request->Student_Section,
+                'TL_receiver_id' => $request->TL_receiver_id == 0 ? null : $request->TL_receiver_id,
+                'TL_sender_id' => $request->TL_sender_id == 0 ? null : $request->TL_sender_id,
+            ];
+
+            if ($sender === 'Teacher' || $sender === 'JuniorLecturer') {
+                $data['TL_sender_id'] = $request->TL_sender_id ; // Default sender ID for teachers
+            } elseif ($sender === 'Admin') {
+                $data['TL_sender_id'] = $request->TL_sender_id ?? 262; // Set a valid default for Admin (if needed)
+            } elseif ($sender === 'Datacell') {
+                $data['TL_sender_id'] = $request->TL_sender_id ?? 263; // Set a valid default for Datacell (if needed)
+            } else {
+                return response()->json(['message' => 'Invalid sender role.'], 400);
+            }
+
+
+            $notification = notification::create($data);
+
+            return response()->json(['message' => 'Notification sent successfully!', 'data' => $notification], 201);
+
+        } catch (Exception $e) {
+            return response()->json(['message' => 'Failed to send notification.', 'error' => $e->getMessage()], 500);
+        }
+    }
     public function Login(Request $request)
     {
         try {
@@ -76,7 +128,7 @@ class StudentsController extends Controller
                 } else {
                     $timetable = timetable::getTodayTimetableOfEnrollementsByStudentId($student_id);
                 }
-
+                
                 $studentInfo = [
                     "id" => $student->id,
                     "name" => $student->name,
@@ -89,12 +141,13 @@ class StudentsController extends Controller
                     "email" => $student->user->email,
                     "InTake" => (new session())->getSessionNameByID($student->session_id),
                     "Program" => $student->program->name,
+                    "Is Grader ?"=> grader::where('student_id',$student->id)->exists(),
                     "Section" => (new section())->getNameByID($student->section_id),
                     "Total Enrollments" => student_offered_courses::GetCountOfTotalEnrollments($student->id),
                     "Current Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?: 'N/A',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
                     "Attendance" => (new attendance())->getAttendanceByID($student_id),
-                    "Image" => Action::getImageByPath($student->image)
+                    "Image" => asset($student->image)
                 ];
                 if ($rescheduled) {
                     $studentInfo['Notice'] = $Notice;

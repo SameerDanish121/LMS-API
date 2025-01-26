@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 use App\Models\Action;
 use App\Models\FileHandler;
+use App\Models\program;
 use App\Models\student_offered_courses;
 use App\Models\teacher_juniorlecturer;
 use Exception;
@@ -30,6 +31,61 @@ use App\Models\user;
 use Illuminate\Validation\ValidationException;
 class AdminController extends Controller
 {
+    public function addOrUpdateProgram(Request $request)
+    {
+        try {
+
+            $request->validate([
+                'name' => 'required|string|max:100',
+                'description' => 'nullable|string|max:255',
+                'status' => 'required|string|max:20'
+            ]);
+
+
+            $name = $request->input('name');
+            $description = $request->input('description');
+            $status = $request->input('status');
+
+
+            $program = Program::where('name', $name)->first();
+
+            if ($program) {
+                // If the program exists, update it
+                $program->update([
+                    'description' => $description,
+                    'status' => $status
+                ]);
+                return response()->json([
+                    'status' => 'success',
+                    'message' => "The program '{$name}' was updated successfully."
+                ], 200);
+            } else {
+                // If the program doesn't exist, create a new one
+                program::create([
+                    'name' => $name,
+                    'description' => $description,
+                    'status' => $status
+                ]);
+                return response()->json([
+                    'status' => 'success',
+                    'message' => "The program '{$name}' was added successfully."
+                ], 201);
+            }
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function getStudentsNotEnrolledInSession($sessionId)
     {
         $students = DB::table('student as s')
@@ -678,11 +734,6 @@ class AdminController extends Controller
 
         return response()->json($result);
     }
-
-
-
-
-    ///////////////////////////////////////////
     public function GetTeacherByName(Request $request)
     {
         try {
@@ -732,13 +783,6 @@ class AdminController extends Controller
             ], 500);
         }
     }
-
-
-
-
-
-
-
     public function AllTeacher(Request $request)
     {
         try {
@@ -868,7 +912,6 @@ class AdminController extends Controller
             return response()->json(['status' => 'error', 'message' => 'An error occurred', 'error' => $e->getMessage()], 500);
         }
     }
-
     public function getTeacherJuniorLecturers(Request $request)
     {
         try {
@@ -1083,10 +1126,6 @@ class AdminController extends Controller
             return response()->json(['error' => 'Server error, please try again later'], 500);
         }
     }
-
-
-
-
     public function getTeachersWithAssignedGraders(Request $request)
     {
         try {
@@ -1130,12 +1169,6 @@ class AdminController extends Controller
             return response()->json(['error' => 'Server error, please try again later'], 500);
         }
     }
-
-
-
-
-
-
     public function getUnassignedGraders(Request $request)
     {
         $currentSession = $request->json('session_id');
@@ -1172,8 +1205,6 @@ class AdminController extends Controller
             return response()->json(['error' => 'Server error, please try again later'], 500);
         }
     }
-
-
     public function getFailedStudents(Request $request)
     {
         try {
@@ -1228,17 +1259,6 @@ class AdminController extends Controller
             ], 500);
         }
     }
-
-
-
-
-
-
-
-
-
-
-
     public function getGraderHistory(Request $request)
     {
         try {
@@ -1588,44 +1608,44 @@ class AdminController extends Controller
         }
     }
     public function updateAdminImage(Request $request)
-{
-    $validator = Validator::make($request->all(), [
-        'admin_id' => 'required',
-        'image' => 'required|image',
-    ]);
+    {
+        $validator = Validator::make($request->all(), [
+            'admin_id' => 'required',
+            'image' => 'required|image',
+        ]);
 
-    if ($validator->fails()) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Validation failed',
-            'errors' => $validator->errors()
-        ], 400);
-    }
-
-    try {
-        $admin_id = $request->admin_id;
-        $file = $request->file('image');
-        
-        // Fetch admin details
-        $admin = Admin::find($admin_id);
-        if (!$admin) {
-            throw new Exception("Admin not found");
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 400);
         }
-        $directory = 'Images/Admin';
-        $storedFilePath =FileHandler::storeFile($admin->user_id, $directory, $file);
-        $admin->update(['image' => $storedFilePath]);
 
-        return response()->json([
-            'success' => true,
-            'message' => "Image updated successfully for Admin: $admin->name"
-        ], 200);
+        try {
+            $admin_id = $request->admin_id;
+            $file = $request->file('image');
 
-    } catch (Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => $e->getMessage()
-        ], 400);
+            // Fetch admin details
+            $admin = Admin::find($admin_id);
+            if (!$admin) {
+                throw new Exception("Admin not found");
+            }
+            $directory = 'Images/Admin';
+            $storedFilePath = FileHandler::storeFile($admin->user_id, $directory, $file);
+            $admin->update(['image' => $storedFilePath]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Image updated successfully for Admin: $admin->name"
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
     }
-}
 
 }

@@ -1837,7 +1837,6 @@ class TeachersController extends Controller
             ], 500);
         }
     }
-
     public function SortedAttendanceList(Request $request)
     {
         // Validate request
@@ -1927,7 +1926,6 @@ class TeachersController extends Controller
             'students' => $finalList,
         ], 200);
     }
-
     public function addAttendanceSeatingPlan(Request $request)
     {
         $validated = $request->validate([
@@ -1957,7 +1955,6 @@ class TeachersController extends Controller
             'message' => 'Attendance seating plan updated successfully.',
         ], 200);
     }
-
     public function updateTeacherPassword(Request $request)
     {
         try {

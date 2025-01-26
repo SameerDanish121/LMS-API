@@ -924,7 +924,7 @@ class JuniorLecController extends Controller
             $validated = $request->validate([
                 'junior_id' => 'required|integer',
             ]);
-       
+
             $juniorLecturerId = $validated['junior_id'];
             // Get active courses for the junior lecturer
             $activeCourses = self::getActiveCoursesForJuniorLecturer($juniorLecturerId);
@@ -967,43 +967,43 @@ class JuniorLecController extends Controller
         $validated = $request->validate([
             'teacher_offered_course_id' => 'required|integer'
         ]);
-        $type ='Lab';
+        $type = 'Lab';
         $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
         $teacherOfferedCourse = teacher_offered_courses::with(['section', 'offeredCourse.course', 'offeredCourse.session'])
             ->find($teacherOfferedCourseId);
-    
+
         if (!$teacherOfferedCourse) {
             return response()->json([
                 'error' => 'Teacher offered course not found.',
             ], 404);
         }
-    
+
         $offeredCourseId = $teacherOfferedCourse->offered_course_id;
         $sectionId = $teacherOfferedCourse->section_id;
-    
+
         // Fetch student courses
         $studentCourses = student_offered_courses::where('offered_course_id', $offeredCourseId)
             ->where('section_id', $sectionId)
             ->with('student')
             ->get();
-    
+
         if ($studentCourses->isEmpty()) {
             return response()->json([
                 'error' => 'No students found for the given teacher offered course.',
             ], 404);
         }
-    
+
         // Fetch attendance sheet sequence
         $attendanceRecords = Attendance_Sheet_Sequence::where('teacher_offered_course_id', $teacherOfferedCourseId)
             ->where('For', $type)
             ->with('student')
             ->orderBy('SeatNumber')
             ->get();
-    
+
         $attendanceMap = $attendanceRecords->keyBy('student_id');
         $sortedStudents = [];
         $unsortedStudents = [];
-    
+
         // Loop through each student course and check for matching attendance records
         foreach ($studentCourses as $studentCourse) {
             $student = $studentCourse->student;
@@ -1011,30 +1011,30 @@ class JuniorLecController extends Controller
                 continue;
             }
             $attendanceRecord = $attendanceMap->get($student->id);
-    
+
             if ($attendanceRecord) {
                 $sortedStudents[] = [
                     'SeatNumber' => $attendanceRecord->SeatNumber,
                     'name' => $student->name,
                     'RegNo' => $student->RegNo,
-                    'image' =>$student->image?asset($student->image):null,
+                    'image' => $student->image ? asset($student->image) : null,
                 ];
             } else {
                 $unsortedStudents[] = [
                     'SeatNumber' => null,
                     'name' => $student->name,
                     'RegNo' => $student->RegNo,
-                   'image' =>$student->image?asset($student->image):null,
+                    'image' => $student->image ? asset($student->image) : null,
                 ];
             }
         }
         usort($sortedStudents, fn($a, $b) => $a['SeatNumber'] <=> $b['SeatNumber']);
         // Merge sorted and unsorted students
         $finalList = array_merge($sortedStudents, $unsortedStudents);
-    
+
         // Determine the list format
         $listFormat = count($attendanceRecords) > 0 ? 'Sorted' : 'Unsorted';
-    
+
         // Return the JSON response
         return response()->json([
             'success' => true,
@@ -1043,7 +1043,7 @@ class JuniorLecController extends Controller
             'List Format' => $listFormat,
             'students' => $finalList,
         ], 200);
-    }    
+    }
     public function addAttendanceSeatingPlan(Request $request)
     {
         $validated = $request->validate([
@@ -1052,7 +1052,7 @@ class JuniorLecController extends Controller
             'students.*.student_id' => 'required|integer', // Each student must have an ID
             'students.*.seatNo' => 'required|integer', // Each student must have a seat number
         ]);
-        $attendanceType ='Lab';
+        $attendanceType = 'Lab';
         $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
         Attendance_Sheet_Sequence::where('teacher_offered_course_id', $teacherOfferedCourseId)
             ->where('For', $attendanceType)
@@ -1066,120 +1066,121 @@ class JuniorLecController extends Controller
                 'SeatNumber' => $data['seatNo'],
             ]);
         }
-    
+
         return response()->json([
             'success' => true,
             'message' => 'Attendance seating plan updated successfully.',
         ], 200);
     }
-    public function updateJuniorLecturerPassword(Request $request)
-{
-    try {
-        // Validate incoming data
-        $request->validate([
-            'junior_lecturer_id' => 'required|integer',
-            'newPassword' => 'required|string',
-        ]);
 
-        // Check if the password already exists for any other user
-        if (user::where('password', $request->newPassword)->exists()) {
+    public function updateJuniorLecturerPassword(Request $request)
+    {
+        try {
+            // Validate incoming data
+            $request->validate([
+                'junior_lecturer_id' => 'required|integer',
+                'newPassword' => 'required|string',
+            ]);
+
+            // Check if the password already exists for any other user
+            if (user::where('password', $request->newPassword)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Password is Already Taken by Another User! Please Try a New One'
+                ], 401);
+            }
+
+            // Fetch junior lecturer and update password
+            $responseMessage = $this->updateJuniorLecturerPasswordHelper(
+                $request->junior_lecturer_id,
+                $request->newPassword
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => $responseMessage
+            ], 200);
+
+        } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Password is Already Taken by Another User! Please Try a New One'
-            ], 401);
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Junior Lecturer not found'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Fetch junior lecturer and update password
-        $responseMessage = $this->updateJuniorLecturerPasswordHelper(
-            $request->junior_lecturer_id,
-            $request->newPassword
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => $responseMessage
-        ], 200);
-
-    } catch (ValidationException $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Validation failed',
-            'errors' => $e->errors()
-        ], 400);
-
-    } catch (ModelNotFoundException $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Junior Lecturer not found'
-        ], 404);
-
-    } catch (Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'An unexpected error occurred',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
-public function updateJuniorLecturerPasswordHelper($junior_lecturer_id, $newPassword)
-{
-    $juniorLecturer = juniorlecturer::find($junior_lecturer_id);
-    if (!$juniorLecturer) {
-        throw new Exception("Junior Lecturer not found");
-    }
-
-    $user_id = $juniorLecturer->user_id;
-    if (!$user_id) {
-        throw new Exception("User ID not found for the junior lecturer");
-    }
-
-    $user = user::where('id', $user_id)->first();
-    if (!$user) {
-        throw new Exception("User not found for the given user ID");
-    }
-    $user->update(['password' => $newPassword]);
-
-    return "Password updated successfully for Junior Lecturer: $juniorLecturer->name";
-}
-public function updateJuniorLecturerImage(Request $request)
-{
-    $validator = Validator::make($request->all(), [
-        'junior_lecturer_id' => 'required',
-        'image' => 'required|image',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Validation failed',
-            'errors' => $validator->errors()
-        ], 400);
-    }
-
-    try {
-        $junior_lecturer_id = $request->junior_lecturer_id;
-        $file = $request->file('image');
-        $juniorLecturer = JuniorLecturer::find($junior_lecturer_id);
+    public function updateJuniorLecturerPasswordHelper($junior_lecturer_id, $newPassword)
+    {
+        $juniorLecturer = juniorlecturer::find($junior_lecturer_id);
         if (!$juniorLecturer) {
             throw new Exception("Junior Lecturer not found");
         }
-        $directory = 'Images/JuniorLecturer';
-        $storedFilePath = FileHandler::storeFile($juniorLecturer->user_id, $directory, $file);
 
-        // Update the junior lecturer's image path
-        $juniorLecturer->update(['image' => $storedFilePath]);
+        $user_id = $juniorLecturer->user_id;
+        if (!$user_id) {
+            throw new Exception("User ID not found for the junior lecturer");
+        }
 
-        return response()->json([
-            'success' => true,
-            'message' => "Image updated successfully for Junior Lecturer: $juniorLecturer->name"
-        ], 200);
+        $user = user::where('id', $user_id)->first();
+        if (!$user) {
+            throw new Exception("User not found for the given user ID");
+        }
+        $user->update(['password' => $newPassword]);
 
-    } catch (Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => $e->getMessage()
-        ], 400);
+        return "Password updated successfully for Junior Lecturer: $juniorLecturer->name";
     }
-}
+    public function updateJuniorLecturerImage(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'junior_lecturer_id' => 'required',
+            'image' => 'required|image',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+
+        try {
+            $junior_lecturer_id = $request->junior_lecturer_id;
+            $file = $request->file('image');
+            $juniorLecturer = JuniorLecturer::find($junior_lecturer_id);
+            if (!$juniorLecturer) {
+                throw new Exception("Junior Lecturer not found");
+            }
+            $directory = 'Images/JuniorLecturer';
+            $storedFilePath = FileHandler::storeFile($juniorLecturer->user_id, $directory, $file);
+
+            // Update the junior lecturer's image path
+            $juniorLecturer->update(['image' => $storedFilePath]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Image updated successfully for Junior Lecturer: $juniorLecturer->name"
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
 
 }

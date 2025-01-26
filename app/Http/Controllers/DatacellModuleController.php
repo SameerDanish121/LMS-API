@@ -51,31 +51,6 @@ use Illuminate\Support\Facades\DB;
 use function PHPUnit\Framework\isEmpty;
 class DatacellModuleController extends Controller
 {
-    public function Sample(Request $request)
-    {
-        try {
-            $id = $request->id;
-        } catch (ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-
-        } catch (ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid username or password'
-            ], 404);
-
-        } catch (Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
     public function OfferedCourseTeacheruploadExcel(Request $request)
     {
         try {
@@ -2364,7 +2339,6 @@ class DatacellModuleController extends Controller
             return response()->json(['message' => 'Failed to send notification.', 'error' => $ex->getMessage()], 500);
         }
     }
-
     public function AddSubjectResult(Request $request)
     {
         try {
@@ -2537,9 +2511,6 @@ class DatacellModuleController extends Controller
             default => 'F',
         };
     }
-
-
-
     public function Archives(Request $request)
     {
         try {

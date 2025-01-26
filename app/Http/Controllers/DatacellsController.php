@@ -2596,7 +2596,6 @@ class DatacellsController extends Controller
             return response()->json(['message' => 'Failed to send notification.', 'error' => $ex->getMessage()], 500);
         }
     }
-
     public function AddSubjectResult(Request $request)
     {
         try {
@@ -2699,20 +2698,10 @@ class DatacellsController extends Controller
                         'quality_points' => $qualityPoints,
                     ]
                 );
-                student_offered_courses::updateOrCreate(
-                    [
-                        'student_id' => $student->id,
-                        'offered_course_id' => $offered_course_id
-                    ],
-                    [
-                        'grade' => $grade
-                    ]
-                );
-
+                $studentOfferedCourse->grade = $grade; // Replace $newGrade with the desired grade value
+                $studentOfferedCourse->save();
                 $success[] = ["status" => "success", "message" => "Result added for {$regNo}"];
             }
-
-            // Handle missing students
             $missingStudentIds = array_diff($dbStudentIds, $excelStudentIds);
             foreach ($missingStudentIds as $missingId) {
                 $studentOfferedCourse = student_offered_courses::where('student_id', $missingId)
