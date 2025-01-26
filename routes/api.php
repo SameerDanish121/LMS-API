@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\DatacellsController;
 use App\Http\Controllers\GraderController;
 use App\Http\Controllers\LogicController;
 use App\Http\Controllers\TestController;
@@ -26,7 +27,7 @@ Route::prefix('Students')->group(function () {
     Route::get('/attendancePerSubject', [StudentsController::class, 'AttendancePerSubject']);
     Route::get('/get/notification', [StudentsController::class, 'Notifications']);
     Route::post('/update-password', [StudentsController::class, 'updatePassword']);
-    Route::post('/update-student-image', [StudentsController::class, 'updateStudentImage']);
+    Route::post('/update-student-image', action: [StudentsController::class, 'updateStudentImage']);
     Route::get('/current-enrollments', [StudentsController::class, 'StudentCurrentEnrollmentsName']);
     Route::get('/all-enrollments', [StudentsController::class, 'StudentAllEnrollmentsName']);
     Route::post('/contest-attendance', [StudentsController::class, 'ContestAttendance']);
@@ -72,6 +73,11 @@ Route::prefix('JuniorLec')->group(function () {
     Route::post('/process-contest', [JuniorLecController::class, 'ProcessContest']);
     Route::get('/jl-unassigned-task', [JuniorLecController::class, 'getListofUnassignedTask']);
     Route::post('/temporary-enrollment', [JuniorLecController::class, 'AddRequestForTemporaryEnrollment']);
+    Route::get('/active-teacher-details', [JuniorLecController::class, 'getYourTeacher']);
+    Route::post('/attendance-list', [JuniorLecController::class, 'SortedAttendanceList']);
+    Route::post('/add-sequence-attendance', [JuniorLecController::class, 'addAttendanceSeatingPlan']);
+    Route::post('/update-junior-lecturer-password', [JuniorLecController::class, 'updateJuniorLecturerPassword']);
+    Route::post('/update-junior-lecturer-image', [JuniorLecController::class, 'updateJuniorLecturerImage']);
 });
 Route::prefix('Teachers')->group(function () {
     Route::post('/add-or-update-feedbacks', [TeachersController::class, 'AddFeedback']);
@@ -97,22 +103,22 @@ Route::prefix('Teachers')->group(function () {
     Route::post('/temporary-enrollment', [TeachersController::class, 'AddRequestForTemporaryEnrollment']);
     Route::post('/attendance/mark-single', [JuniorLecController::class, 'markSingleAttendance']);
     Route::post('/attendance/mark-bulk', [JuniorLecController::class, 'markBulkAttendance']);
-
-
-
-
-
-
+    Route::get('/active-junior-lecturers', [TeachersController::class, 'getYourActiveJuniorLecturer']);
+    Route::post('/submit-number-list', [TeachersController::class, 'SubmitNumberList']);
+    Route::get('/get-task-submissions', [TeachersController::class, 'getTaskSubmissionList']);
+    Route::post('/attendance-list', [TeachersController::class, 'SortedAttendanceList']);
+    Route::post('/add-sequence-attendance', [TeachersController::class, 'addAttendanceSeatingPlan']);
+    Route::post('/update-teacher-password', [TeachersController::class, 'updateTeacherPassword']);
+    Route::post('/update-teacher-image', [TeachersController::class, 'updateTeacherImage']);
+  
+  
     Route::get('/exam/section-result', [TeachersController::class, 'getSectionExamResult']);
 });
 
 Route::prefix('Teacher')->group(function () {
-    Route::post('/markAttendance', [TeacherController::class, 'markAttendance']);
     Route::get('/currentcourses/{id}', [TeacherController::class, 'getCurrentOfferedCourses']);
     Route::post('/markAttendance', [TeacherController::class, 'markAttendance']);
     Route::post('/sendNotification', [TeacherController::class, 'sendNotification']);
-    Route::get('/Attendence', [TeacherController::class, 'getStudentsByTeacherAndSection']);
-    Route::get('/sortAttendence', [TeacherController::class, 'getSortedAttendance']);
     Route::get('/teacher-course-details', [TeacherController::class, 'getCourseDetails']);
 });
 
@@ -139,11 +145,13 @@ Route::prefix('Admins')->group(function () {
 Route::prefix('Datacells')->group(function () {
     Route::get('/temporary-enrollments', [TeachersController::class, 'getTemporaryEnrollmentsRequest']);
     Route::post('/process-temporary-enrollments', [TeachersController::class, 'ProcessTemporaryEnrollments']);
+    
+    Route::post('/update-datacell-image', [DatacellsController::class, 'updateDataCellImage']);
 });
 
 //////////////////////////////////////////////////////~api/JuniorLecturer////////////////////////////////////////////////
 Route::prefix('JuniorLecturer')->group(function () {
-   
+
 });
 //////////////////////////////////////////////////////~api/Admin///////////////////////////////////////////////
 Route::prefix('Admin')->group(function () {
@@ -175,6 +183,7 @@ Route::prefix('Admin')->group(function () {
     Route::get('/TeacherJLecList', [AdminController::class, 'getAllTeachersWithJuniorLecturers']);
     Route::get('/history', [AdminController::class, 'getGraderHistory']);
     Route::post('/add-session', [AdminController::class, 'addSingleSession']);
+    Route::post('/update-admin-image', [AdminController::class, 'updateAdminImage']);
 });
 Route::prefix('Datacell')->group(function () {
     Route::post('/EnrollStudent', [DatacellController::class, 'NewEnrollment']);
@@ -210,3 +219,21 @@ Route::prefix('Uploading')->group(function () {
 });
 
 
+// {
+//     "teacher_offered_course_id": 123,
+//     "attendance_type": "Class",
+//     "students": [
+//         {
+//             "student_id": 1,
+//             "seatNo": 1
+//         },
+//         {
+//             "student_id": 2,
+//             "seatNo": 2
+//         },
+//         {
+//             "student_id": 3,
+//             "seatNo": 3
+//         }
+//     ]
+// }

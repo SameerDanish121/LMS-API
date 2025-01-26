@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\datacell;
 use Illuminate\Http\Request;
 use App\Models\Action;
 use App\Models\coursecontent;
 use App\Models\coursecontent_topic;
+use Illuminate\Support\Facades\Validator;
 use App\Models\dayslot;
 use App\Models\exam;
 use App\Models\excluded_days;
@@ -2592,4 +2594,49 @@ class DatacellsController extends Controller
             default => 'F',
         };
     }
+    public function updateDataCellImage(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'datacell_id' => 'required',
+        'image' => 'required|image',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors' => $validator->errors()
+        ], 400);
+    }
+
+    try {
+        $datacell_id = $request->datacell_id;
+        $file = $request->file('image');
+        
+        // Fetch data cell details
+        $datacell =datacell::find($datacell_id);
+        if (!$datacell) {
+            throw new Exception("DataCell not found");
+        }
+
+        // Store file in a directory
+        $directory = 'Images/DataCell';
+        $storedFilePath = FileHandler::storeFile($datacell->user_id, $directory, $file);
+
+        // Update the data cell's image path
+        $datacell->update(['image' => $storedFilePath]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Image updated successfully for DataCell: $datacell->name"
+        ], 200);
+
+    } catch (Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 400);
+    }
+}
+
 }

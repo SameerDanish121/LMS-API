@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Action;
+use App\Models\Attendance_Sheet_Sequence;
 use App\Models\coursecontent;
 use App\Models\coursecontent_topic;
 use App\Models\dayslot;
@@ -282,16 +283,17 @@ class TeachersController extends Controller
             'path' => 'required|string',
         ]);
         $path = $validated['path'];
-        $fileData = FileHandler::getFileByPath($path);
-        if ($fileData === null) {
-            return response()->json([
-                'error' => 'File not found or unable to load the file.',
-            ], 404);
-        }
-        return response()->json([
-            'success' => true,
-            'file_data' => $fileData,
-        ], 200);
+        return asset($path);
+        // $fileData = FileHandler::getFileByPath($path);
+        // if ($fileData === null) {
+        //     return response()->json([
+        //         'error' => 'File not found or unable to load the file.',
+        //     ], 404);
+        // }
+        // return response()->json([
+        //     'success' => true,
+        //     'file_data' => $fileData,
+        // ], 200);
     }
     public static function getStudentIdsByTeacherOfferedCourseId($teacherOfferedCourseId)
     {
@@ -634,11 +636,11 @@ class TeachersController extends Controller
     public function getTodayClassesWithAttendanceStatus($teacherId)
     {
         $currentDay = Carbon::now()->format('l');
-        if(excluded_days::checkHoliday()){
+        if (excluded_days::checkHoliday()) {
             return response()->json(['message' => excluded_days::checkHolidayReason()], 404);
         }
-        if(excluded_days::checkReschedule()){
-            $currentDay=excluded_days::checkRescheduleDay();
+        if (excluded_days::checkReschedule()) {
+            $currentDay = excluded_days::checkRescheduleDay();
         }
         $currentDate = Carbon::now()->toDateString();
         $classes = Timetable::join('venue', 'timetable.venue_id', '=', 'venue.id')
@@ -1046,7 +1048,7 @@ class TeachersController extends Controller
         try {
             $activeCourses = self::getActiveCoursesForTeacher($teacher_id);
             $teacherOfferedCourseIds = collect($activeCourses)->pluck('teacher_offered_course_id');
-            $tasks = \App\Models\task::with(['courseContent', 'teacherOfferedCourse.section', 'teacherOfferedCourse.offeredCourse.course'])
+            $tasks = task::with(['courseContent', 'teacherOfferedCourse.section', 'teacherOfferedCourse.offeredCourse.course'])
                 ->whereIn('teacher_offered_course_id', $teacherOfferedCourseIds)
                 ->where('CreatedBy', 'Teacher')
                 ->where('isMarked', false)
@@ -1328,14 +1330,14 @@ class TeachersController extends Controller
                     'isMarked' => false,
                 ];
 
-                $task = \App\Models\task::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                $task = task::where('teacher_offered_course_id', $teacherOfferedCourseId)
                     ->where('coursecontent_id', $coursecontent_id)->first();
 
                 if ($task) {
                     $task->update($taskData);
                     $insertedTasks[] = ['status' => 'Task is Already Allocated ! Just Updated the informations', 'task' => $task];
                 } else {
-                    $task = \App\Models\task::create($taskData);
+                    $task = task::create($taskData);
                     $insertedTasks[] = ['status' => 'Task Allocated Successfully', 'task' => $task];
                 }
 
@@ -1380,7 +1382,7 @@ class TeachersController extends Controller
                 try {
                     if ($course->lab) {
                         $jlTaskCount = $record['jl_task_count'] ?? 0;
-                        $taskCount = \App\Models\task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                        $taskCount = task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
                             ->where('type', $record['type'])
                             ->count();
                         if ($record['top'] > $taskCount) {
@@ -1396,7 +1398,7 @@ class TeachersController extends Controller
                             ->where('type', $record['type'])
                             ->where('CreatedBy', 'Teacher')
                             ->count();
-                        $jlTaskCountFromDb =task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                        $jlTaskCountFromDb = task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
                             ->where('type', $record['type'])
                             ->where('CreatedBy', 'JuniorLecturer')
                             ->count();
@@ -1412,7 +1414,7 @@ class TeachersController extends Controller
                             continue;
                         }
 
-                        $taskConsideration =task_consideration::updateOrCreate(
+                        $taskConsideration = task_consideration::updateOrCreate(
                             [
                                 'teacher_offered_course_id' => $teacherOfferedCourse->id,
                                 'type' => $record['type']
@@ -1423,7 +1425,7 @@ class TeachersController extends Controller
                             ]
                         );
                     } else {
-                        $taskCount = \App\Models\task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                        $taskCount = task::where('teacher_offered_course_id', $teacherOfferedCourse->id)
                             ->where('type', $record['type'])
                             ->count();
                         if ($record['top'] > $taskCount) {
@@ -1706,7 +1708,7 @@ class TeachersController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
-    } 
+    }
     public function getAllOfferedCourses($id)
     {
         $query = "
@@ -1748,7 +1750,7 @@ class TeachersController extends Controller
         return response()->json($courses);
     }
 
-     public function getLabAttendanceList(Request $request)
+    public function getLabAttendanceList(Request $request)
     {
         try {
             $teacher_offered_course_id = $request->input('teacher_offered_course_id');
@@ -1780,7 +1782,7 @@ class TeachersController extends Controller
             'status' => 'required|in:p,a',
             'date_time' => 'required|date_format:Y-m-d H:i:s',
             'isLab' => 'required|boolean',
-            'venue_id' => 'required', 
+            'venue_id' => 'required',
         ]);
 
         try {
@@ -1806,11 +1808,222 @@ class TeachersController extends Controller
             return response()->json(['message' => 'Error marking attendance', 'error' => $e->getMessage()], 500);
         }
     }
+    public function getYourActiveJuniorLecturer(Request $request)
+    {
+        // Validate the request
+        $validated = $request->validate([
+            'teacher_id' => 'required|integer',
+        ]);
 
+        $teacher_id = $validated['teacher_id'];
 
+        try {
 
+            $activeCourses = self::getActiveCoursesForTeacher($teacher_id);
+            $filteredCourses = [];
+            foreach ($activeCourses as $course) {
+                $teacherJuniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $course['teacher_offered_course_id'])
+                    ->with('juniorLecturer') // Eager load the junior lecturer data
+                    ->first();
+                if ($teacherJuniorLecturer && $teacherJuniorLecturer->juniorLecturer) {
+                    $course['junior_lecturer_name'] = $teacherJuniorLecturer->juniorLecturer->name;
+                    $filteredCourses[] = $course; // Add course to the filtered list
+                }
+            }
+            return response()->json($filteredCourses, 200);
 
+        } catch (Exception $ex) {
 
+            return response()->json([
+                'error' => 'An error occurred while fetching the active junior lecturer data.',
+                'message' => $ex->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function SortedAttendanceList(Request $request)
+    {
+        // Validate request
+        $validated = $request->validate([
+            'teacher_offered_course_id' => 'required|integer',
+            'attendance_type' => 'nullable|string|in:Class,Lab',
+        ]);
+
+        // Handle attendance_type with fallback
+        $type = $validated['attendance_type'] ?? 'Lab'; // Use Lab if attendance_type is null
+
+        $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
+
+        // Retrieve the teacher offered course data
+        $teacherOfferedCourse = teacher_offered_courses::with(['section', 'offeredCourse.course', 'offeredCourse.session'])
+            ->find($teacherOfferedCourseId);
+
+        if (!$teacherOfferedCourse) {
+            return response()->json([
+                'error' => 'Teacher offered course not found.',
+            ], 404);
+        }
+
+        $offeredCourseId = $teacherOfferedCourse->offered_course_id;
+        $sectionId = $teacherOfferedCourse->section_id;
+
+        // Fetch student courses
+        $studentCourses = student_offered_courses::where('offered_course_id', $offeredCourseId)
+            ->where('section_id', $sectionId)
+            ->with('student')
+            ->get();
+
+        if ($studentCourses->isEmpty()) {
+            return response()->json([
+                'error' => 'No students found for the given teacher offered course.',
+            ], 404);
+        }
+
+        // Fetch attendance sheet sequence
+        $attendanceRecords = Attendance_Sheet_Sequence::where('teacher_offered_course_id', $teacherOfferedCourseId)
+            ->where('For', $type)
+            ->with('student')
+            ->orderBy('SeatNumber')
+            ->get();
+
+        $attendanceMap = $attendanceRecords->keyBy('student_id');
+        $sortedStudents = [];
+        $unsortedStudents = [];
+
+        // Loop through each student course and check for matching attendance records
+        foreach ($studentCourses as $studentCourse) {
+            $student = $studentCourse->student;
+            if (!$student) {
+                continue;
+            }
+            $attendanceRecord = $attendanceMap->get($student->id);
+
+            if ($attendanceRecord) {
+                $sortedStudents[] = [
+                    'SeatNumber' => $attendanceRecord->SeatNumber,
+                    'name' => $student->name,
+                    'RegNo' => $student->RegNo,
+                    'image' => $student->image ? asset($student->image) : null,
+                ];
+            } else {
+                $unsortedStudents[] = [
+                    'SeatNumber' => null,
+                    'name' => $student->name,
+                    'RegNo' => $student->RegNo,
+                    'image' => $student->image ? asset($student->image) : null,
+                ];
+            }
+        }
+        usort($sortedStudents, fn($a, $b) => $a['SeatNumber'] <=> $b['SeatNumber']);
+        // Merge sorted and unsorted students
+        $finalList = array_merge($sortedStudents, $unsortedStudents);
+
+        // Determine the list format
+        $listFormat = count($attendanceRecords) > 0 ? 'Sorted' : 'Unsorted';
+
+        // Return the JSON response
+        return response()->json([
+            'success' => true,
+            'Course Name' => $teacherOfferedCourse->offeredCourse->course->name,
+            'Section Name' => (new section())->getNameByID($teacherOfferedCourse->section->id),
+            'List Format' => $listFormat,
+            'students' => $finalList,
+        ], 200);
+    }
+
+    public function addAttendanceSeatingPlan(Request $request)
+    {
+        $validated = $request->validate([
+            'teacher_offered_course_id' => 'required|integer',
+            'attendance_type' => 'nullable|string|in:Class,Lab', // Nullable with default handling
+            'students' => 'required|array', // List of students with seat number
+            'students.*.student_id' => 'required|integer', // Each student must have an ID
+            'students.*.seatNo' => 'required|integer', // Each student must have a seat number
+        ]);
+        $attendanceType = $validated['attendance_type'] ?? 'Lab';
+        $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
+        Attendance_Sheet_Sequence::where('teacher_offered_course_id', $teacherOfferedCourseId)
+            ->where('For', $attendanceType)
+            ->delete();
+        $studentData = $validated['students'];
+        foreach ($studentData as $data) {
+            Attendance_Sheet_Sequence::create([
+                'teacher_offered_course_id' => $teacherOfferedCourseId,
+                'student_id' => $data['student_id'],
+                'For' => $attendanceType,
+                'SeatNumber' => $data['seatNo'],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Attendance seating plan updated successfully.',
+        ], 200);
+    }
+
+    public function updateTeacherPassword(Request $request)
+    {
+        try {
+            $request->validate([
+                'teacher_id' => 'required|integer',
+                'newPassword' => 'required|string',
+            ]);
+            if (user::where('password', $request->newPassword)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Password is Already Taken by Another User! Please Try a New One'
+                ], 401);
+            }
+            $responseMessage = $this->updateTeacherPasswordHelper(
+                $request->teacher_id,
+                $request->newPassword
+            );
+            return response()->json([
+                'success' => true,
+                'message' => $responseMessage
+            ], 200);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Teacher not found'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function updateTeacherPasswordHelper($teacher_id, $newPassword)
+    {
+        $teacher = teacher::find($teacher_id);
+        if (!$teacher) {
+            throw new Exception("Teacher not found");
+        }
+
+        $user_id = $teacher->user_id;
+        if (!$user_id) {
+            throw new Exception("User ID not found for the teacher");
+        }
+
+        $user = user::where('id', $user_id)->first();
+        if (!$user) {
+            throw new Exception("User not found for the given user ID");
+        }
+        $user->update(['password' => $newPassword]);
+
+        return "Password updated successfully for Teacher: $teacher->name";
+    }
 
 
 
@@ -1931,6 +2144,93 @@ class TeachersController extends Controller
             return response()->json(['error' => 'An unexpected error occurred', 'message' => $e->getMessage()], 500);
         }
     }
+    public function SubmitNumberList(Request $request)
+    {
+        try {
+            $submissions = $request->submissions;
+            $Logs = [];
+            foreach ($submissions as $submission) {
+                $task_id = $submission['task_id'];
+                $student_RegNo = $submission['regNo'];
+                $obtainedMarks = $submission['obtainedMarks'];
 
+                if ($task_id) {
+                    task::ChangeStatusOfTask($task_id);
+                }
+                $result = student_task_result::storeOrUpdateResult($task_id, $student_RegNo, $obtainedMarks);
+                if (!$result) {
+                    $Logs[] = ["Message" => "Error in Uploading the Number of $student_RegNo", "Data" => $submission];
+                } else {
+                    $Logs[] = ["Message" => "successfully Uploaded the Number of $student_RegNo", "Data" => $submission];
+                }
+            }
+            return response()->json([
+                'message' => 'All submissions processed successfully!',
+                'data' => $Logs
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function getTaskSubmissionList(Request $request)
+    {
+        try {
+            $task_id = $request->task_id;
+            $yask = JuniorLecturerHandling::getStudentListForTaskMarking($task_id);
+            return response()->json([
+                'status' => 'success',
+                'List Of Submission' => $yask,
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function updateTeacherImage(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'teacher_id' => 'required',
+            'image' => 'required|image',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+
+        try {
+            $teacher_id = $request->teacher_id;
+            $file = $request->file('image');
+
+            $teacher = Teacher::find($teacher_id);
+            if (!$teacher) {
+                throw new Exception("Teacher not found");
+            }
+            $directory = 'Images/Teacher';
+            $storedFilePath = FileHandler::storeFile($teacher->user_id, $directory, $file);
+            $teacher->update(['image' => $storedFilePath]);
+            return response()->json([
+                'success' => true,
+                'message' => "Image updated successfully for Teacher: $teacher->name"
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
 
 }

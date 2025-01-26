@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 use App\Models\Action;
+use App\Models\FileHandler;
 use App\Models\student_offered_courses;
 use App\Models\teacher_juniorlecturer;
 use Exception;
@@ -13,7 +14,7 @@ use App\Models\admin;
 use App\Models\Course;
 use App\Models\coursecontent;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-
+use Illuminate\Support\Facades\Validator;
 use App\Models\datacell;
 use App\Models\grader;
 use App\Models\juniorlecturer;
@@ -1586,4 +1587,45 @@ class AdminController extends Controller
             ], 500);
         }
     }
+    public function updateAdminImage(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'admin_id' => 'required',
+        'image' => 'required|image',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors' => $validator->errors()
+        ], 400);
+    }
+
+    try {
+        $admin_id = $request->admin_id;
+        $file = $request->file('image');
+        
+        // Fetch admin details
+        $admin = Admin::find($admin_id);
+        if (!$admin) {
+            throw new Exception("Admin not found");
+        }
+        $directory = 'Images/Admin';
+        $storedFilePath =FileHandler::storeFile($admin->user_id, $directory, $file);
+        $admin->update(['image' => $storedFilePath]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Image updated successfully for Admin: $admin->name"
+        ], 200);
+
+    } catch (Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 400);
+    }
+}
+
 }

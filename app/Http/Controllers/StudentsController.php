@@ -293,11 +293,12 @@ class StudentsController extends Controller
             }
 
             File::put($fullPath, $pdfContent);
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Transcript generated successfully',
-                'file_url' => asset($directory.'/'.$fileName)
-            ]);
+            return asset($directory.'/'.$fileName);
+            // return response()->json([
+            //     'status' => 'success',
+            //     'message' => 'Transcript generated successfully',
+            //     'file_url' => 
+            // ]);
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
