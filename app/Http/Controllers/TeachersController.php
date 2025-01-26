@@ -181,7 +181,7 @@ class TeachersController extends Controller
                         continue;
                     }
                     if (in_array($content->type, ['Notes', 'Quiz', 'Assignment']) && $content->content) {
-                        $directory = "{$destinationSessionName}/Course Content/{$course->description}";
+                        $directory = "{$destinationSessionName}/CourseContent/{$course->description}";
                         $newContentPath = FileHandler::copyFileToDestination($content->content, $content->title, $directory);
                         if (!$newContentPath) {
                             $errors[] = [
@@ -1008,7 +1008,7 @@ class TeachersController extends Controller
                     'type' => $task->type,
                     ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
                         ? Action::getMCQS($task->courseContent->id)
-                        : FileHandler::getFileByPath($task->courseContent->content),
+                        : asset($task->courseContent->content),
                     'created_by' => $task->CreatedBy,
                     'points' => $task->points,
                     'start_date' => $task->start_date,
@@ -1626,9 +1626,7 @@ class TeachersController extends Controller
             $teacherName = optional($teacherOfferedCourse->teacher)->name;
             $message = "Student {$student->name} ({$student->RegNo}): Your request for enrollment in course '{$courseName}' ";
             $message .= "for section '{$sectionName}' by teacher '{$teacherName}' ";
-
             if ($verification === 'Accepted') {
-                // Handle insertion or updating in `student_offered_courses`
                 student_offered_courses::updateOrCreate(
                     [
                         'student_id' => $student->id,
@@ -1810,7 +1808,6 @@ class TeachersController extends Controller
     }
     public function getYourActiveJuniorLecturer(Request $request)
     {
-        // Validate the request
         $validated = $request->validate([
             'teacher_id' => 'required|integer',
         ]);
@@ -1935,7 +1932,7 @@ class TeachersController extends Controller
     {
         $validated = $request->validate([
             'teacher_offered_course_id' => 'required|integer',
-            'attendance_type' => 'nullable|string|in:Class,Lab', // Nullable with default handling
+            'attendance_type' => 'nullable|string|in:Class,Lab', 
             'students' => 'required|array', // List of students with seat number
             'students.*.student_id' => 'required|integer', // Each student must have an ID
             'students.*.seatNo' => 'required|integer', // Each student must have a seat number
@@ -2024,126 +2021,6 @@ class TeachersController extends Controller
 
         return "Password updated successfully for Teacher: $teacher->name";
     }
-
-
-
-
-
-
-
-
-    public function getSectionExamResult(Request $request)
-    {
-        $validated = $request->validate([
-            'teacher_offered_course_id' => 'required|integer',
-        ]);
-
-        $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
-        try {
-            $teacherOfferedCourse = teacher_offered_courses::
-                with(['section', 'offeredCourse.course', 'offeredCourse.session'])->find($teacherOfferedCourseId);
-            if (!$teacherOfferedCourse) {
-                return response()->json(['error' => 'Teacher offered course not found'], 404);
-            }
-
-            $offeredCourseId = $teacherOfferedCourse->offered_course_id;
-
-            // Fetching the list of students for the given offered_course_id
-            $studentIds = self::getStudentIdsByTeacherOfferedCourseId($teacherOfferedCourseId);
-            if (!$studentIds) {
-                return response()->json(['error' => 'No students found for the given teacher_offered_course_id'], 404);
-            }
-            $exams = exam::where('offered_course_id', $offeredCourseId)->with('questions')->get();
-
-            $result = [
-                'Mid' => [],
-                'Final' => [],
-            ];
-            foreach ($exams as $exam) {
-
-                $examType = $exam->type;
-                $examInfo = [
-                    'Session_Name' => (new session())->getSessionNameByID($teacherOfferedCourse->offeredCourse->session->id),
-                    'Course_Name' => $teacherOfferedCourse->offeredCourse->course->name,
-                    'Section_Name' => (new section())->getNameByID($teacherOfferedCourse->section->id),
-                    'Solid_Marks' => $exam->Solid_marks,
-                    'Total_Marks' => $exam->total_marks,
-                    'Questions' => [],
-                    'Students' => [],
-                ];
-                $questions = $exam->questions;
-
-                foreach ($questions as $question) {
-
-                    $examInfo['Questions'][] = [
-                        'Question_No' => $question->q_no,
-                        'Marks' => $question->marks,
-                    ];
-                }
-                foreach ($studentIds as $studentId) {
-
-                    $studentExamResults = student_exam_result::where('exam_id', $exam->id)
-                        ->where('student_id', $studentId)
-                        ->with('question')
-                        ->get();
-                    $totalObtainedMarks = 0;
-                    $totalSolidMarksObtained = 0;
-                    $questionResults = [];
-
-                    foreach ($studentExamResults as $result) {
-                        $question = $result->question;
-                        $obtainedMarks = $result->obtained_marks;
-                        $solidMarks = $question->marks;
-
-                        $questionResults[] = [
-                            'Question_No' => $question->q_no,
-                            'Obtained_Marks' => $obtainedMarks,
-                        ];
-
-                        $totalObtainedMarks += $obtainedMarks;
-                        $totalSolidMarksObtained += $solidMarks;
-                    }
-
-                    foreach ($studentExamResults as $result) {
-                        $question = $result->question;
-                        $obtainedMarks = $result->obtained_marks;
-                        $solidMarks = $question->marks;
-
-                        $questionResults[] = [
-                            'Question_No' => $question->q_no,
-                            'Obtained_Marks' => $obtainedMarks,
-                        ];
-
-                        $totalObtainedMarks += $obtainedMarks;
-                        $totalSolidMarksObtained += $solidMarks;
-                    }
-                    $percentage = ($totalSolidMarksObtained > 0) ? round(($totalObtainedMarks / $totalSolidMarksObtained) * 100, 2) : 0;
-
-                    // Get student details
-                    $student = student::find($studentId);
-                    $examInfo['Students'][] = [
-                        'RegNo' => $student->RegNo ?? 'Unknown',
-                        'Name' => $student->name ?? 'Unknown',
-                        'Question_Results' => $questionResults,
-                        'Total_Solid_Marks_Obtained' => $totalObtainedMarks,
-                        'Percentage' => $percentage,
-                    ];
-                }
-                // return $result;
-
-                if ($examType == 'Mid') {
-                    $result['Mid'][] = $examInfo;
-                } else if ($examType == 'Final') {
-                    $result['Final'][] = $examInfo;
-                }
-            }
-
-            return response()->json($result, 200);
-
-        } catch (Exception $e) {
-            return response()->json(['error' => 'An unexpected error occurred', 'message' => $e->getMessage()], 500);
-        }
-    }
     public function SubmitNumberList(Request $request)
     {
         try {
@@ -2231,6 +2108,115 @@ class TeachersController extends Controller
                 'message' => $e->getMessage()
             ], 400);
         }
+    }
+    public static function getStudentExamResult(int $teacher_offered_course_id, int $student_id)
+    {
+        $student = student::find($student_id);
+        if (!$student) {
+            return 'No Student Found!';
+        }
+        $teacherOfferedCourse = teacher_offered_courses::with(['offeredCourse'])->find($teacher_offered_course_id);
+        if (!$teacherOfferedCourse) {
+            return 'The Teacher Allocation Does Not Exist!';
+        }
+
+        $offeredCourseId = $teacherOfferedCourse->offeredCourse->id;
+        $exams = exam::where('offered_course_id', $offeredCourseId)->with(['questions'])->get();
+
+        if ($exams->isEmpty()) {
+            return response()->json([
+                'message' => 'No exams found for the given offered course.',
+            ], 404);
+        }
+
+        $results = [];
+
+        foreach ($exams as $exam) {
+            $totalObtainedMarks = 0;
+            $totalMarks = $exam->total_marks;
+            $solidMarks = $exam->Solid_marks;
+
+            $questionData = [];
+            foreach ($exam->questions as $question) {
+                $result = student_exam_result::where('question_id', $question->id)
+                    ->where('student_id', $student_id)
+                    ->where('exam_id', $exam->id)
+                    ->first();
+
+                $obtainedMarks = $result ? $result->obtained_marks : 0;
+                $totalObtainedMarks += $obtainedMarks;
+
+                $questionData[] = [
+                    'Question No' => $question->q_no,
+                    'Total Marks' => $question->marks,
+                    'Obtained Marks' => $obtainedMarks,
+                ];
+            }
+
+            $solidObtainedMarks = $solidMarks > 0
+                ? ($totalObtainedMarks / $totalMarks) * $solidMarks
+                : 0;
+
+            $results[$exam->type] = [
+                'Total Marks' => $totalMarks,
+                'Solid Marks' => $solidMarks,
+                'Total Obtained Marks' => $totalObtainedMarks,
+                'Total Solid Obtained Marks' => $solidObtainedMarks,
+                'Percentage' => $totalMarks > 0 ? ($totalObtainedMarks / $totalMarks) * 100 : 0,
+                'Questions' => $questionData,
+            ];
+        }
+
+       return $results;
+    }
+    public function getSectionExamList(Request $request)
+    {
+        $validated = $request->validate([
+            'teacher_offered_course_id' => 'required|integer',
+        ]);
+        $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
+        $teacherOfferedCourse = teacher_offered_courses::with(['section', 'offeredCourse.course', 'offeredCourse.session'])->find($teacherOfferedCourseId);
+
+        if (!$teacherOfferedCourse) {
+            return response()->json([
+                'error' => 'Teacher offered course not found.',
+            ], 404);
+        }
+        $offeredCourseId = $teacherOfferedCourse->offered_course_id;
+        $sectionId = $teacherOfferedCourse->section_id;
+        $studentCourses = student_offered_courses::where('offered_course_id', $offeredCourseId)
+            ->where('section_id', $sectionId)
+            ->with(['student'])
+            ->get();
+
+        if ($studentCourses->isEmpty()) {
+            return response()->json([
+                'error' => 'No students found for the given teacher offered course.',
+            ], 404);
+        }
+
+        $studentsData = $studentCourses->map(function ($studentCourse) use ($teacherOfferedCourseId) {
+            $student = $studentCourse->student;
+            if (!$student) {
+                return null;
+            }
+            $examResults = self::getStudentExamResult($teacherOfferedCourseId, $student->id);
+
+            return [
+                "student_id" => $student->id,
+                "name" => $student->name,
+                "RegNo" => $student->RegNo,
+                "Exam Results" => $examResults?: null,
+            ];
+        })->filter();
+        return response()->json([
+            'success' => true,
+            'Session Name' => ($teacherOfferedCourse->offeredCourse->session->name . '-' . $teacherOfferedCourse->offeredCourse->session->year) ?? null,
+            'Course Name' => $teacherOfferedCourse->offeredCourse->course->name,
+            'Section Name' => (new section())->getNameByID($teacherOfferedCourse->section->id),
+            'students_count' => $studentCourses->count(),
+            'students' => $studentsData,
+        ], 200);
     }
 
 }

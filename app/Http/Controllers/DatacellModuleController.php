@@ -2540,6 +2540,58 @@ class DatacellModuleController extends Controller
 
 
 
+    public function Archives(Request $request)
+    {
+        try {
+            if ($request->directory) {
+                $directory_details = FileHandler::getFolderInfo($request->directory);
+                if (!$directory_details) {
+                    throw new Exception('No Directory Exsist with the Given Name');
+                }
+            } else {
+                $directory_details = FileHandler::getFolderInfo();
+            }
+            return response()->json(
+                [
+                    'message' => 'Directory Details Fetched !',
+                    'Details' => $directory_details,
+                ],
+                200
+            );
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
 
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function DeleteFolderByPath(Request $request)
+    {
+        try {
+            if ($request->path) {
+                $isFolderDeleted = FileHandler::deleteFolder($request->path);
+                if (!$isFolderDeleted) {
+                    throw new Exception('No Directory Exsist with the Given Path');
+                }
+            } else {
+                throw new Exception('Folder PATH OR Name is Required , Please Select Valid Folder !');
+            }
+            return response()->json(
+                [
+                    'message' => 'Folder Deleted Successfully !',
+                    'logs' => " Deleted {$isFolderDeleted} Of Data  "
+                ],
+                200
+            );
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
 

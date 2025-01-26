@@ -113,6 +113,10 @@ class timetable extends Model
         if (!(new session())->getCurrentSessionId()) {
             return [];
         }
+        $today=Carbon::now()->format('l');
+        if($day){
+           $today=$day;
+        }
         $timetable = Timetable::with([
             'course:name,id,description',
             'teacher:name,id',
@@ -121,8 +125,9 @@ class timetable extends Model
             'juniorLecturer:name',
             'section:id'
         ])
-            ->whereHas('dayslot', function ($query) {
-                $query->where('day',$day??Carbon::now()->format('l'));
+        
+            ->whereHas('dayslot', function ($query)use ($today) {
+                $query->where('day',$today);
             })
             ->where('teacher_id', $teacher_id)
             ->where('session_id', (new session())->getCurrentSessionId())
@@ -218,7 +223,10 @@ class timetable extends Model
         if (!(new session())->getCurrentSessionId()) {
             return [];
         }
-    
+        $today=Carbon::now()->format('l');
+        if($day){
+           $today=$day;
+        }
         $timetable = Timetable::with([
             'course:name,id,description',
             'teacher:name,id',
@@ -226,8 +234,8 @@ class timetable extends Model
             'dayslot:day,start_time,end_time,id',
             'section:id'
         ])
-            ->whereHas('dayslot', function ($query) {
-                $query->where('day', $day??Carbon::now()->format('l'));
+            ->whereHas('dayslot', function ($query)use ($today) {
+                $query->where('day', $today);
             })
             ->where('junior_lecturer_id', $JuniorLecturer_id)
             ->where('session_id', (new session())->getCurrentSessionId())

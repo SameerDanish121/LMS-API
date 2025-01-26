@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\contested_attendance;
+use App\Models\exam;
+use App\Models\student_exam_result;
 use App\Models\task_consideration;
 use Illuminate\Http\Request;
 use App\Models\Action;
@@ -183,8 +185,8 @@ class StudentsController extends Controller
                 if ($rescheduled) {
                     $Notice = excluded_days::checkReasonOfReschedule();
                     $attribute = 'Reschedule';
-                    $timetable = timetable::getTodayTimetableOfJuniorLecturerById($jl->id, excluded_days::checkRescheduleDay()??null);
-                    
+                    $timetable = timetable::getTodayTimetableOfJuniorLecturerById($jl->id, excluded_days::checkRescheduleDay() ?? null);
+
                 } else {
                     $timetable = timetable::getTodayTimetableOfJuniorLecturerById($jl->id);
                 }
@@ -238,8 +240,8 @@ class StudentsController extends Controller
     {
         try {
             $studentId = $request->student_id;
-            $student = student::with(['program','section'])->find($studentId);
-            $program = $student->program;  
+            $student = student::with(['program', 'section'])->find($studentId);
+            $program = $student->program;
             if (!$student) {
                 return response()->json(['status' => 'error', 'message' => 'Student not found'], 404);
             }
@@ -293,7 +295,7 @@ class StudentsController extends Controller
             }
 
             File::put($fullPath, $pdfContent);
-            return asset($directory.'/'.$fileName);
+            return asset($directory . '/' . $fileName);
             // return response()->json([
             //     'status' => 'success',
             //     'message' => 'Transcript generated successfully',
@@ -337,7 +339,7 @@ class StudentsController extends Controller
                     return [
                         'total_credit_points' => $sessionResult->ObtainedCreditPoints,
                         'GPA' => $sessionResult->GPA,
-                        'session_name' => $sessionResult->session->name.'-'.$sessionResult->session->year,
+                        'session_name' => $sessionResult->session->name . '-' . $sessionResult->session->year,
                         'subjects' => $subjects,
                     ];
                 });
@@ -543,8 +545,8 @@ class StudentsController extends Controller
                 return response()->json([
                     'message' => 'Your Submission Has been Added !',
                     'Total Marks of Task' => $task->points,
-                    "{$task->type} Data" =>asset($task->courseContent->content)?:null,
-                    'Your Submissions' => asset($filePath)?:null,
+                    "{$task->type} Data" => asset($task->courseContent->content) ?: null,
+                    'Your Submissions' => asset($filePath) ?: null,
 
                 ], 200);
             }
@@ -564,8 +566,8 @@ class StudentsController extends Controller
                 return response()->json([
                     'message' => 'Your Submission Has been Added !',
                     'Total Marks of Task' => $task->points,
-                    "{$task->type} Data" => asset($task->courseContent->content)?:null,
-                    'Your Submissions' => asset($filePath)?:null,
+                    "{$task->type} Data" => asset($task->courseContent->content) ?: null,
+                    'Your Submissions' => asset($filePath) ?: null,
                 ], 200);
             }
             throw new Exception('Invalid file or no file uploaded.');
@@ -695,7 +697,7 @@ class StudentsController extends Controller
                 'student_id' => 'required',
                 'newPassword' => 'required',
             ]);
-            if(user::where('password', $request->newPassword)->exists()){
+            if (user::where('password', $request->newPassword)->exists()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Password is Already Taken by Differenet User ! Please Try New'
@@ -913,7 +915,7 @@ class StudentsController extends Controller
                 'attendance_id' => 'required',
             ]);
             $id = $request->attendance_id;
-            
+
             $responseMessage = StudentManagement::createContestedAttendance($id);
             return response()->json([
                 'success' => 'Fetcehd Successfully !',
@@ -1171,14 +1173,14 @@ class StudentsController extends Controller
         $taskConsideration = task_consideration::where('teacher_offered_course_id', $teacherOfferedCourseId)->get();
         $teacherOfferedCourse = teacher_offered_courses::with(['offeredCourse.course', 'offeredCourse', 'section'])->find($teacherOfferedCourseId);
         $student = student::find($studentId);
-        
+
         if (!$teacherOfferedCourse) {
             return [
                 'status' => 'error',
                 'message' => 'Record For Teacher & Section is Not Found.',
             ];
         }
-        if($taskConsideration->isEmpty()) {
+        if ($taskConsideration->isEmpty()) {
             return [
                 'status' => 'error',
                 'message' => 'No consideration is set by the teacher.',
@@ -1277,4 +1279,87 @@ class StudentsController extends Controller
 
         return $response;
     }
+
+    public function getStudentExamResult(Request $request)
+    {
+        $validated = $request->validate([
+            'teacher_offered_course_id' => 'required|integer',
+            'student_id' => 'required|integer',
+        ]);
+        if(!student::find($validated['student_id'])){
+            return 'No Student Found  !';
+        }
+        $teacherOfferedCourse=teacher_offered_courses::with(['offeredCourse'])->find($validated['teacher_offered_course_id']);
+        if(!$teacherOfferedCourse){
+            return 'The Teacher Allocation Found Esist !';
+        }
+        $offeredCourseId = $teacherOfferedCourse->offeredCourse->id;
+        $studentId = $validated['student_id'];
+        $exams =exam::where('offered_course_id', $offeredCourseId)->with(['questions'])->get();
+
+        if ($exams->isEmpty()) {
+            return response()->json([
+                'message' => 'No exams found for the given offered course.',
+            ], 404);
+        }
+        $results = [];
+        $totalObtainedMarks = 0;
+        $totalMarks = 0;
+        $solidMarks = 0;
+        foreach ($exams as $exam) {
+            $examData = [
+                'exam_id' => $exam->id,
+                'exam_type' => $exam->type,
+                'total_marks' => $exam->total_marks,
+                'solid_marks' => $exam->Solid_marks,
+                'obtained_marks'=>0,
+                'solid_marks_equivalent'=>0,
+                'status' => 'Declared',
+                'questions' => [],
+               
+            ];
+            $examTotalObtained = 0;
+            foreach ($exam->questions as $question) {
+                $result = student_exam_result::where('question_id', $question->id)
+                    ->where('student_id', $studentId)
+                    ->where('exam_id', $exam->id)
+                    ->first();
+
+                $questionData = [
+                    'question_id' => $question->id,
+                    'q_no' => $question->q_no,
+                    'marks' => $question->marks,
+                    'obtained_marks' => $result ? $result->obtained_marks : null,
+                ];
+
+                $examData['questions'][] = $questionData;
+
+                if ($result) {
+                    $examTotalObtained += $result->obtained_marks;
+                }
+            }
+            $examData['obtained_marks'] = $examTotalObtained;
+            $examData['solid_marks_equivalent'] =$exam->Solid_marks > 0
+                ? ($examTotalObtained /  $exam->total_marks) * $exam->Solid_marks
+                : 0;
+            $totalObtainedMarks += $examTotalObtained;
+            $totalMarks += $exam->total_marks;
+            $solidMarks += $exam->Solid_marks;
+
+            $results[$exam->type][] = $examData;
+        }
+        $student=student::find($studentId);
+        return response()->json([
+            'Student Name'=>$student->name,
+            'Registration Number'=>$student->RegNo,
+            'total_marks' => $totalMarks,
+            'solid_marks' => $solidMarks,
+            'obtained_marks' => $totalObtainedMarks,
+            'solid_marks_equivalent' => $solidMarks > 0
+                ? ($totalObtainedMarks / $totalMarks) * $solidMarks
+                : 0,
+            'exam_results' => $results,
+        ]);
+    }
+
 }

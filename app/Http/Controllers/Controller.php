@@ -1,6 +1,10 @@
 <?php
 
 namespace App\Http\Controllers;
+use App\Models\Action;
+use App\Models\notification;
+use App\Models\student;
+use App\Models\teacher_offered_courses;
 use App\Models\User;
 use Exception;
 use Illuminate\Http\Request;
@@ -48,27 +52,5 @@ abstract class Controller
             ], 500);
         }
     }
-    public function Empty(Request $request)
-    { 
-        try {
-            $task_id = (new session())->getUpcomingSessionId();
-            if ($task_id) {
-                return response()->json(
-                    [
-                        'message' => 'Fetched Successfully',
-                        'SESSION' => $task_id
-                    ],
-                    200
-                );
-            } else {
-                throw new Exception('No Session Found');
-            }
-        } catch (Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
+    
 }

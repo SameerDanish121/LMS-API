@@ -54,6 +54,181 @@ use Illuminate\Support\Facades\DB;
 use function PHPUnit\Framework\isEmpty;
 class DatacellsController extends Controller
 {
+    public function AddNewOfferedCourse(Request $request)
+    {
+        try {
+            $course_name = $request->course_name;
+            if ($course_name) {
+                $course_id = Course::where('name', $course_name)->pluck('id')->first();
+                if ($course_id) {
+                    $offered_course = offered_courses::where('course_id', $course_id)->where('session_id', (new session())->getCurrentSessionId())->first();
+                    if ($offered_course) {
+                        throw new Exception('Course is Already is Offerd in this session');
+                    } else {
+                        offered_courses::create(
+                            [
+                                'course_id' => $course_id,
+                                'session_id' => (new session())->getCurrentSessionId()
+                            ]
+                        );
+                        return response()->json(
+                            [
+                                'message' => 'Offerd Course Successfully Added'
+                            ],
+                            200
+                        );
+
+                    }
+
+                } else {
+                    throw new Exception('Course Name is Not in the Course List');
+                }
+            } else {
+                throw new Exception('Course Name Required');
+            }
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function AllStudent(Request $request)
+    {
+        try {
+            $id = $request->id;
+            $students = [];
+            if ($request->student_RegNo) {
+                $students = student::where('RegNo', $request->student_RegNo)->first();
+            } else if ($request->student_name) {
+                $students = student::where('name', $request->student_name)->get();
+            } else if ($request->student_cgpa) {
+                $students = student::where('cgpa', '>=', $request->student_cgpa)->get();
+            } else if ($request->student_section) {
+                $students = student::where('section_id', $request->student_section)->get();
+            } else if ($request->student_program) {
+                $students = student::where('program_id', $request->student_program)->get();
+            } else if ($request->student_session) {
+                $students = student::where('session_id', $request->student_session)->get();
+            } else if ($request->student_status) {
+                $students = student::where('status', $request->student_status)->get();
+            } else {
+                $students = student::with(['user', 'section', 'session', 'program'])->get();
+            }
+            foreach ($students as $student) {
+                $originalPath = $student->image;
+                if (!$originalPath) {
+                    $student->image = null;
+                } else {
+                    $imageContent = file_get_contents(public_path($originalPath));
+                    $student->image = base64_encode($imageContent);
+                }
+            }
+            return response()->json(
+                [
+                    'message' => 'Student Fetched Successfully',
+                    'Student' => $students,
+                ],
+                200
+            );
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function NewEnrollment(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'student_RegNo' => 'required|string',
+                'course_name' => 'required|string',
+                'section' => 'required'
+            ]);
+            $student_RegNo = $request->student;
+            $student = student::where('RegNo', $student_RegNo)->pluck('id')->first();
+            $course_name = $request->course_name;
+            $course = course::where('name', $course_name)->pluck('id')->first();
+            $session = $request->session;
+            $section = $request->section;
+            if (!$session) {
+                $session = (new session())->getCurrentSessionId();
+            } else {
+                $session_info = explode('-', $session);
+                $session = session::where('year', $session_info[1])->where('name', $session_info[0])->pluck('id')->first();
+            }
+            $offered_course = offered_courses::where('session_id', $session)->where('course_id', $course)->pluck('id')->first();
+            if (!$offered_course) {
+                throw new Exception('Course is Not Offered in Provided Session ');
+            }
+            $section_info = $splitString = explode('-', $section);
+            $program = $section_info[0];
+            $semester = $section_info[1][0];
+            $group = $section_info[1][1];
+            $section = section::where('program', $program)->where('group', $group)->where('semester', $semester)->pluck('id')->first();
+            $enrollment = student_offered_courses::where('student_id', $student)->where('section_id', $section)->where('offered_course_id', $offered_course);
+            if ($enrollment) {
+                throw new Exception('Enrollment Already Exsists');
+            } else {
+                $enrollment = student_offered_courses::where('student_id', $student)
+                    ->whereHas('offeredCourse', function ($query) use ($course) {
+                        $query->where('course_id', $course);
+                    })
+                    ->where('grade', 'F')
+                    ->first();
+                if ($enrollment) {
+                    student_offered_courses::where('id', $enrollment->id)->update(
+                        [
+                            'grade' => '',
+                            'offered_course_id' => $offered_course,
+                            'section_id' => $section,
+                            'attempt_no' => DB::raw('attempt_no + 1')
+                        ]
+                    );
+                    return response()->json(
+                        [
+                            'message' => 'The Re-Enrollment For Failed Course is Added'
+                        ],
+                        200
+                    );
+                } else {
+                    student_offered_courses::create(
+                        [
+                            'grade' => null,
+                            'attempt_no' => 0,
+                            'student_id' => $student,
+                            'section_id' => $section,
+                            'offered_course_id' => $offered_course
+                        ]
+                    );
+
+                    return response()->json(
+                        [
+                            'message' => 'The Enrollment is Added'
+                        ],
+                        200
+                    );
+                }
+
+            }
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 
     public function Archives(Request $request)
     {
@@ -2533,7 +2708,7 @@ class DatacellsController extends Controller
                         'grade' => $grade
                     ]
                 );
-                
+
                 $success[] = ["status" => "success", "message" => "Result added for {$regNo}"];
             }
 
@@ -2595,48 +2770,48 @@ class DatacellsController extends Controller
         };
     }
     public function updateDataCellImage(Request $request)
-{
-    $validator = Validator::make($request->all(), [
-        'datacell_id' => 'required',
-        'image' => 'required|image',
-    ]);
+    {
+        $validator = Validator::make($request->all(), [
+            'datacell_id' => 'required',
+            'image' => 'required|image',
+        ]);
 
-    if ($validator->fails()) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Validation failed',
-            'errors' => $validator->errors()
-        ], 400);
-    }
-
-    try {
-        $datacell_id = $request->datacell_id;
-        $file = $request->file('image');
-        
-        // Fetch data cell details
-        $datacell =datacell::find($datacell_id);
-        if (!$datacell) {
-            throw new Exception("DataCell not found");
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 400);
         }
 
-        // Store file in a directory
-        $directory = 'Images/DataCell';
-        $storedFilePath = FileHandler::storeFile($datacell->user_id, $directory, $file);
+        try {
+            $datacell_id = $request->datacell_id;
+            $file = $request->file('image');
 
-        // Update the data cell's image path
-        $datacell->update(['image' => $storedFilePath]);
+            // Fetch data cell details
+            $datacell = datacell::find($datacell_id);
+            if (!$datacell) {
+                throw new Exception("DataCell not found");
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => "Image updated successfully for DataCell: $datacell->name"
-        ], 200);
+            // Store file in a directory
+            $directory = 'Images/DataCell';
+            $storedFilePath = FileHandler::storeFile($datacell->user_id, $directory, $file);
 
-    } catch (Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => $e->getMessage()
-        ], 400);
+            // Update the data cell's image path
+            $datacell->update(['image' => $storedFilePath]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Image updated successfully for DataCell: $datacell->name"
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
     }
-}
 
 }

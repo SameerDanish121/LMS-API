@@ -1,5 +1,4 @@
 <?php
-
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\DatacellsController;
 use App\Http\Controllers\GraderController;
@@ -8,14 +7,10 @@ use App\Http\Controllers\TestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
-use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\JuniorLecController;
-use App\Http\Controllers\DatacellController;
 use App\Http\Controllers\DatacellModuleController;
-use App\Http\Controllers\TeacherModuleController;
 use App\Http\Controllers\TeachersController;
 use App\Http\Controllers\StudentsController;
-
 Route::get('/load-file', [TeachersController::class, 'LoadFile']);
 Route::get('/Login', [StudentsController::class, 'Login']);
 Route::prefix('Students')->group(function () {
@@ -40,6 +35,7 @@ Route::prefix('Students')->group(function () {
     Route::get('/course-content', [StudentsController::class, 'GetFullCourseContentOfSubject']);
     Route::get('/course-content/week', [StudentsController::class, 'GetFullCourseContentOfSubjectByWeek']);
     Route::post('/submitTask', [StudentsController::class, 'submitAnswer']);
+    Route::post('/exam-result', [StudentsController::class, 'getStudentExamResult']);
 });
 Route::prefix('Grader')->group(function () {
     Route::get('/GraderInfo', [GraderController::class, 'GraderOf']);
@@ -78,6 +74,10 @@ Route::prefix('JuniorLec')->group(function () {
     Route::post('/add-sequence-attendance', [JuniorLecController::class, 'addAttendanceSeatingPlan']);
     Route::post('/update-junior-lecturer-password', [JuniorLecController::class, 'updateJuniorLecturerPassword']);
     Route::post('/update-junior-lecturer-image', [JuniorLecController::class, 'updateJuniorLecturerImage']);
+  
+
+
+    
 });
 Route::prefix('Teachers')->group(function () {
     Route::post('/add-or-update-feedbacks', [TeachersController::class, 'AddFeedback']);
@@ -110,17 +110,12 @@ Route::prefix('Teachers')->group(function () {
     Route::post('/add-sequence-attendance', [TeachersController::class, 'addAttendanceSeatingPlan']);
     Route::post('/update-teacher-password', [TeachersController::class, 'updateTeacherPassword']);
     Route::post('/update-teacher-image', [TeachersController::class, 'updateTeacherImage']);
-  
-  
-    Route::get('/exam/section-result', [TeachersController::class, 'getSectionExamResult']);
+    Route::get('/get-exam-result', [TeachersController::class, 'getSectionExamList']);
+   
+   
 });
 
-Route::prefix('Teacher')->group(function () {
-    Route::get('/currentcourses/{id}', [TeacherController::class, 'getCurrentOfferedCourses']);
-    Route::post('/markAttendance', [TeacherController::class, 'markAttendance']);
-    Route::post('/sendNotification', [TeacherController::class, 'sendNotification']);
-    Route::get('/teacher-course-details', [TeacherController::class, 'getCourseDetails']);
-});
+
 
 
 
@@ -145,14 +140,13 @@ Route::prefix('Admins')->group(function () {
 Route::prefix('Datacells')->group(function () {
     Route::get('/temporary-enrollments', [TeachersController::class, 'getTemporaryEnrollmentsRequest']);
     Route::post('/process-temporary-enrollments', [TeachersController::class, 'ProcessTemporaryEnrollments']);
-    
     Route::post('/update-datacell-image', [DatacellsController::class, 'updateDataCellImage']);
+    Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
+    Route::get('/timetable/section', [DatacellsController::class, 'getTimetableGroupedBySection']);
+    Route::get('/AllStudent', [DatacellsController::class, 'AllStudent']);
+    Route::post('/NewOfferedCourse', [DatacellsController::class, 'AddNewOfferedCourse']);
 });
 
-//////////////////////////////////////////////////////~api/JuniorLecturer////////////////////////////////////////////////
-Route::prefix('JuniorLecturer')->group(function () {
-
-});
 //////////////////////////////////////////////////////~api/Admin///////////////////////////////////////////////
 Route::prefix('Admin')->group(function () {
     Route::get('/AllStudent', [AdminController::class, 'AllStudent']);
@@ -185,14 +179,7 @@ Route::prefix('Admin')->group(function () {
     Route::post('/add-session', [AdminController::class, 'addSingleSession']);
     Route::post('/update-admin-image', [AdminController::class, 'updateAdminImage']);
 });
-Route::prefix('Datacell')->group(function () {
-    Route::post('/EnrollStudent', [DatacellController::class, 'NewEnrollment']);
-    Route::get('/timetable/section', [DatacellController::class, 'getTimetableGroupedBySection']);
-    Route::get('/AllStudent', [DatacellController::class, 'AllStudent']);
-    Route::post('/NewOfferedCourse', [DatacellController::class, 'AddNewOfferedCourse']);
-    Route::post('/send/notification', [DatacellController::class, 'sendNotification']);
-    Route::post('/send/notification/student', [DatacellModuleController::class, 'sendNotification']);
-});
+
 
 Route::prefix('Uploading')->group(function () {
     Route::post('/excel-upload/offeredcourse_teacherallocation', [DatacellModuleController::class, 'OfferedCourseTeacheruploadExcel']);
@@ -213,8 +200,8 @@ Route::prefix('Uploading')->group(function () {
     Route::post('/uplaod/timetable', [DatacellModuleController::class, 'UploadTimetableExcel']);
     Route::post('/timetable/section', [DatacellModuleController::class, 'getTimetableGroupedBySection']);
     Route::post('/uplaod/course-content', [DatacellModuleController::class, 'CreateCourseContent']);
-    Route::get('/getArchivesDetails', [DatacellController::class, 'Archives']);
-    Route::delete('/DeleteFolderByPath', [DatacellController::class, 'DeleteFolderByPath']);
+    Route::get('/getArchivesDetails', [DatacellModuleController::class, 'Archives']);
+    Route::delete('/DeleteFolderByPath', [DatacellModuleController::class, 'DeleteFolderByPath']);
     Route::post('/uplaod/subject-result', [DatacellModuleController::class, 'AddSubjectResult']);
 });
 

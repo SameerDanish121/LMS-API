@@ -290,7 +290,7 @@ class JuniorLecturerHandling extends Model
                 if ($submission) {
                     $relativePath = str_replace('public/', '', $submission->Answer);
                     if (Storage::disk('public')->exists($relativePath)) {
-                        $submission->Answer = FileHandler::getFileByPath($submission->Answer);
+                        $submission->Answer = asset($submission->Answer);
                     } else {
                         $submission->Answer = null;
                     }
