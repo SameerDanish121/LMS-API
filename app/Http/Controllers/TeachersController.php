@@ -1933,9 +1933,12 @@ class TeachersController extends Controller
             'attendance_type' => 'nullable|string|in:Class,Lab', 
             'students' => 'required|array', // List of students with seat number
             'students.*.student_id' => 'required|integer', // Each student must have an ID
-            'students.*.seatNo' => 'required|integer', // Each student must have a seat number
+            'students.*.seatNo' => 'required|integer', 
         ]);
-        $attendanceType = $validated['attendance_type'] ?? 'Lab';
+        $attendanceType = $validated['attendance_type']??null;
+        if(!$attendanceType){
+            $attendanceType="Class";
+        }
         $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
         Attendance_Sheet_Sequence::where('teacher_offered_course_id', $teacherOfferedCourseId)
             ->where('For', $attendanceType)

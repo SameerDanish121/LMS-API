@@ -11,10 +11,15 @@ use App\Http\Controllers\JuniorLecController;
 use App\Http\Controllers\DatacellModuleController;
 use App\Http\Controllers\TeachersController;
 use App\Http\Controllers\StudentsController;
-
+use App\Http\Controllers\ExtraKhattaController;
+use App\Http\Controllers\AuthenticationController;
 Route::get('/Login', [StudentsController::class, 'Login']);
+Route::post('/forgot-password', [AuthenticationController::class, 'sendOTP']);
+Route::post('/verify-otp', [AuthenticationController::class, 'verifyOTP']);
+Route::post('/update-pass', [AuthenticationController::class, 'updatePassword']);
 Route::get('/load-file', [TeachersController::class, 'LoadFile']);
-Route::get('/send-Notification', [StudentsController::class,'sendNotification']);
+Route::post('/send-Notification', [StudentsController::class, 'sendNotification']);
+Route::post('/uplaod/SubjectFullResult', [ExtraKhattaController::class, 'AddSubjectResult']);
 Route::prefix('Students')->group(function () {
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);
     Route::get('/TranscriptPDF', [StudentsController::class, 'getTranscriptPdf']);
@@ -118,11 +123,20 @@ Route::prefix('Datacells')->group(function () {
     Route::get('/timetable/section', [DatacellsController::class, 'getTimetableGroupedBySection']);
     Route::get('/AllStudent', [DatacellsController::class, 'AllStudent']);
     Route::post('/NewOfferedCourse', [DatacellsController::class, 'AddNewOfferedCourse']);
+
+    //////////////////////////////////////SINGLE-INSERTION///////////////////////////////////////////////////
+
+    Route::post('/offered-courses/add-or-check', [ExtraKhattaController::class, 'addOrCheckOfferedCourses']);
+    Route::post('/teacher-offered-courses/add-multiple', [ExtraKhattaController::class, 'addTeacherOfferedCourses']);
+    Route::post('/teacher-offered-courses/update-or-insert-multiple', [ExtraKhattaController::class, 'updateOrInsertTeacherOfferedCourses']);
+    Route::post('/assign-junior-lecturer', [ExtraKhattaController::class, 'assignJuniorLecturer']);
+    Route::post('/update-or-create-junior-lecturer', [ExtraKhattaController::class, 'updateOrCreateTeacherJuniorLecturer']);
+    Route::post('/assign-grader', [ExtraKhattaController::class, 'assignGrader']);
+    Route::post('/enroll-student', [ExtraKhattaController::class, 'addStudentEnrollment']);
 });
-//////////////////////////////////////////////////////~api/Admin///////////////////////////////////////////////
+
 Route::prefix('Admin')->group(function () {
     Route::get('/AllStudent', [AdminController::class, 'AllStudent']);
-    Route::post('/SendNotification', [AdminController::class, 'sendNotification']);
     Route::get('/sections', [AdminController::class, 'showSections']);
     Route::get('/teachers', [AdminController::class, 'AllTeacher']);
     Route::get('/courses', [AdminController::class, 'AllCourse']);
@@ -139,8 +153,8 @@ Route::prefix('Admin')->group(function () {
     Route::get('/Teacher-Courses/{teacherId}/{sessionId}', [AdminController::class, 'getTeacherEnrolledCourses']);
     Route::get('/Students-Not-Enrolled-Courses/{sessionId}', [AdminController::class, 'getStudentsNotEnrolledInSession']);
     Route::get('/Student-Courses/{studentName}/{sessionId}', [AdminController::class, 'getStudentCoursesInSession']);
-    Route::get('/failed-courses', [AdminController::class, 'getFailedCourses']);
-    Route::get('/failed-students', [AdminController::class, 'getFailedStudents']);
+    Route::get('/failed-courses', [AdminController::class, 'getFailedCoursesOfStudent']);
+    Route::get('/failed-students', [AdminController::class, 'getFailedStudentsInOfferedCourse']);
     Route::get('/TeacherJLec', [AdminController::class, 'getTeacherJuniorLecturers']);
     Route::get('/assigned-graders', [AdminController::class, 'getTeachersWithAssignedGraders']);
     Route::get('/TeacherwithNoGrader', [AdminController::class, 'getTeachersWithoutGraders']);
@@ -152,6 +166,7 @@ Route::prefix('Admin')->group(function () {
     Route::post('/update-admin-image', [AdminController::class, 'updateAdminImage']);
     Route::post('/update-add-program', [AdminController::class, 'addOrUpdateProgram']);
 });
+
 Route::prefix('Uploading')->group(function () {
     Route::post('/excel-upload/offeredcourse_teacherallocation', [DatacellModuleController::class, 'OfferedCourseTeacheruploadExcel']);
     Route::post('/excel-upload/excluded_days', [DatacellModuleController::class, 'ExcludedDays']);

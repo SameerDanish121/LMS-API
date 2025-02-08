@@ -137,24 +137,29 @@ class attendance extends Model
                     $query->where('session_id', (new Session())->getCurrentSessionId());
                 })
                 ->get();
+            
             foreach ($enrollments as $enrollment) {
-                $offeredCourse = $enrollment->offeredCourse;
-                $teacherOfferedCourse = teacher_offered_courses::with(['section'])->where('offered_course_id', $offeredCourse->id)->first();
-
-                if ($teacherOfferedCourse) {
+                
+                $offeredCourse = $enrollment->offered_course;
+                
+                $teacherOfferedCourse = teacher_offered_courses::
+                with(['section','teacher'])
+                ->where('offered_course_id', $offeredCourse->id)
+                ->where('section_id',$enrollment->section_id)->first();
                     $attendanceRecords = attendance::where('student_id', $studentId)
                         ->where('teacher_offered_course_id', $teacherOfferedCourse->id)
                         ->get();
-                    $totalPresent = $attendanceRecords->where('status', 'p')->count();
+                    $totalPresent = $attendanceRecords->where('status', 'p')->count(); 
                     $totalAbsent = $attendanceRecords->where('status', 'a')->count();
                     $total_Classes = $totalPresent + $totalAbsent;
                     $total_Classes = self::where('teacher_offered_course_id', $teacherOfferedCourse->id)
                         ->distinct('date_time')
                         ->count('date_time');
-                    $percentage = $total_Classes > 0 ? ($totalPresent / $total_Classes) * 100 : 100;
-
+                     
+                    $percentage = $total_Classes > 0 ? ($totalPresent / $total_Classes) * 100 : 0;
+                    $oc=offered_courses::with(['course'])->find($offeredCourse->id);
                     $attendanceData[] = [
-                        'course_name' => $offeredCourse->course->name,
+                        'course_name' => $oc->course->name,
                         'section_name'=>(new section())->getNameByID($teacherOfferedCourse->section->id),
                         'teacher_name' => $teacherOfferedCourse->teacher->name ?? 'N/A',
                         'Total_classes_conducted'=>$total_Classes,
@@ -163,11 +168,9 @@ class attendance extends Model
                         'Percentage' => $percentage,
                         'teacher_offered_course_id' => $teacherOfferedCourse->id,
                     ];
-                    
-                }
             }
         } catch (Exception $ex) {
-            return $attendanceData;
+            return $ex->getMessage();
         }
         return $attendanceData;
     }

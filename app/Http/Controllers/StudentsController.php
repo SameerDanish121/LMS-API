@@ -146,7 +146,7 @@ class StudentsController extends Controller
                     "Total Enrollments" => student_offered_courses::GetCountOfTotalEnrollments($student->id),
                     "Current Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?: 'N/A',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
-                    "Attendance" => (new attendance())->getAttendanceByID($student_id),
+                    // "Attendance" => (new attendance())->getAttendanceByID($student_id),
                     "Image" => asset($student->image)
                 ];
                 if ($rescheduled) {
@@ -168,10 +168,11 @@ class StudentsController extends Controller
                     "Designation" => $Admin->Designation,
                     "Username" => $Admin->user->username,
                     "Password" => $Admin->user->password,
-                    "image" => Action::getImageByPath($Admin->image),
+                    
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
-                    "End Date" => $session->end_date ?? "N/A"
+                    "End Date" => $session->end_date ?? "N/A",
+                    "image" => asset($Admin->image)
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -197,9 +198,9 @@ class StudentsController extends Controller
                     "Date Of Birth" => $teacher->date_of_birth,
                     "Username" => $teacher->user->username,
                     "Password" => $teacher->user->password,
-                    "image" => Action::getImageByPath($teacher->image),
                     "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
+                    "image" => asset($teacher->image),
                 ];
                 if ($rescheduled) {
                     $Teacher['Notice !'] = $Notice;
@@ -220,10 +221,11 @@ class StudentsController extends Controller
                     "Designation" => $Datacell->Designation,
                     "Username" => $Datacell->user->username,
                     "Password" => $Datacell->user->password,
-                    "image" => Action::getImageByPath($Datacell->image),
+                   
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
-                    "End Date" => $session->end_date ?? "N/A"
+                    "End Date" => $session->end_date ?? "N/A",
+                    "image" => asset($Datacell->image),
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -250,9 +252,10 @@ class StudentsController extends Controller
                     "Date Of Birth" => $jl->date_of_birth,
                     "Username" => $jl->user->username,
                     "Password" => $jl->user->password,
-                    "image" => Action::getImageByPath(originalPath: $jl->image),
+                   
                     "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
+                    "image" => asset($jl->image),
                 ];
                 if ($rescheduled) {
                     $Teacher['Notice !'] = $Notice;

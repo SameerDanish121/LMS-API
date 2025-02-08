@@ -140,9 +140,9 @@ class GraderController extends Controller
                 $result = $students->map(function ($student) use ($submissions) {
                     $submission = $submissions->firstWhere('Student_id', $student->id);
                     if ($submission) {
-                        $relativePath = str_replace('public/', '', $submission->Answer);
-                        if (Storage::disk('public')->exists($relativePath)) {
-                            $submission->Answer =FileHandler::getFileByPath($submission->Answer);
+                        if ($submission->Answer) {
+                          
+                            $submission->Answer = asset( $submission->Answer);
                         } else {
                             $submission->Answer = null;
                         }
@@ -180,8 +180,11 @@ class GraderController extends Controller
     {
         try {
             $graderId = $request->grader_id;
+            if(!$graderId){
+                throw new Exception('Please Provide with the Grader ID');
+            }
             $session_id = (new session())->getCurrentSessionId();
-            $assignedTasks = grader_task::with(['task', 'task.teacherOfferedCourse.offeredCourse.session','courseContent'])
+            $assignedTasks = grader_task::with(['task','task.teacherOfferedCourse.section','task.teacherOfferedCourse.offeredCourse.course', 'task.teacherOfferedCourse.offeredCourse.session','task.courseContent'])
                 ->where('Grader_id', $graderId)
                 ->whereHas('task.teacherOfferedCourse.offeredCourse.session', function ($query) use ($session_id) {
                     $query->where('id', $session_id);
@@ -190,44 +193,49 @@ class GraderController extends Controller
                 ->map(function ($graderTask) {
                     $task = $graderTask->task;
                     $markingInfo = null;
+                    $taskdetails=task::with(['teacherOfferedCourse.section','teacherOfferedCourse.offeredCourse.course'])->find($task->id);
+                   
                     if ($task->isMarked) {
                         $markingInfo = $this->getMarkingInfo($task->id);
+                        $Teacher=teacher::find($taskdetails->teacherOfferedCourse->teacher_id);
                         return [
                             'task_id' => $task->id,
+                            'Course Name'=>$taskdetails->teacherOfferedCourse->offeredCourse->course->name,
+                            'Section Name'=> (new section())->getNameByID($taskdetails->teacherOfferedCourse->section->id),
+                            'Teacher Name' =>$Teacher->name??null,
                             'title' => $task->title,
                             'type' => $task->type,
-                            'course_content' => $task->courseContent?FileHandler::getFileByPath($task->courseContent->content):'null',
+                            'File' => $task->courseContent?asset($task->courseContent->content):'null',
                             'created_by' => $task->CreatedBy,
-                            'points' => $task->points,
+                            'Total Marks' => $task->points,
                             'start_date' => $task->start_date,
                             'due_date' => $task->due_date,
-                            'teacher_offered_course' => teacher::find($task->teacherOfferedCourse->teacher_id)->value('name') ?? 'N/A',
                             'marking_status' => 'Marked',
                             'marking_info' => $markingInfo,
                         ];
                     } else {
+                        $Teacher=teacher::find($taskdetails->teacherOfferedCourse->teacher_id);
                         return [
                             'task_id' => $task->id,
+                            'Course Name'=>$task->teacherOfferedCourse->offeredCourse->course->name,
+                            'Section Name'=> (new section())->getNameByID($task->teacherOfferedCourse->section->id),
+                            'Teacher Name' => $Teacher->name??null,
                             'title' => $task->title,
                             'type' => $task->type,
-                            'course_content' => $task->courseContent?FileHandler::getFileByPath($task->courseContent->content):'null',
+                            'File' => $task->courseContent?asset($task->courseContent->content):'null',
                             'created_by' => $task->CreatedBy,
-                            'points' => $task->points,
+                            'Total Marks' => $task->points,
                             'start_date' => $task->start_date,
                             'due_date' => $task->due_date,
                             'marking_status' => 'Un-Marked',
-                            'teacher_offered_course' => teacher::find($task->teacherOfferedCourse->teacher_id)->value('name') ?? 'N/A'
+                            'points' => $task->points,
                         ];
                     }
-
                 });
             $currentDate = now();
-
-            // Categorize tasks
             $markedTasks = $assignedTasks->filter(function ($task) {
                 return $task['marking_status'] === 'Marked';
             });
-
             $upcomingTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
                 return $task['start_date'] > $currentDate;
             });
@@ -235,7 +243,7 @@ class GraderController extends Controller
             $ongoingTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
                 return $task['start_date'] <= $currentDate && $task['due_date'] >= $currentDate;
             });
-
+           
             $unmarkedTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
                 return !$task['marking_status'] === 'Marked' && $task['due_date'] < $currentDate;
             });
@@ -257,7 +265,7 @@ class GraderController extends Controller
             ], 500);
         }
     }
-    private function getMarkingInfo($taskId)
+    private function getMarkingInfo($taskId): array|null
     {
         $marks = student_task_result::where('Task_id', $taskId)
             ->join('student', 'student.id', '=', 'student_task_result.Student_id')
@@ -305,11 +313,14 @@ class GraderController extends Controller
                     'grader.id as id',
                     'student.name as name',
                     'student.image as image',
+                    'student.section_id as section',
+                    'student.RegNo as regno',
                     'grader.status',
                     'grader.type',
                     'teacher.name as teacher_name',
                     'teacher.image as teacher_image',
                     'teacher_grader.feedback',
+                    'session.id as  session_id',
                     DB::raw("CONCAT(session.name,'-',session.year) as session"),
                     'session.id as session_id',
                     DB::raw("CASE WHEN session.id = $currentSessionId THEN 'active' ELSE 'non_active' END as session_status"),
@@ -317,19 +328,23 @@ class GraderController extends Controller
                 )
                 ->get()
                 ->groupBy('grader_id')
-                ->map(function ($group) {
+                ->map(function ($group)  {
                     $first = $group->first();
                     return [
                         'grader_id' => $first->id,
                         'grader_name' => $first->name,
-                        'status' => $first->status,
+                        'grader_RegNo' => $first->regno,
+                        'grader_section' => (new section())->getNameByID($first->section),
+                        'This Session' => $first->status,
                         'type' => $first->type,
-                        'GraderOf' => $group->map(function ($item) {
+                        'Grader Allocations' => $group->map(function ($item)  {
                             return [
+                                'Session is ? '=>$item->session_id===(new session())->getCurrentSessionId()?' Current Session':' Previous Session',
                                 'teacher_name' => $item->teacher_name,
-                                'status' => $item->status,
-                                'feedback' => $item->feedback ?? 'Not Added',
                                 'session_name' => $item->session,
+                                'Allocation Status' => $item->session_status,
+                                'feedback' => $item->feedback ?? 'Not Added By Instructor',
+                                
                             ];
                         }),
                     ];

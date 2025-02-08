@@ -2247,7 +2247,7 @@ class DatacellModuleController extends Controller
                     }
                 } else {
                     if (in_array($file->getClientOriginalExtension(), ['pdf', 'doc', 'docx', 'xlsx', 'xls'])) {
-                        $directory = $offeredCourse->session->name . '-' . $offeredCourse->session->year . '/Course Content' . '/' . $offeredCourse->course->description;
+                        $directory = $offeredCourse->session->name . '-' . $offeredCourse->session->year . '/CourseContent' . '/' . $offeredCourse->course->description;
                         $filePath = FileHandler::storeFile($title, $directory, $file);
                         $courseContent->content = $filePath;
                         $courseContent->save();
@@ -2500,7 +2500,7 @@ class DatacellModuleController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
-    }
+    }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
     private function calculateGrade($marks, $thresholds)
     {
         return match (true) {
