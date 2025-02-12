@@ -16,7 +16,7 @@ class Action extends Model
     // 'guardian', 'image', 'user_id', 'section_id', 'program_id', 
     // 'session_id', 'status'
 
-    
+
     public static function AddorUpdateNewStudent($RegNo, $name, $cgpa, $gender, $dateofBirth, $guradain, $image, $user_id, $section, $program, $session, $status)
     {
         student::updateOrCreate(
@@ -123,6 +123,9 @@ class Action extends Model
         $attendanceData = [];
         try {
             $currentSessionId = (new Session())->getCurrentSessionId();
+            if ($currentSessionId == 0) {
+                return $attendanceData;
+            }
             $enrollments = student_offered_courses::where('student_id', $studentId)
                 ->with('offeredCourse')
                 ->whereHas('offeredCourse', function ($query) use ($currentSessionId) {
@@ -231,7 +234,7 @@ class Action extends Model
         if (preg_match('/\(([^)]+)\)/', $section, $matches)) {
             $section = $matches[1];
         } else {
-          
+
             return ["status" => "error", "issue" => "Format of {$RawDATA} is not Correct"];
         }
 
@@ -252,7 +255,7 @@ class Action extends Model
         } else if (count($parts) == 3) {
             $teacherInfo = $teachervenueparts[0];
         }
-      
+
         $teacherInfo = str_replace(['(', ')'], '', subject: $teacherInfo);
         if (strpos($teacherInfo, ',') !== false) {
             $parts = explode(',', $teacherInfo);
@@ -262,7 +265,7 @@ class Action extends Model
             $teacherName = $teacherInfo;
             $juniorLecturerName = null;
         }
-       
+
         $course = Course::where('description', $course)->first();
         if (!$course) {
             return ["status" => "error", "issue" => "no course exsist for this {$course} / {$RawDATA}"];
@@ -306,12 +309,12 @@ class Action extends Model
         }
         $timetable = [];
         $section = explode(',', $section);
-       
+
         foreach ($section as $s) {
             $section_id = section::addNewSection($s);
-            
+
             if (!$section_id) {
-             
+
                 return ["status" => "error", "issue" => "no section is created for this {$s} / {$RawDATA}"];
             }
             $timetable = Timetable::firstOrCreate(
@@ -344,8 +347,8 @@ class Action extends Model
     {
         $role = Role::where('type', $roleType)->first();
         if (!$role) {
-            $role=role::create([
-                "type"=>$roleType
+            $role = role::create([
+                "type" => $roleType
             ]);
         }
         $roleId = $role->id;
@@ -367,28 +370,30 @@ class Action extends Model
         }
         return $user->id;
     }
-    public static function getMCQS($coursecontent_id){
-        if(!$coursecontent_id){
-         return null;
+    public static function getMCQS($coursecontent_id)
+    {
+        if (!$coursecontent_id) {
+            return null;
         }
-        $Question=quiz_questions::where('coursecontent_id',$coursecontent_id)->with(['Options'])->get();
-        if(!$Question){
-         return null;
+        $Question = quiz_questions::where('coursecontent_id', $coursecontent_id)->with(['Options'])->get();
+        if (!$Question) {
+            return null;
         }
-        $Question_details=$Question->map(function($Question){
-         return [
-             "ID" => $Question->id,
-             "Question NO" => $Question->question_no,
-             "Question" => $Question->question_text,
-             "Option 1" => $Question->Options[0]->option_text ?? null, 
-             "Option 2" => $Question->Options[1]->option_text ?? null,
-             "Option 3" => $Question->Options[2]->option_text ?? null,
-             "Option 4" => $Question->Options[3]->option_text ?? null,
-             "Answer"=>$Question->Options->firstWhere('is_correct', true)->option_text ?? null, 
-         ];
-        }
-     );
+        $Question_details = $Question->map(
+            function ($Question) {
+                return [
+                    "ID" => $Question->id,
+                    "Question NO" => $Question->question_no,
+                    "Question" => $Question->question_text,
+                    "Option 1" => $Question->Options[0]->option_text ?? null,
+                    "Option 2" => $Question->Options[1]->option_text ?? null,
+                    "Option 3" => $Question->Options[2]->option_text ?? null,
+                    "Option 4" => $Question->Options[3]->option_text ?? null,
+                    "Answer" => $Question->Options->firstWhere('is_correct', true)->option_text ?? null,
+                ];
+            }
+        );
         return $Question_details;
-     }
+    }
 
 }

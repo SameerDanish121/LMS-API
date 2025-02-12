@@ -2385,7 +2385,6 @@ class DatacellModuleController extends Controller
             if ($isLab) {
                 $expectedHeaders[] = 'Lab';
             }
-
             if (array_slice($header, 0, count($expectedHeaders)) !== $expectedHeaders) {
                 throw new Exception("Invalid header format. Expected: " . implode(", ", $expectedHeaders));
             }
@@ -2453,8 +2452,6 @@ class DatacellModuleController extends Controller
                 
                 $success[] = ["status" => "success", "message" => "Result added for {$regNo}"];
             }
-
-            // Handle missing students
             $missingStudentIds = array_diff($dbStudentIds, $excelStudentIds);
             foreach ($missingStudentIds as $missingId) {
                 $studentOfferedCourse = student_offered_courses::where('student_id', $missingId)
