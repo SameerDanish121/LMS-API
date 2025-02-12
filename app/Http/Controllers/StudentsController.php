@@ -113,10 +113,14 @@ class StudentsController extends Controller
                 ->where('username', $request->username)
                 ->where('password', $request->password)
                 ->firstOrFail();
+               
             $role = $user->role->type;
             if ($role == 'Student') {
                 $student = student::where('user_id', $user->id)->with(['program', 'user'])
                     ->first();
+                if(!$student){
+                    throw new Exception('No user Found');
+                }                    
                 $student_id = $student->value('id');
                 $section_id = $student->section_id;
                 $attribute = excluded_days::checkHoliday() ? 'Holiday' : 'Timetable';
@@ -128,10 +132,9 @@ class StudentsController extends Controller
                 } else {
                     $timetable = timetable::getTodayTimetableOfEnrollementsByStudentId($student_id);
                 }
-                
                 $studentInfo = [
                     "id" => $student->id,
-                    "name" => $student->name,
+                    "name" => $student->name??'N/A',
                     "RegNo" => $student->RegNo,
                     "CGPA" => $student->cgpa,
                     "Gender" => $student->gender,
@@ -140,18 +143,19 @@ class StudentsController extends Controller
                     "password" => $student->user->password,
                     "email" => $student->user->email,
                     "InTake" => (new session())->getSessionNameByID($student->session_id),
-                    "Program" => $student->program->name,
+                    "Program" => $student->program->name??'N/A',
                     "Is Grader ?"=> grader::where('student_id',$student->id)->exists(),
                     "Section" => (new section())->getNameByID($student->section_id),
                     "Total Enrollments" => student_offered_courses::GetCountOfTotalEnrollments($student->id),
                     "Current Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?: 'N/A',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
                     // "Attendance" => (new attendance())->getAttendanceByID($student_id),
-                    "Image" => asset($student->image)
+                    "Image" => $student->image?asset($student->image):null
                 ];
                 if ($rescheduled) {
                     $studentInfo['Notice'] = $Notice;
                 }
+              
                 return response()->json([
                     'Type' => $role,
                     'StudentInfo' => $studentInfo,
@@ -408,6 +412,7 @@ class StudentsController extends Controller
             ], 500);
         }
     }
+    
     public function FullTimetable(Request $request)
     {
         try {

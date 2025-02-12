@@ -153,7 +153,8 @@ Route::prefix('Admin')->group(function () {
     Route::get('/Teacher-Courses/{teacherId}/{sessionId}', [AdminController::class, 'getTeacherEnrolledCourses']);
     Route::get('/Students-Not-Enrolled-Courses/{sessionId}', [AdminController::class, 'getStudentsNotEnrolledInSession']);
     Route::get('/Student-Courses/{studentName}/{sessionId}', [AdminController::class, 'getStudentCoursesInSession']);
-    Route::get('/failed-courses', [AdminController::class, 'getFailedCoursesOfStudent']);
+    Route::get('/failed-courses', [AdminController::class, 'getFailedStudents']);
+
     Route::get('/failed-students', [AdminController::class, 'getFailedStudentsInOfferedCourse']);
     Route::get('/TeacherJLec', [AdminController::class, 'getTeacherJuniorLecturers']);
     Route::get('/assigned-graders', [AdminController::class, 'getTeachersWithAssignedGraders']);
