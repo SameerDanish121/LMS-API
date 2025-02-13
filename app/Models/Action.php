@@ -12,6 +12,67 @@ class Action extends Model
 {
 
 
+
+    public static function EligibleToPromote($student_id)
+    {
+        $student = student::find($student_id);
+        if (!$student) {
+            return false;
+        }
+        $section = Section::find($student->section_id)??0;
+        if (!$section || !isset($section->semester)) {
+            return false;
+        }
+        $currentSemester = $section->semester+1;
+        if ($currentSemester == 1) {
+            return true;
+        }
+        $promotionPolicies = [
+            2 => 2.0,
+            3 => 2.1,
+            4 => 2.2,
+            5 => 2.3,
+            6 => 2.4,
+            7 => 2.5,
+            8 => 2.6
+        ];
+        $requiredCgpa = $promotionPolicies[$currentSemester] ?? 2.5;
+        if ($student->cgpa < $requiredCgpa) {
+            return self::handleFailedPromotion($student_id, $student->user_id);
+        }
+        $failedCourses = student_offered_courses::where('student_id', $student_id)
+            ->whereIn('grade', ['D', 'F'])
+            ->with(['offeredCourse.course'])
+            ->get();
+        if ($failedCourses->isNotEmpty()) {
+            return self::handleFailedPromotion($student_id, $student->user_id, $failedCourses);
+        }
+        return true;
+    }
+
+    private static function handleFailedPromotion($student_id, $user_id, $failedCourses = [])
+    {
+        $failedSubjectsString = "";
+        foreach ($failedCourses as $course) {
+            $failedSubjectsString .= $course->offeredCourse->course->name . " (" . $course->grade . "), ";
+        }
+        $failedSubjectsString = rtrim($failedSubjectsString, ', ');
+        Notification::create([
+            'title' => 'Promotion Status',
+            'description' => "Dropped : You are not eligible for promotion due to CGPA | failing courses: $failedSubjectsString",
+            'url' => null,
+            'notification_date' => now(),
+            'sender' => 'DataCell',
+            'reciever' => 'Student',
+            'Brodcast' => 0,
+            'TL_sender_id' => null,
+            'Student_Section' => null,
+            'TL_receiver_id' => $user_id,
+        ]);
+
+        return false;
+    }
+
     // 'RegNo', 'name', 'cgpa', 'gender', 'date_of_birth', 
     // 'guardian', 'image', 'user_id', 'section_id', 'program_id', 
     // 'session_id', 'status'

@@ -149,7 +149,7 @@ class StudentsController extends Controller
                     "Total Enrollments" => student_offered_courses::GetCountOfTotalEnrollments($student->id),
                     "Current Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?: 'N/A',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
-                    // "Attendance" => (new attendance())->getAttendanceByID($student_id),
+                     "Attendance" => (new attendance())->getAttendanceByID($student_id),
                     "Image" => $student->image?asset($student->image):null
                 ];
                 if ($rescheduled) {
@@ -1234,7 +1234,6 @@ class StudentsController extends Controller
         $taskConsideration = task_consideration::where('teacher_offered_course_id', $teacherOfferedCourseId)->get();
         $teacherOfferedCourse = teacher_offered_courses::with(['offeredCourse.course', 'offeredCourse', 'section'])->find($teacherOfferedCourseId);
         $student = student::find($studentId);
-
         if (!$teacherOfferedCourse) {
             return [
                 'status' => 'error',
@@ -1276,7 +1275,6 @@ class StudentsController extends Controller
                     ->take($top);
                 $teacherTasks = $tasks;
             } else {
-                // Teacher and JuniorLecturer Tasks
                 $teacherCount = $top - $jlConsiderCount;
                 $jlCount = $jlConsiderCount;
 

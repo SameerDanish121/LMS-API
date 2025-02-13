@@ -127,7 +127,6 @@ class attendance extends Model
         if (!$studentId) {
             return [];
         }
-
         $attendanceData = [];
         try {
             $currentSessionId = (new Session())->getCurrentSessionId();
@@ -137,14 +136,12 @@ class attendance extends Model
                     $query->where('session_id', (new Session())->getCurrentSessionId());
                 })
                 ->get();
-            
+           
             foreach ($enrollments as $enrollment) {
-                
-                $offeredCourse = $enrollment->offered_course;
-                
+                $offeredCourse = $enrollment->offered_course_id;
                 $teacherOfferedCourse = teacher_offered_courses::
                 with(['section','teacher'])
-                ->where('offered_course_id', $offeredCourse->id)
+                ->where('offered_course_id', $offeredCourse)
                 ->where('section_id',$enrollment->section_id)->first();
                     $attendanceRecords = attendance::where('student_id', $studentId)
                         ->where('teacher_offered_course_id', $teacherOfferedCourse->id)
@@ -155,9 +152,8 @@ class attendance extends Model
                     $total_Classes = self::where('teacher_offered_course_id', $teacherOfferedCourse->id)
                         ->distinct('date_time')
                         ->count('date_time');
-                     
                     $percentage = $total_Classes > 0 ? ($totalPresent / $total_Classes) * 100 : 0;
-                    $oc=offered_courses::with(['course'])->find($offeredCourse->id);
+                    $oc=offered_courses::with(['course'])->find($offeredCourse);
                     $attendanceData[] = [
                         'course_name' => $oc->course->name,
                         'section_name'=>(new section())->getNameByID($teacherOfferedCourse->section->id),

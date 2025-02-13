@@ -18,8 +18,12 @@ Route::post('/forgot-password', [AuthenticationController::class, 'sendOTP']);
 Route::post('/verify-otp', [AuthenticationController::class, 'verifyOTP']);
 Route::post('/update-pass', [AuthenticationController::class, 'updatePassword']);
 Route::get('/load-file', [TeachersController::class, 'LoadFile']);
+Route::get('/CanBePromoted', [ExtraKhattaController::class, 'Sample']);
 Route::post('/send-Notification', [StudentsController::class, 'sendNotification']);
 Route::post('/uplaod/SubjectFullResult', [ExtraKhattaController::class, 'AddSubjectResult']);
+
+Route::post('/firebase-notification', [ExtraKhattaController::class, 'send']);
+
 Route::prefix('Students')->group(function () {
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);
     Route::get('/TranscriptPDF', [StudentsController::class, 'getTranscriptPdf']);
@@ -123,9 +127,6 @@ Route::prefix('Datacells')->group(function () {
     Route::get('/timetable/section', [DatacellsController::class, 'getTimetableGroupedBySection']);
     Route::get('/AllStudent', [DatacellsController::class, 'AllStudent']);
     Route::post('/NewOfferedCourse', [DatacellsController::class, 'AddNewOfferedCourse']);
-
-    //////////////////////////////////////SINGLE-INSERTION///////////////////////////////////////////////////
-
     Route::post('/offered-courses/add-or-check', [ExtraKhattaController::class, 'addOrCheckOfferedCourses']);
     Route::post('/teacher-offered-courses/add-multiple', [ExtraKhattaController::class, 'addTeacherOfferedCourses']);
     Route::post('/teacher-offered-courses/update-or-insert-multiple', [ExtraKhattaController::class, 'updateOrInsertTeacherOfferedCourses']);
@@ -154,7 +155,6 @@ Route::prefix('Admin')->group(function () {
     Route::get('/Students-Not-Enrolled-Courses/{sessionId}', [AdminController::class, 'getStudentsNotEnrolledInSession']);
     Route::get('/Student-Courses/{studentName}/{sessionId}', [AdminController::class, 'getStudentCoursesInSession']);
     Route::get('/failed-courses', [AdminController::class, 'getFailedStudents']);
-
     Route::get('/failed-students', [AdminController::class, 'getFailedStudentsInOfferedCourse']);
     Route::get('/TeacherJLec', [AdminController::class, 'getTeacherJuniorLecturers']);
     Route::get('/assigned-graders', [AdminController::class, 'getTeachersWithAssignedGraders']);
@@ -167,7 +167,6 @@ Route::prefix('Admin')->group(function () {
     Route::post('/update-admin-image', [AdminController::class, 'updateAdminImage']);
     Route::post('/update-add-program', [AdminController::class, 'addOrUpdateProgram']);
 });
-
 Route::prefix('Uploading')->group(function () {
     Route::post('/excel-upload/offeredcourse_teacherallocation', [DatacellModuleController::class, 'OfferedCourseTeacheruploadExcel']);
     Route::post('/excel-upload/excluded_days', [DatacellModuleController::class, 'ExcludedDays']);
@@ -189,7 +188,8 @@ Route::prefix('Uploading')->group(function () {
     Route::post('/uplaod/course-content', [DatacellModuleController::class, 'CreateCourseContent']);
     Route::get('/getArchivesDetails', [DatacellModuleController::class, 'Archives']);
     Route::delete('/DeleteFolderByPath', [DatacellModuleController::class, 'DeleteFolderByPath']);
-    Route::post('/uplaod/subject-result', [DatacellModuleController::class, 'AddSubjectResult']);
 });
+
+
 
 

@@ -2,57 +2,84 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Action;
-use App\Models\coursecontent;
-use App\Models\coursecontent_topic;
-use App\Models\dayslot;
+use DateTime;
+use Exception;
+use App\Models;
+use Carbon\Carbon;
 use App\Models\exam;
-use App\Models\excluded_days;
-use App\Models\FileHandler;
-use App\Models\grader;
-use App\Models\juniorlecturer;
-use App\Models\program;
-use App\Models\question;
-use App\Models\quiz_questions;
 use App\Models\role;
-use App\Models\student_exam_result;
-use App\Models\StudentManagement;
-use App\Models\subjectresult;
-use App\Models\teacher;
-use App\Models\teacher_grader;
-use App\Models\teacher_juniorlecturer;
+use App\Models\task;
+use App\Models\User;
 use App\Models\topic;
 use App\Models\venue;
-use Exception;
-use GrahamCampbell\ResultType\Success;
-use Laravel\Pail\Options;
-use PhpOffice\PhpSpreadsheet\IOFactory;
-use App\Models\attendance;
+use App\Models\Action;
 use App\Models\course;
-use App\Models\notification;
-use App\Models\offered_courses;
+use App\Models\grader;
+use App\Models\dayslot;
+use App\Models\program;
 use App\Models\section;
-use App\Models\sessionresult;
-use App\Models\student;
-use App\Models\student_offered_courses;
-use App\Models\student_task_result;
-use App\Models\student_task_submission;
-use App\Models\task;
-use App\Models\teacher_offered_courses;
-use App\Models\timetable;
-use App\Models\User;
-use DateTime;
-use App\Models;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Validation\ValidationException;
 use App\Models\session;
-use Carbon\Carbon;
+use App\Models\student;
+use App\Models\teacher;
+use App\Models\question;
+use App\Models\timetable;
+use Laravel\Pail\Options;
+use App\Models\attendance;
+use App\Models\FileHandler;
+use App\Models\notification;
+use Illuminate\Http\Request;
+use App\Models\coursecontent;
+use App\Models\excluded_days;
+use App\Models\sessionresult;
+use App\Models\subjectresult;
+use App\Models\juniorlecturer;
+use App\Models\quiz_questions;
+use App\Models\teacher_grader;
+use App\Models\offered_courses;
+use App\Models\StudentManagement;
+use App\Models\task_consideration;
 use Illuminate\Support\Facades\DB;
+use App\Models\coursecontent_topic;
+use App\Models\student_exam_result;
+use App\Models\student_task_result;
+use App\Traits\SendNotificationTrait;
+use App\Models\teacher_juniorlecturer;
+use GrahamCampbell\ResultType\Success;
+use App\Models\student_offered_courses;
+use App\Models\student_task_submission;
+use App\Models\teacher_offered_courses;
 use function PHPUnit\Framework\isEmpty;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ExtraKhattaController extends Controller
 {
+        use SendNotificationTrait; // Include the trait
+        public function send(Request $request)
+        {
+            $request->validate([
+                'user_id' => 'required',
+                'title'   => 'required|string',
+                'body'    => 'required|string',
+            ]);
+    
+            // Retrieve user and their FCM token
+            // $user = User::find($request->user_id);
+            // if (!$user->fcm_token) {
+            //     return response()->json(['error' => 'User does not have an FCM token'], 400);
+            // }
+    
+            // Optional custom data
+            $data = $request->input('data', []);
+    
+            // Send the notification
+            $response = $this->sendNotification($request->user_id, $request->title, $request->body, $data);
+    
+            return response()->json($response);
+        }
+    
+
     public function AddSubjectResult(Request $request)
     {
         try {
@@ -904,5 +931,390 @@ class ExtraKhattaController extends Controller
         }
     }
 
+    public static function CompilerResult($offered_course_id, $section_id)
+    {
+        if (!$offered_course_id || !$section_id) {
+            return;
+        }
+        $offered_course = offered_courses::with('course:id,name,credit_hours,lab')->find($offered_course_id);
+        if (!$offered_course) {
+            return;
+        }
+        $course = $offered_course->course;
+        $isLab = $course->lab == 1;
+        $students = student_offered_courses::where('section_id', $section_id)
+            ->where('offered_course_id', $offered_course_id)
+            ->with('student')
+            ->get();
+        $teacher_offered_c = teacher_offered_courses::where('offered_course_id', $offered_course_id)->where('section_id', $section_id)->first();
+        if (!$teacher_offered_c) {
+            return;
+        }
+        foreach ($students as $s) {
+            $credit_hours = $course->credit_hours;
+            $total_marks = match ($credit_hours) {
+                1 => 20,
+                2 => 40,
+                3 => 60,
+                4 => 80,
+                default => 0,
+            };
+            $quality_points = match ($credit_hours) {
+                1 => 4,
+                2 => 8,
+                3 => 12,
+                4 => 16,
+                default => 0,
+            };
+            $mid_marks = self::CountExamMarks('Mid',$s->student->id,$teacher_offered_c->id);
+            $final_marks = self::CountExamMarks('Final',$s->student->id,$teacher_offered_c->id);
+            $lab_marks = $isLab ? 0 : null;
+            if ($isLab) {
+                $lab_marks = self::getLabTaskResult($s->student->id, $teacher_offered_c->id);
+            }
+            $internal_marks = self::compileInternalMarks($s->student->id, $teacher_offered_c->id, $total_marks == 80 ? 12 : (($total_marks == 60 && $isLab) ? 8 : 12));
+            $obtained_marks = $internal_marks + $mid_marks + $final_marks + ($isLab ? $lab_marks : 0);
+            $theorymarks=$total_marks;
+            if($isLab){
+                 $theorymarks=$theorymarks-20;
+            }
+            $theory_per =($internal_marks + $mid_marks + $final_marks)>0?(($internal_marks + $mid_marks + $final_marks)/$theorymarks)*100:0;
+            $percentage = ($total_marks > 0) ? ($obtained_marks / $total_marks) * 100 : 0;
+            $grade = 'F';
+            if ($isLab && $lab_marks < 8) {
+                $grade = 'F';
+                $quality_points = 0;
+            } elseif (!$isLab && $percentage < 40) {
+                $grade = 'F';
+                $quality_points = 0;
+            } else if ($isLab && $theory_per < 40) {
+                $grade = 'F';
+                $quality_points = 0;
+            } else {
+                if ($percentage >= 85) {
+                    $grade = 'A';
+                } elseif ($percentage >= 75) {
+                    $grade = 'B';
+                    $quality_points == 3 ? 10 : 14;
+                } elseif ($percentage >= 55) {
+                    $grade = 'C';
+                    $quality_points  == 3 ? 9 : 12;
+                } elseif ($percentage >= 40) {
+                    $grade = 'D';
+                    $quality_points  == 3 ? 7 : 10;
+                } else {
+                    $grade = 'F';
+                    $quality_points = 0;
+                }
+            }
+            $existingResult = subjectresult::where('student_offered_course_id', $s->id)->first();
+            if ($existingResult) {
+                $existingResult->update([
+                    'mid' => $mid_marks,
+                    'internal' => $internal_marks,
+                    'final' => $final_marks,
+                    'lab' => $lab_marks,
+                    'grade' => $grade,
+                    'quality_points' => $quality_points,
+                ]);
+            } else {
+                subjectresult::create([
+                    'student_offered_course_id' => $s->id,
+                    'mid' => $mid_marks,
+                    'internal' => $internal_marks,
+                    'final' => $final_marks,
+                    'lab' => $lab_marks,
+                    'grade' => $grade,
+                    'quality_points' => $quality_points,
+                ]);
+            }
+            $s->update(['grade' => $grade]);
+            $GPA = self::calculateAndStoreGPA($s->student_id, $offered_course->session_id);
+            $CGPA = self::calculateAndUpdateCGPA($s->student_id);
+            if($s->student->id==36){
+                return [
+                    "Student Name"=>$s->student->name,
+                    "Subject Name"=>$course->name,
+                    "Mid Marks"=>$mid_marks,
+                    "Final"=>$final_marks,
+                    "Lab Marks"=>$lab_marks,
+                    "Internal Marks"=>$internal_marks,
+                    "Grade"=>$grade,
+                    "Quality Points"=>$quality_points,
+                    "Total Marks of Subject"=>$total_marks,
+                    "Obtained Total"=>$obtained_marks,
+                    "Percentage of Theory"=>$theory_per,
+                    "Percentage of Total"=>$percentage,
+                    "Updated CGPA"=>$CGPA,
+                    "Updated GPA"=>$GPA
+                ];
+            }
+            
+        }
+    }
 
+    public static function CountExamMarks($type, $student_id, $teacher_offered_course_id)
+    {
+        if (!student::find($student_id)) {
+            return 0;
+        }
+        $teacherOfferedCourse = teacher_offered_courses::with(['offeredCourse'])->find($teacher_offered_course_id);
+        if (!$teacherOfferedCourse) {
+            return 0;
+        }
+        $offeredCourseId = $teacherOfferedCourse->offeredCourse->id;
+        $studentId = $student_id;
+        $exam = exam::where('offered_course_id', $offeredCourseId)->where('type', $type)->with(['questions'])->first();
+
+        if (!$exam) {
+            return 0;
+        }
+        $totalObtainedMarks = 0;
+        $totalMarks = 0;
+        $solidMarks = 0;
+        $examTotalObtained = 0;
+        foreach ($exam->questions as $question) {
+            $result = student_exam_result::where('question_id', $question->id)
+                ->where('student_id', $studentId)
+                ->where('exam_id', $exam->id)
+                ->first();
+            if ($result) {
+                $examTotalObtained += $result->obtained_marks;
+            }
+        }
+        $obtained_marks = $examTotalObtained;
+        $solid_marks_equivalent = $exam->Solid_marks > 0
+            ? ($examTotalObtained / $exam->total_marks) * $exam->Solid_marks
+            : 0;
+        return $solid_marks_equivalent ?? 0;
+    }
+
+
+
+    public static function SingleSubjectAttendance($student_id = null, $teacher_offered_course_id = null)
+    {
+        if (!$student_id || !$teacher_offered_course_id) {
+            return 0;
+        }
+        try {
+            $total_classes = attendance::where('teacher_offered_course_id', $teacher_offered_course_id)
+                ->distinct('date_time')
+                ->count('date_time');
+            $total_present = attendance::where('teacher_offered_course_id', $teacher_offered_course_id)
+                ->where('student_id', $student_id)
+                ->where('status', 'p')
+                ->count();
+            $percentage = ($total_classes > 0) ? ($total_present / $total_classes) * 100 : 0;
+            return $percentage;
+        } catch (Exception $ex) {
+            return 0;
+        }
+    }
+    public static function getTotalAndObtainedMarks($studentId, $teacherOfferedCourseId)
+    {
+        $taskConsideration = task_consideration::where('teacher_offered_course_id', $teacherOfferedCourseId)
+            ->whereIn('type', ['Quiz', 'Assignment'])
+            ->get();
+
+        $totalMarks = 0;
+        $obtainedMarks = 0;
+        $taskTypes = ['Quiz', 'Assignment'];
+
+        foreach ($taskTypes as $type) {
+            $teacherTasks = [];
+            $juniorTasks = [];
+            $consideration = $taskConsideration->where('type', $type)->first();
+
+            if ($consideration) {
+                $top = $consideration->top;
+                $jlConsiderCount = $consideration->jl_consider_count;
+                if ($jlConsiderCount === null) {
+                    $tasks = task::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                        ->where('type', $type)
+                        ->get();
+                    $teacherTasks = $tasks->sortByDesc(function ($task) use ($studentId) {
+                        return student_task_result::where('Task_id', $task->id)
+                            ->where('Student_id', $studentId)
+                            ->first()->ObtainedMarks ?? 0;
+                    })->take($top);
+                } else {
+                    $teacherCount = $top - $jlConsiderCount;
+                    $jlCount = $jlConsiderCount;
+
+                    $teacherTasks = task::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                        ->where('CreatedBy', 'Teacher')
+                        ->where('type', $type)
+                        ->get()
+                        ->sortByDesc(function ($task) use ($studentId) {
+                            return student_task_result::where('Task_id', $task->id)
+                                ->where('Student_id', $studentId)
+                                ->first()->ObtainedMarks ?? 0;
+                        })->take($teacherCount);
+
+                    $juniorTasks = task::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                        ->where('CreatedBy', 'JuniorLecturer')
+                        ->where('type', $type)
+                        ->get()
+                        ->sortByDesc(function ($task) use ($studentId) {
+                            return student_task_result::where('Task_id', $task->id)
+                                ->where('Student_id', $studentId)
+                                ->first()->ObtainedMarks ?? 0;
+                        })->take($jlCount);
+                }
+            } else {
+                // If no consideration exists, fetch all tasks of that type
+                $teacherTasks = task::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                    ->where('type', $type)
+                    ->get();
+            }
+
+            // Sum up the total and obtained marks
+            foreach ($teacherTasks->merge($juniorTasks) as $task) {
+                $taskTotalMarks = $task->points ?? 0;
+                $taskObtainedMarks = student_task_result::where('Task_id', $task->id)
+                    ->where('Student_id', $studentId)
+                    ->first()->ObtainedMarks ?? 0;
+
+                $totalMarks += $taskTotalMarks;
+                $obtainedMarks += $taskObtainedMarks;
+            }
+        }
+
+        return [
+            'status' => 'success',
+            'teacher_offered_course_id' => $teacherOfferedCourseId,
+            'total_marks' => $totalMarks,
+            'obtained_marks' => $obtainedMarks,
+        ];
+    }
+    public static function compileInternalMarks($studentId, $teacherOfferedCourseId, $internalMarks)
+    {
+        $attendance = self::SingleSubjectAttendance($studentId, $teacherOfferedCourseId);
+        $attendancePercentage = $attendance ?? 0;
+        $taskMarks = self::getTotalAndObtainedMarks($studentId, $teacherOfferedCourseId);
+        $totalMarks = $taskMarks['total_marks'];
+        $obtainedMarks = $taskMarks['obtained_marks'];
+        $attendanceMarks = 0;
+        $taskBasedMarks = 0;
+        if ($internalMarks == 8) {
+            $attendanceMarksWeight = 2;
+        } elseif ($internalMarks == 12) {
+            $attendanceMarksWeight = 4;
+        } else {
+            return 0;
+        }
+        if ($attendancePercentage >= 80) {
+            $attendanceMarks = ($attendancePercentage / 100) * $attendanceMarksWeight;
+        } else {
+            $attendanceMarks = 0;
+        }
+        $remainingMarksForTasks = $internalMarks - $attendanceMarksWeight;
+        if ($totalMarks > 0) {
+            $taskBasedMarks = ($obtainedMarks / $totalMarks) * $remainingMarksForTasks;
+        }
+        return min($attendanceMarks + $taskBasedMarks, $internalMarks) ?? 0;
+    }
+    public static function getLabTaskResult($studentId, $teacherOfferedCourseId)
+    {
+        $taskConsideration = task_consideration::where('teacher_offered_course_id', $teacherOfferedCourseId)
+            ->where('type', 'LabTask')
+            ->first();
+        $teacherTasks = [];
+        $juniorTasks = [];
+
+        if ($taskConsideration) {
+            // Step 2: Fetch Considered LabTasks
+            $top = $taskConsideration->top;
+            $jlConsiderCount = $taskConsideration->jl_consider_count;
+            $teacherCount = $top;
+            $jlCount = 0;
+
+            if ($jlConsiderCount !== null) {
+                $teacherCount = $top - $jlConsiderCount;
+                $jlCount = $jlConsiderCount;
+            }
+
+            // Fetch Teacher Created LabTasks
+            $teacherTasks = task::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                ->where('CreatedBy', 'Teacher')
+                ->where('type', 'LabTask')
+                ->get()
+                ->map(function ($task) use ($studentId) {
+                    $obtainedMarks = student_task_result::where('Task_id', $task->id)
+                        ->where('Student_id', $studentId)
+                        ->first()->ObtainedMarks ?? 0;
+                    $task->obtained_marks = $obtainedMarks;
+                    return $task;
+                })
+                ->sortByDesc('obtained_marks')
+                ->take($teacherCount);
+            $juniorTasks = task::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                ->where('CreatedBy', 'JuniorLecturer')
+                ->where('type', 'LabTask')
+                ->get()
+                ->map(function ($task) use ($studentId) {
+                    $obtainedMarks = student_task_result::where('Task_id', $task->id)
+                        ->where('Student_id', $studentId)
+                        ->first()->ObtainedMarks ?? 0;
+                    $task->obtained_marks = $obtainedMarks;
+                    return $task;
+                })
+                ->sortByDesc('obtained_marks')
+                ->take($jlCount);
+
+        } else {
+            $teacherTasks = task::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                ->where('type', 'LabTask')
+                ->get()
+                ->map(function ($task) use ($studentId) {
+                    $obtainedMarks = student_task_result::where('Task_id', $task->id)
+                        ->where('Student_id', $studentId)
+                        ->first()->ObtainedMarks ?? 0;
+                    $task->obtained_marks = $obtainedMarks;
+                    return $task;
+                });
+        }
+        $totalMarks = collect($teacherTasks)->sum('points') + collect($juniorTasks)->sum('points');
+
+        $obtainedMarks = collect($teacherTasks)->sum('obtained_marks') + collect($juniorTasks)->sum('obtained_marks');
+        $labTaskMarks = 0;
+        if ($totalMarks > 0) {
+            $labTaskMarks = ($obtainedMarks / $totalMarks) * 20;
+        }
+        return round($labTaskMarks, 0);
+    }
+    public function Sample(Request $request)
+    {
+        try {
+
+            return response()->json(
+                [
+                    // 'atteandance per' => self::SingleSubjectAttendance(36, 64),
+                    // 'Inernal Marks' => self::compileInternalMarks(36, 64, 12),
+                    // 'Lab Marks' => self::getLabTaskResult(36, 64)
+                    "REUSLT"=>self::CompilerResult(18,16)
+                ],
+                200
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

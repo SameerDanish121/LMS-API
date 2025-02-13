@@ -1409,17 +1409,10 @@ $sec = $section->getNameByID($section_id);
             ], 500);
         }
     }
-
-    /**
-     * Display a list of junior lectures with optional name search.
-     */
     public function allJuniorLecturers(Request $request)
     {
         try {
-            // Initialize the query builder
             $query = juniorlecturer::query();
-
-            // Apply a filter if the 'name' parameter is present
             if ($request->filled('name')) {
                 $query->where('name', 'LIKE', '%' . $request->name . '%');
             }

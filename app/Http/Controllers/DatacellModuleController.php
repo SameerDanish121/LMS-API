@@ -1627,6 +1627,26 @@ class DatacellModuleController extends Controller
             ], 500);
         }
     }
+    public static function CompilerResult($offered_course_id, $section_id)
+    {
+        if (!$offered_course_id || !$section_id) {
+            return;
+        }
+        $offered_course=offered_courses::with([''])->find($offered_course_id);
+
+        $teacher_offered_Course_id = teacher_offered_courses::where('offered_course_id', $offered_course_id)->where('section_id', $section_id)->first();
+        if (!$teacher_offered_Course_id) {
+            return;
+        }
+        $students = student_offered_courses::where('section_id', $section_id)
+                ->where('offered_course_id', $offered_course_id)
+                ->with('student')
+                ->get();
+        foreach($students as $s){
+            $internalmarks=0;
+
+        }
+    }
     public function UploadExamAwardList(Request $request)
     {
         try {
@@ -1743,6 +1763,9 @@ class DatacellModuleController extends Controller
                 } else {
                     continue;
                 }
+            }
+            if($examType=='Final'){
+                self::CompilerResult($offered_course_id,$section_id);
             }
             return response()->json([
                 'status' => 'success',
@@ -2449,7 +2472,7 @@ class DatacellModuleController extends Controller
                         'grade' => $grade
                     ]
                 );
-                
+
                 $success[] = ["status" => "success", "message" => "Result added for {$regNo}"];
             }
             $missingStudentIds = array_diff($dbStudentIds, $excelStudentIds);
@@ -2497,7 +2520,7 @@ class DatacellModuleController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
-    }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+    }
     private function calculateGrade($marks, $thresholds)
     {
         return match (true) {
