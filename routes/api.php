@@ -13,6 +13,23 @@ use App\Http\Controllers\TeachersController;
 use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\ExtraKhattaController;
 use App\Http\Controllers\AuthenticationController;
+Route::post('/send-rich-notification', function (Request $request) {
+    $trait = new class {
+        use \App\Traits\SendNotificationTrait;
+    };
+    $token = "fTxTomXQQAmoorfJWqe-Lq:APA91bEE-NXhE0WqUhPFwqhi_mTsKiwAB7kqVZ_j3XDocvZnOmcgzTSmGCoBlTvZqkbhR8YIlQ0bTRJ6_yPeBSGoTeFddLQFGnH1Vs47nuQUwwAQL9k8EDQ";
+    $title = "Test Notification";
+    $body = "This is a test notification with rich content.";
+    $imageUrl = "https://img.freepik.com/free-vector/media-player-software-computer-application-geolocation-app-location-determination-function-male-implementor-programmer-cartoon-character_335657-1180.jpg?ga=GA1.1.1046342397.1717240298&semt=ais_hybrid";
+    $iconUrl = "https://img.freepik.com/free-vector/media-player-software-computer-application-geolocation-app-location-determination-function-male-implementor-programmer-cartoon-character_335657-1180.jpg?ga=GA1.1.1046342397.1717240298&semt=ais_hybrid";
+    $data = ['key' => 'value'];
+    
+    return $trait->sendRichNotification($token, $title, $body, $imageUrl, $iconUrl, $data);
+});
+Route::post('/firebase-notification', [ExtraKhattaController::class, 'send']);
+Route::get('/', function () {
+    return response()->json(['status' => 'success'], 200);
+});
 Route::get('/Login', [StudentsController::class, 'Login']);
 Route::post('/forgot-password', [AuthenticationController::class, 'sendOTP']);
 Route::post('/verify-otp', [AuthenticationController::class, 'verifyOTP']);
@@ -22,7 +39,7 @@ Route::get('/CanBePromoted', [ExtraKhattaController::class, 'Sample']);
 Route::post('/send-Notification', [StudentsController::class, 'sendNotification']);
 Route::post('/uplaod/SubjectFullResult', [ExtraKhattaController::class, 'AddSubjectResult']);
 
-Route::post('/firebase-notification', [ExtraKhattaController::class, 'send']);
+
 
 Route::prefix('Students')->group(function () {
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);

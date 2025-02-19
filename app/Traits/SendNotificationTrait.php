@@ -8,6 +8,44 @@ use Exception;
 
 trait SendNotificationTrait
 {
+    public function sendRichNotification($token, $title, $body, $imageUrl, $iconUrl, $data = [])
+    {
+        try {
+            $fcmUrl = "https://fcm.googleapis.com/v1/projects/lmsv1-e1686/messages:send";
+            $notification = [
+                'notification' => [
+                    'title' => $title,
+                    'body' => $body,
+                    'image' => $imageUrl,
+                ],
+                'android' => [
+                    'notification' => [
+                        'icon' => $iconUrl,
+                        'color' => '#FF0000',
+                        'sound' => 'default'
+                    ]
+                ],
+                'data' => (array) $data,
+                'token' => $token
+            ];
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->getAccessToken(),
+                'Content-Type'  => 'application/json',
+            ])->post($fcmUrl, ['message' => $notification]);
+
+            if ($response->failed()) {
+                throw new Exception("Firebase Rich Notification Failed: " . $response->body());
+            }
+
+            return $response->json();
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
     public function sendNotification($token, $title, $body, $data = [])
     {
         try {
@@ -49,7 +87,6 @@ trait SendNotificationTrait
                 if (empty($token['access_token'])) {
                    return null;
                 }
-    
                 return $token['access_token'];
             } catch (Exception $e) {
                 return null;

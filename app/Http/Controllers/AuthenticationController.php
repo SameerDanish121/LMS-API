@@ -109,8 +109,7 @@ class AuthenticationController extends Controller
                 'user_id' => 'required|exists:user,id',
                 'new_password' => [
                     'required',
-                    'min:6',
-                    'regex:/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*?&]+$/', // At least one letter & one number
+                    'min:6' // At least one letter & one number
                 ],
             ]); 
             $user = User::findOrFail($request->user_id);

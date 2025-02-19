@@ -92,10 +92,7 @@ class StudentsController extends Controller
             } else {
                 return response()->json(['message' => 'Invalid sender role.'], 400);
             }
-
-
             $notification = notification::create($data);
-
             return response()->json(['message' => 'Notification sent successfully!', 'data' => $notification], 201);
 
         } catch (Exception $e) {
@@ -176,7 +173,7 @@ class StudentsController extends Controller
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",
-                    "image" => asset($Admin->image)
+                    "image" => $Admin->image?asset($Admin->image):null
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -204,7 +201,7 @@ class StudentsController extends Controller
                     "Password" => $teacher->user->password,
                     "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
-                    "image" => asset($teacher->image),
+                    "image" =>$teacher->image?asset($teacher->image):null,
                 ];
                 if ($rescheduled) {
                     $Teacher['Notice !'] = $Notice;
@@ -229,7 +226,7 @@ class StudentsController extends Controller
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",
-                    "image" => asset($Datacell->image),
+                    "image" =>$Datacell->image?asset($Datacell->image):null,
                 ];
                 return response()->json([
                     'Type' => $role,
