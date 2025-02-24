@@ -24,7 +24,7 @@ Route::post('/send-rich-notification', function (Request $request) {
     $iconUrl = "https://img.freepik.com/free-vector/media-player-software-computer-application-geolocation-app-location-determination-function-male-implementor-programmer-cartoon-character_335657-1180.jpg?ga=GA1.1.1046342397.1717240298&semt=ais_hybrid";
     $data = ['key' => 'value'];
     
-    return $trait->sendRichNotification($token, $title, $body, $imageUrl, $iconUrl, $data);
+    return $trait->sendRichNotification($token, $title, $body, $imageUrl,$data);
 });
 Route::post('/firebase-notification', [ExtraKhattaController::class, 'send']);
 Route::get('/', function () {

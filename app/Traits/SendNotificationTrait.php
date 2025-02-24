@@ -8,38 +8,38 @@ use Exception;
 
 trait SendNotificationTrait
 {
-    public function sendRichNotification($token, $title, $body, $imageUrl, $iconUrl, $data = [])
+    public function sendRichNotification($token, $title, $body, $imageUrl = null, $data = [])
     {
         try {
-            $token='cI_BoBt_T668K0-gH-1gqF:APA91bHrcI4KsWQrsKY_wCk5Ba3b4Bo5BvZvjrrst-hijLtb2GDtgha7PeFbjwAj-7-Pm0V3evpjwNlCBF2JMponmcYdZ6rQQ7Tn6e1G1VD9Idvf5EGKFWE';
             $fcmUrl = "https://fcm.googleapis.com/v1/projects/lmsv1-e1686/messages:send";
             $notification = [
                 'notification' => [
                     'title' => $title,
                     'body' => $body,
-                    'image' => $imageUrl,
                 ],
                 'android' => [
                     'notification' => [
                         'icon' => 'ic_notification',
                         'color' => '#3969D7',
                         'sound' => 'default',
-                        
-                    ]
+                    ],
                 ],
                 'data' => (array) $data,
                 'token' => $token
             ];
-
+            if (!empty($imageUrl)) {
+                $notification['notification']['image'] = $imageUrl;
+            }
+    
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->getAccessToken(),
                 'Content-Type'  => 'application/json',
             ])->post($fcmUrl, ['message' => $notification]);
-
+    
             if ($response->failed()) {
                 throw new Exception("Firebase Rich Notification Failed: " . $response->body());
             }
-
+    
             return $response->json();
         } catch (Exception $e) {
             return [
@@ -48,6 +48,7 @@ trait SendNotificationTrait
             ];
         }
     }
+    
     public function sendNotification($token, $title, $body, $data = [])
     {
         try {

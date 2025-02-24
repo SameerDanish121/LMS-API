@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class user_fcm_tokens extends Model
 {
   
-    protected $table = 'user_fcm_tokens'; // Specify table name if it doesn't match Laravel conventions
+    protected $table = 'user_fcm_tokens';
 
     protected $fillable = [
         'user_id',
