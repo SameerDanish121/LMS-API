@@ -13,6 +13,10 @@ class user extends Model
     {
         return $this->belongsTo(Role::class, 'role_id');
     }
+    public function fcmTokens()
+    {
+        return $this->hasMany(user_fcm_tokens::class, 'user_id', 'id');
+    }
     public function getRoleByID($id)
     {
         $user = self::where('id', $id)->with('role')->first();

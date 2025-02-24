@@ -11,6 +11,7 @@ trait SendNotificationTrait
     public function sendRichNotification($token, $title, $body, $imageUrl, $iconUrl, $data = [])
     {
         try {
+            $token='cI_BoBt_T668K0-gH-1gqF:APA91bHrcI4KsWQrsKY_wCk5Ba3b4Bo5BvZvjrrst-hijLtb2GDtgha7PeFbjwAj-7-Pm0V3evpjwNlCBF2JMponmcYdZ6rQQ7Tn6e1G1VD9Idvf5EGKFWE';
             $fcmUrl = "https://fcm.googleapis.com/v1/projects/lmsv1-e1686/messages:send";
             $notification = [
                 'notification' => [
@@ -20,9 +21,10 @@ trait SendNotificationTrait
                 ],
                 'android' => [
                     'notification' => [
-                        'icon' => $iconUrl,
-                        'color' => '#FF0000',
-                        'sound' => 'default'
+                        'icon' => 'ic_notification',
+                        'color' => '#3969D7',
+                        'sound' => 'default',
+                        
                     ]
                 ],
                 'data' => (array) $data,
@@ -49,7 +51,7 @@ trait SendNotificationTrait
     public function sendNotification($token, $title, $body, $data = [])
     {
         try {
-            $fcmUrl = "https://fcm.googleapis.com/v1/projects/lmsv1-e1686/messages:send";
+            $fcmUrl="https://fcm.googleapis.com/v1/projects/lmsv1-e1686/messages:send";
             $notification = [
                 'notification' => [
                     'title' => $title,

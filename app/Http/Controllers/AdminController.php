@@ -14,6 +14,7 @@ use App\Models\section;
 use App\Models\student;
 use App\Models\teacher;
 use App\Models;
+use Illuminate\Validation\ValidationException;
 use App\Models\FileHandler;
 use App\Models\program;
 use App\Models\teacher_grader;
@@ -23,7 +24,6 @@ use App\Models\student_offered_courses;
 use App\Models\teacher_juniorlecturer;
 use Carbon\Carbon;
 use Exception;
-use League\Config\Exception\ValidationException;
 use App\Models\user;
 use Dotenv\Validator;
 use Illuminate\Support\Facades\DB;
@@ -177,7 +177,7 @@ public function getTeacherJuniorLecturers(Request $request)
             'message' => 'Validation failed.',
             'errors' => $e->errors(),
         ], 400);
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
         // Handle general exceptions
         return response()->json([
             'status' => 'error',
@@ -257,8 +257,8 @@ public function getTeacherJuniorLecturers(Request $request)
                 if (!$originalPath) {
                     $student->image = null;
                 } else if (file_exists(public_path($originalPath))) {
-                    $imageContent = file_get_contents(public_path($originalPath));
-                    $student->image = base64_encode($imageContent);
+                    // $imageContent = file_get_contents(public_path($originalPath));
+                    $student->image =asset($originalPath);
                 } else {
                     $student->image = null;
                 }
@@ -370,7 +370,7 @@ public function getTeacherJuniorLecturers(Request $request)
             }
 
             return response()->json(['success' => 'Notification(s) sent successfully!']);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             // Handle validation exceptions
             return response()->json([
                 'error' => 'Validation Error',
@@ -448,7 +448,7 @@ public function getTeacherJuniorLecturers(Request $request)
                 'Teacher' => $teachers,
             ], 200);
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             // Handle any unexpected errors
             return response()->json([
                 'status' => 'error',
@@ -545,7 +545,7 @@ public function getTeacherJuniorLecturers(Request $request)
                 'data' => $freeSlots
             ], 200);
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             // Handle any unexpected errors
             return response()->json([
                 'status' => 'error',
@@ -605,7 +605,7 @@ public function getTeacherJuniorLecturers(Request $request)
             $response = $result;
 
             return response()->json($response, 200);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Error fetching grader history: ' . $e->getMessage());
             return response()->json(['error' => 'Server error, please try again later.'], 500);
         }
@@ -644,7 +644,7 @@ public function getTeacherJuniorLecturers(Request $request)
                 ->get();
 
             return response()->json($unassignedGraders);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Error fetching unassigned graders: ' . $e->getMessage());
             return response()->json(['error' => 'Server error, please try again later'], 500);
         }
@@ -679,7 +679,7 @@ public function getTeacherJuniorLecturers(Request $request)
             ->get();
 
             return response()->json($teachersWithoutGraders);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Error fetching teachers without graders: ' . $e->getMessage());
             return response()->json(['error' => 'Server error, please try again later'], 500);
         }
@@ -724,7 +724,7 @@ public function getTeacherJuniorLecturers(Request $request)
         });
 
         return response()->json($groupedResults);
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
         Log::error('Error fetching teachers with graders: ' . $e->getMessage());
         return response()->json(['error' => 'Server error, please try again later'], 500);
     }

@@ -64,6 +64,7 @@ class DatacellModuleController extends Controller
                 throw new Exception('NO SESSION EXISIT FOR THE PROVIDED NAME ');
             }
             $file = $request->file('excel_file');
+           
             $spreadsheet = IOFactory::load($file->getPathname());
             $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
             $filteredData = [];
@@ -450,7 +451,6 @@ class DatacellModuleController extends Controller
 
                 try {
                     $venue = venue::firstOrCreate(['venue' => $rawVenue]);
-
                     $successful[] = [
                         'status' => 'success',
                         'data' => "Row No {$rowCount}: Venue '{$venue->venue}' was added or already exists."
@@ -802,7 +802,8 @@ class DatacellModuleController extends Controller
                         'date_of_birth' => $formattedDOB,
                         'gender' => $gender
                     ]);
-                    $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated."];
+                    $user=User::find($userId);
+                    $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated.","username"=>$username,"password"=>$user->password];
                 } else {
                     Teacher::create([
                         'user_id' => $userId,
@@ -810,7 +811,7 @@ class DatacellModuleController extends Controller
                         'date_of_birth' => $formattedDOB,
                         'gender' => $gender
                     ]);
-                    $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was added."];
+                    $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was added.","username"=>$username,"password"=>$password];
                 }
             }
 
@@ -906,12 +907,16 @@ class DatacellModuleController extends Controller
                 if (!$program_id) {
                     $errorMessages[] = ["status" => 'failed', "reason" => "The Field Disciplein  {$Discipline} Format is Not Correct !"];
                 }
-
+                $addorUpdate='Added';
+                if(student::where('RegNo',$regNo)->exists()){
+                    $addorUpdate='Updated';
+                }
+                
                 $student = StudentManagement::addOrUpdateStudent($regNo, $Name, $cgpa, $gender, $dob, $guardian, null, $user_id, $section_id, $program_id, $session_id, $status);
 
                 if ($student) {
-                    $successMessages[] = ["status" => 'success', "Logs" => "The Student with RegNo : {$regNo} ,Name : {$Name}  is added to Record !", "Username" => $regNo, "Password" => $password];
-
+                    $password=user::where('username',$regNo)->first()->password;
+                    $successMessages[] = ["status" => 'success', "Logs" => "The Student with RegNo : {$regNo} ,Name : {$Name}  is {$addorUpdate} ! ", "Username" => $regNo, "Password" => $password];
                 } else {
                     $errorMessages[] = ["status" => 'failed', 'Reason' => 'Unknown'];
                 }
@@ -1125,7 +1130,8 @@ class DatacellModuleController extends Controller
                         'date_of_birth' => $formattedDOB,
                         'gender' => $gender
                     ]);
-                    $status[] = ["status" => 'success', "Logs" => "The JuniorLecturer with Name: {$name} was updated."];
+                    $user=User::find($userId);
+                    $status[] = ["status" => 'success', "Logs" => "The JuniorLecturer with Name: {$name} was updated.","username"=>$username,"password"=>$user->password];
                 } else {
                     JuniorLecturer::create([
                         'user_id' => $userId,
@@ -1133,7 +1139,7 @@ class DatacellModuleController extends Controller
                         'date_of_birth' => $formattedDOB,
                         'gender' => $gender
                     ]);
-                    $status[] = ["status" => 'success', "Logs" => "The JuniorLecturer with Name: {$name} was added."];
+                    $status[] = ["status" => 'success', "Logs" => "The JuniorLecturer with Name: {$name} was added.","username"=>$username,"password"=>$password];
                 }
             }
 
@@ -1803,12 +1809,13 @@ class DatacellModuleController extends Controller
                 'excel_file' => 'required|mimes:xlsx,xls',
                 'session' => 'required'
             ]);
-
+          
             $session_name = $request->session;
             $session_id = (new session())->getSessionIdByName($session_name);
             if (!$session_id) {
                 $session_id = (new session())->getUpcomingSessionId();
             }
+           
             $file = $request->file('excel_file');
             $spreadsheet = IOFactory::load($file->getPathname());
             $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
@@ -2140,42 +2147,101 @@ class DatacellModuleController extends Controller
             ], 500);
         }
     }
-    public function getTimetableGroupedBySection(Request $request)
-    {
-        $session_id = $request->session_id ?? (new Session())->getCurrentSessionId();
-        if (!$session_id) {
-            return response()->json(['error' => 'Session ID is required.'], 400);
-        }
-        $timetable = Timetable::with([
-            'course:name,id,description',
-            'teacher:name,id',
-            'venue:venue,id',
-            'dayslot:day,start_time,end_time,id',
-            'juniorLecturer:id,name',
-        ])
-            ->where('session_id', $session_id)
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'section' => (new Section())->getNameByID($item->section_id) ?? 'N/A',
-                    'name' => $item->course->name ?? 'N/A',
-                    'description' => $item->course->description ?? 'N/A',
-                    'teacher' => $item->teacher->name ?? 'N/A',
-                    'junior_lecturer' => $item->juniorLecturer->name ?? 'N/A',
-                    'venue' => $item->venue->venue ?? 'N/A',
-                    'day' => $item->dayslot->day ?? 'N/A',
-                    'time' => ($item->dayslot->start_time && $item->dayslot->end_time)
-                        ? Carbon::parse($item->dayslot->start_time)->format('g:i A') . ' - ' . Carbon::parse($item->dayslot->end_time)->format('g:i A')
-                        : 'N/A',
-                ];
-            })
-            ->groupBy('section');
+    // public function getTimetableGroupedBySection(Request $request)
+    // {
+    //     $session_id = $request->session_id ?? (new Session())->getCurrentSessionId();
+    //     if (!$session_id) {
+    //         return response()->json(['error' => 'Session ID is required.'], 400);
+    //     }
+    //     $timetable = Timetable::with([
+    //         'course:name,id,description',
+    //         'teacher:name,id',
+    //         'venue:venue,id',
+    //         'dayslot:day,start_time,end_time,id',
+    //         'juniorLecturer:id,name',
+    //     ])
+    //         ->where('session_id', $session_id)
+    //         ->get()
+    //         ->map(function ($item) {
+    //             return [
+    //                 'section' => (new Section())->getNameByID($item->section_id) ?? 'N/A',
+    //                 'name' => $item->course->name ?? 'N/A',
+    //                 'description' => $item->course->description ?? 'N/A',
+    //                 'teacher' => $item->teacher->name ?? 'N/A',
+    //                 'junior_lecturer' => $item->juniorLecturer->name ?? 'N/A',
+    //                 'venue' => $item->venue->venue ?? 'N/A',
+    //                 'day' => $item->dayslot->day ?? 'N/A',
+    //                 'time' => ($item->dayslot->start_time && $item->dayslot->end_time)
+    //                     ? Carbon::parse($item->dayslot->start_time)->format('g:i A') . ' - ' . Carbon::parse($item->dayslot->end_time)->format('g:i A')
+    //                     : 'N/A',
+    //             ];
+    //         })
+    //         ->groupBy('section');
 
-        return response()->json([
-            "status" => "Successfull",
-            "timetable" => $timetable,
-        ], 200);
+    //     return response()->json([
+    //         "status" => "Successfull",
+    //         "timetable" => $timetable,
+    //     ], 200);
+    // }
+    public function getTimetableGroupedBySection(Request $request)
+{
+    $session_id = $request->session_id ?? (new Session())->getCurrentSessionId();
+    if (!$session_id) {
+        return response()->json(['error' => 'Session ID is required.'], 400);
     }
+    $session_name=(new session())->getSessionNameByID($session_id);
+    $timetable = Timetable::with([
+        'course:name,id,description',
+        'teacher:name,id',
+        'venue:venue,id',
+        'dayslot:day,start_time,end_time,id',
+        'juniorLecturer:id,name',
+    ])
+        ->where('session_id', $session_id)
+        ->get()
+        ->map(function ($item) {
+            return [
+                'section' => (new Section())->getNameByID($item->section_id) ?? 'N/A',
+                'name' => $item->course->name ?? 'N/A',
+                'description' => $item->course->description ?? 'N/A',
+                'teacher' => $item->teacher->name ?? 'N/A',
+                'junior_lecturer' => $item->juniorLecturer->name ?? 'N/A',
+                'venue' => $item->venue->venue ?? 'N/A',
+                'day' => $item->dayslot->day ?? 'N/A',
+                'time' => ($item->dayslot->start_time && $item->dayslot->end_time)
+                    ? Carbon::parse($item->dayslot->start_time)->format('g:i') . ' - ' . Carbon::parse($item->dayslot->end_time)->format('g:i')
+                    : 'N/A',
+            ];
+        })
+        ->groupBy('section')
+        ->sortBy(function ($items, $sectionName) {
+            // Extract program, batch, and section
+            if (preg_match('/^(BCS)-(\d+)([A-Z]*)$/', $sectionName, $matches)) {
+                $program = $matches[1];  // BCS
+                $batch = (int) $matches[2]; // Numeric batch
+                $section = $matches[3] ?? ''; // Section letter
+                return [0, $batch, $section]; // Prioritize BCS
+            }
+
+            // For other standard formats, place them next
+            if (preg_match('/^([A-Z]+)-(\d+)([A-Z]*)$/', $sectionName, $matches)) {
+                $program = $matches[1];  
+                $batch = (int) $matches[2]; 
+                $section = $matches[3] ?? ''; 
+                return [1, $batch, $section];
+            }
+
+            // For ExtraSection or other non-standard names, push to the end
+            return [2, $sectionName];
+        });
+
+    return response()->json([
+        "status" => "Successfull",
+        "sesssion"=>$session_name,
+        "timetable" => $timetable,
+    ], 200);
+}
+
     public function CreateCourseContent(Request $request)
     {
         try {

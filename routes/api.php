@@ -17,7 +17,7 @@ Route::post('/send-rich-notification', function (Request $request) {
     $trait = new class {
         use \App\Traits\SendNotificationTrait;
     };
-    $token = "fTxTomXQQAmoorfJWqe-Lq:APA91bEE-NXhE0WqUhPFwqhi_mTsKiwAB7kqVZ_j3XDocvZnOmcgzTSmGCoBlTvZqkbhR8YIlQ0bTRJ6_yPeBSGoTeFddLQFGnH1Vs47nuQUwwAQL9k8EDQ";
+    $token = "fNjLVAcNSyapcsMgIsXbZS:APA91bG4spJC4q9CkeMl0ZDcb_sHeH-H_BCfwBxc3AY6cshUTx9i02xEo2PNbbcY-jVUGnyjjouKUV0rT8LLTCntbs616D4pUMYz6NpNNN4iVjkjmGkhkuc";
     $title = "Test Notification";
     $body = "This is a test notification with rich content.";
     $imageUrl = "https://img.freepik.com/free-vector/media-player-software-computer-application-geolocation-app-location-determination-function-male-implementor-programmer-cartoon-character_335657-1180.jpg?ga=GA1.1.1046342397.1717240298&semt=ais_hybrid";

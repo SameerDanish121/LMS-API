@@ -2399,8 +2399,8 @@ class DatacellsController extends Controller
                     'venue' => $item->venue->venue ?? 'N/A',
                     'day' => $item->dayslot->day ?? 'N/A',
                     'time' => ($item->dayslot->start_time && $item->dayslot->end_time)
-                        ? Carbon::parse($item->dayslot->start_time)->format('g:i A') . ' - ' . Carbon::parse($item->dayslot->end_time)->format('g:i A')
-                        : 'N/A',
+                    ? $item->dayslot->start_time . ' - ' . $item->dayslot->end_time
+                    : 'N/A',
                 ];
             })
             ->groupBy('section');
