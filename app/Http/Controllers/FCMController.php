@@ -1,9 +1,10 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Kreait\Firebase\Factory;
 use App\Models\user_fcm_tokens;
 use Illuminate\Http\Request;
+use Kreait\Firebase\Messaging\CloudMessage;
 
 class FCMController extends Controller
 {
@@ -90,5 +91,35 @@ class FCMController extends Controller
         } catch (\Exception $e) {
             return ['status' => 'error', 'message' => 'Unexpected error: ' . $e->getMessage()];
         }
+    }   
+    public function sendN()
+    {
+        try {
+            $notification = [
+                'notification' => [
+                    'title' => 'Test',
+                    'body' => 'I,M TESTING',
+                ],
+                // 'data' => (array) $data, // Ensure 'data' is an associative array
+                'token' => 'cI_BoBt_T668K0-gH-1gqF:APA91bHrcI4KsWQrsKY_wCk5Ba3b4Bo5BvZvjrrst-hijLtb2GDtgha7PeFbjwAj-7-Pm0V3evpjwNlCBF2JMponmcYdZ6rQQ7Tn6e1G1VD9Idvf5EGKFWE'
+            ];
+                $serviceAccountPath = storage_path('app/lmsv1-e1686-firebase-adminsdk-fbsvc-d0b69729a1'); // Secure Path
+            
+                $firebase = (new Factory)
+                    ->withServiceAccount($serviceAccountPath)
+                    ->createMessaging();
+            
+                $message = CloudMessage::fromArray([
+                    'token' => 'cI_BoBt_T668K0-gH-1gqF:APA91bHrcI4KsWQrsKY_wCk5Ba3b4Bo5BvZvjrrst-hijLtb2GDtgha7PeFbjwAj-7-Pm0V3evpjwNlCBF2JMponmcYdZ6rQQ7Tn6e1G1VD9Idvf5EGKFWE', // Replace with actual FCM token
+                    'notification' => $notification,
+                ]);
+            
+                return $firebase->send($message);
+        } catch (\Kreait\Firebase\Exception\MessagingException $e) {
+            return response()->json(['error' => 'Firebase Messaging Error', 'message' => $e->getMessage()], 500);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'An Unexpected Error Occurred', 'message' => $e->getMessage()], 500);
+        }
     }
+    
 }

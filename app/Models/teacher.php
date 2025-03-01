@@ -17,7 +17,8 @@ class teacher extends Model
         'name', 
         'image', 
         'date_of_birth', 
-        'gender'
+        'gender',
+        'cnic'
     ];
 
     // Define the relationship with the User model

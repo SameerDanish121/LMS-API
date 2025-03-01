@@ -169,7 +169,7 @@ class StudentsController extends Controller
                     "Designation" => $Admin->Designation,
                     "Username" => $Admin->user->username,
                     "Password" => $Admin->user->password,
-                    
+                    "user_id"=>$Admin->user->id,
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",
@@ -222,7 +222,7 @@ class StudentsController extends Controller
                     "Designation" => $Datacell->Designation,
                     "Username" => $Datacell->user->username,
                     "Password" => $Datacell->user->password,
-                   
+                    "user_id"=>$Datacell->user->id,
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",

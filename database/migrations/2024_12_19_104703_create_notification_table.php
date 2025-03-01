@@ -17,8 +17,8 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->string('url')->nullable();
             $table->dateTime('notification_date')->nullable()->useCurrent();
-            $table->enum('sender', ['Admin', 'DataCell', 'Teacher', 'JuniorLecturer']);
-            $table->enum('reciever', ['Student', 'Teacher', 'JuniorLecturer']);
+            $table->string('sender', 50)->nullable()->default(null); // Changed from ENUM to VARCHAR(50)
+            $table->string('reciever', 50)->nullable()->default(null); 
             $table->boolean('Brodcast')->nullable()->default(false);
             $table->integer('TL_sender_id')->nullable()->index('tl_sender_id');
             $table->integer('Student_Section')->nullable()->index('student_section');

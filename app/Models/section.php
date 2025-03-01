@@ -55,11 +55,11 @@ class section extends Model
         preg_match('/^([A-Za-z]+)ExtraSection$/', $name, $matches);
         if(!empty($matches)){
             $programType = $matches[1];
-            $semester = $matches[2]; 
-            $group = $matches[3]; 
+            // $semester = $matches[2]; 
+            // $group = $matches[3]; 
             $section = self::where('program', $programType)
-                ->where('Extra', $semester)
-                ->where('Section', $group)
+                ->where('semester', 'Extra')
+                ->where('group', 'Section')
                 ->first();
             if ($section) {
                 return $section->id;

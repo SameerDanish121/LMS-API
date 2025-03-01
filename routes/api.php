@@ -1,9 +1,17 @@
 <?php
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\DatacellsController;
+use App\Http\Controllers\FCMController;
 use App\Http\Controllers\GraderController;
 use App\Http\Controllers\LogicController;
+use App\Http\Controllers\SingleInsertionController;
 use App\Http\Controllers\TestController;
+use App\Models\Course;
+use App\Models\juniorlecturer;
+use App\Models\section;
+use App\Models\session;
+use App\Models\student;
+use App\Models\teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
@@ -13,32 +21,21 @@ use App\Http\Controllers\TeachersController;
 use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\ExtraKhattaController;
 use App\Http\Controllers\AuthenticationController;
-Route::post('/send-rich-notification', function (Request $request) {
-    $trait = new class {
-        use \App\Traits\SendNotificationTrait;
-    };
-    $token = "fNjLVAcNSyapcsMgIsXbZS:APA91bG4spJC4q9CkeMl0ZDcb_sHeH-H_BCfwBxc3AY6cshUTx9i02xEo2PNbbcY-jVUGnyjjouKUV0rT8LLTCntbs616D4pUMYz6NpNNN4iVjkjmGkhkuc";
-    $title = "Test Notification";
-    $body = "This is a test notification with rich content.";
-    $imageUrl = "https://img.freepik.com/free-vector/media-player-software-computer-application-geolocation-app-location-determination-function-male-implementor-programmer-cartoon-character_335657-1180.jpg?ga=GA1.1.1046342397.1717240298&semt=ais_hybrid";
-    $iconUrl = "https://img.freepik.com/free-vector/media-player-software-computer-application-geolocation-app-location-determination-function-male-implementor-programmer-cartoon-character_335657-1180.jpg?ga=GA1.1.1046342397.1717240298&semt=ais_hybrid";
-    $data = ['key' => 'value'];
-    
-    return $trait->sendRichNotification($token, $title, $body, $imageUrl,$data);
-});
-Route::post('/firebase-notification', [ExtraKhattaController::class, 'send']);
+use function Laravel\Prompts\select;
+
 Route::get('/', function () {
     return response()->json(['status' => 'success'], 200);
 });
 Route::get('/Login', [StudentsController::class, 'Login']);
 Route::post('/forgot-password', [AuthenticationController::class, 'sendOTP']);
+Route::post('/store-fcmtoken', [FCMController::class, 'storeFcmToken']);
 Route::post('/verify-otp', [AuthenticationController::class, 'verifyOTP']);
 Route::post('/update-pass', [AuthenticationController::class, 'updatePassword']);
 Route::get('/load-file', [TeachersController::class, 'LoadFile']);
 Route::get('/CanBePromoted', [ExtraKhattaController::class, 'Sample']);
 Route::post('/send-Notification', [StudentsController::class, 'sendNotification']);
 Route::post('/uplaod/SubjectFullResult', [ExtraKhattaController::class, 'AddSubjectResult']);
-
+Route::post('/send', [FCMController::class, 'sendN']);
 
 
 Route::prefix('Students')->group(function () {
@@ -209,4 +206,59 @@ Route::prefix('Uploading')->group(function () {
 
 
 
+Route::post('/send-rich-notification', function (Request $request) {
+    $trait = new class {
+        use \App\Traits\SendNotificationTrait;
+    };
+    if (empty($request->fmctoken)) {
+        return response(['data' => 'error'], 200);
+    }
+    $token = $request->fmctoken;
+    $title = "Test Notification";
+    $body = "This is a test notification with rich content.";
+    $imageUrl = "https://img.freepik.com/free-vector/media-player-software-computer-application-geolocation-app-location-determination-function-male-implementor-programmer-cartoon-character_335657-1180.jpg?ga=GA1.1.1046342397.1717240298&semt=ais_hybrid";
+    return $trait->sendRichNotification($token, $title, $body, $imageUrl);
+});
+Route::post('/firebase-notification', [ExtraKhattaController::class, 'send']);
 
+
+
+
+
+
+Route::prefix('Insertion')->group(function () {
+    Route::post('/add-single-teacher', [SingleInsertionController::class, 'AddSingleTeacher']);
+    Route::post('/add-single-junior', [SingleInsertionController::class, 'AddSingleJuniorLecturer']);
+    Route::post('/add-admin', [SingleInsertionController::class, 'AddSingleAdmin']);
+    Route::post('/add-datacell', [SingleInsertionController::class, 'AddSingleDatacell']);
+    Route::post('/send-notification', [SingleInsertionController::class, 'pushNotification']);
+    Route::post('/update-single-user', [SingleInsertionController::class, 'UpdateSingleUser']);
+});
+
+
+Route::prefix('Dropdown')->group(function () {
+    Route::get('/AllStudent', function () {
+        return student::all('name')->pluck('name');
+    });
+    Route::get('/AllTeacher', function () {
+        return teacher::all('name')->pluck('name');
+    });
+    Route::get('/AllJL', function () {
+        return juniorlecturer::all('name')->pluck('name');
+    });
+    Route::get('/AllCourse', function () {
+        return Course::all('name')->pluck('name');
+    });
+    Route::get('/AllSections', function () {
+        $sections = section::all();
+        $formattedSections = $sections->map(function ($section) {
+            $program = in_array($section->program, ['BCS', 'BAI', 'BSE', 'BIT']) 
+                ? $section->program . '-' 
+                : $section->program;
+
+            return $program . $section->semester . $section->group;
+        });
+
+        return response()->json($formattedSections);
+    });
+});

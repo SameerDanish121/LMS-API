@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('image', 50)->nullable();
             $table->date('date_of_birth')->nullable();
             $table->string('gender', 10)->nullable();
+            $table->string('cnic', 15)->unique();
         });
     }
 

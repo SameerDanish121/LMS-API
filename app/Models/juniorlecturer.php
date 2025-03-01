@@ -21,6 +21,7 @@ class juniorlecturer extends Model
         'image',
         'date_of_birth',
         'gender',
+        'cnic'
     ];
 
     // Define the relationship to the User model
