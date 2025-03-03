@@ -30,17 +30,24 @@ class SingleInsertionController extends Controller
                 'name' => 'required|string',
                 'date_of_birth' => 'required|date',
                 'gender' => 'required|string',
-                'email' => 'nullable|email', // Email is now optional
-                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048' // Image is optional
+                'cnic' => 'required',
+                'email' => 'nullable|email',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048' 
             ]);
 
             $name = trim($request->input('name'));
             $dateOfBirth = $request->input('date_of_birth');
             $gender = $request->input('gender');
-            $email = $request->input('email') ?? null; // Default to null if not provided
+            $cnic = $request->input('cnic');
+            $email = $request->input('email') ?? null; 
             $username = strtolower(str_replace(' ', '', $name)) . '@biit.edu';
-
-            // Check if the user already exists
+            if(teacher::where('cnic',$cnic)->exists()){
+                return response()->json([
+                    'status' => 'failed',
+                    'message' => "The teacher with cnic: {$cnic} already exists."
+                ], 409);
+            }
+            
             $existingUser = User::where('username', $username)->first();
             if ($existingUser) {
                 return response()->json([
@@ -67,7 +74,6 @@ class SingleInsertionController extends Controller
                 'gender' => $gender,
                 'email' => $email // Store email even if it's null
             ]);
-
             // Handle image upload only if it's provided
             if ($request->hasFile('image')) {
                 $image = $request->file('image');
@@ -111,6 +117,7 @@ class SingleInsertionController extends Controller
                 'name' => 'required|string',
                 'date_of_birth' => 'required|date',
                 'gender' => 'required|string',
+                'cnic' => 'required',
                 'email' => 'nullable|email', // Email is optional
                 'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048' // Image is optional
             ]);
@@ -118,9 +125,15 @@ class SingleInsertionController extends Controller
             $name = trim($request->input('name'));
             $dateOfBirth = $request->input('date_of_birth');
             $gender = $request->input('gender');
+            $cnic = $request->input('cnic');
             $email = $request->input('email') ?? null; // Default to null if not provided
             $username = strtolower(str_replace(' ', '', $name)) . '@biit.edu';
-
+            if(juniorlecturer::where('cnic',$cnic)->exists()){
+                return response()->json([
+                    'status' => 'failed',
+                    'message' => "The JuniorLecturer with cnic: {$cnic} already exists."
+                ], 409);
+            }
             // Check if the user already exists
             $existingUser = User::where('username', $username)->first();
             if ($existingUser) {

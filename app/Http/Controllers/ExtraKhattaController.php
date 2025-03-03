@@ -85,10 +85,11 @@ class ExtraKhattaController extends Controller
         try {
             $request->validate([
                 'excel_file' => 'required|file|mimes:xlsx,xls',
-                'section_id' => 'required|integer',
+                'section_id' => 'required',
                 'offered_course_id' => 'required|integer',
             ]);
             $section_id = $request->section_id;
+            $section_id=(new section())->getIDByName($section_id);
             $offered_course_id = $request->offered_course_id;
             $offeredCourse = offered_courses::with('course:id,name,credit_hours,lab')->findOrFail($offered_course_id);
             $course = $offeredCourse->course;
@@ -213,7 +214,7 @@ class ExtraKhattaController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage(),
+                'errors' => $e->getMessage(),
             ], 500);
         }
     }

@@ -135,8 +135,8 @@ class DatacellModuleController extends Controller
                     'message' => 'The Teacher Enrollments Are Added',
                     'data' => [
                         "Total Data " => count($nonEmpty),
-                        "Total Inserted " => count($Succesfull),
-                        "Total Failure " => count($FaultyData),
+                        "Total Inserted" => count($Succesfull),
+                        "Total Failure" => count($FaultyData),
                         "FaultyData" => $FaultyData,
                         "Sucessfull" => $Succesfull
                     ]
@@ -1190,11 +1190,11 @@ class DatacellModuleController extends Controller
         try {
             $request->validate([
                 'excel_file' => 'required|mimes:xlsx,xls',
-                'session_name' => 'required|string'
+                'session' => 'required|string'
             ]);
 
             $file = $request->file('excel_file');
-            $sessionName = $request->input('session_name');
+            $sessionName = $request->input('session');
             $sessionId = (new Session())->getSessionIdByName($sessionName);
 
             if ($sessionId === 0) {
@@ -1321,7 +1321,7 @@ class DatacellModuleController extends Controller
         try {
             $request->validate([
                 'excel_file' => 'required|mimes:xlsx,xls',
-                'session_name' => 'required|string'
+                'session' => 'required|string'
             ]);
             $file = $request->file('excel_file');
             $spreadsheet = IOFactory::load($file->getPathname());
@@ -1344,7 +1344,7 @@ class DatacellModuleController extends Controller
                 }
             }
 
-            $sessionName = $request->input('session_name');
+            $sessionName = $request->input('session');
 
             $sessionId = (new Session())->getSessionIdByName($sessionName);
             if (!$sessionId) {
@@ -1517,14 +1517,15 @@ class DatacellModuleController extends Controller
         } catch (ModelNotFoundException $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Invalid username or password'
+                'message' => 'Invalid username or password',
+                 'errors' => $e->getMessage()
             ], 404);
 
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
+                'errors' => $e->getMessage()
             ], 500);
         }
     }
@@ -1658,12 +1659,16 @@ class DatacellModuleController extends Controller
         try {
             $request->validate([
                 'excel_file' => 'required|file|mimes:xlsx,xls',
-                'section_id' => 'required|integer',
+                'section_id' => 'required',
                 'offered_course_id' => 'required|integer',
                 'type' => 'required|string',
             ]);
 
             $section_id = $request->section_id;
+            $section_id=(new section())->getIDByName($section_id);
+            if(!$section_id){
+                throw new Exception('Section Not Found');
+            }
             $offered_course_id = $request->offered_course_id;
             $examType = $request->type;
             $exam = exam::where('offered_course_id', $offered_course_id)
@@ -1791,14 +1796,15 @@ class DatacellModuleController extends Controller
         } catch (ModelNotFoundException $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Invalid username or password'
+                'message' => 'Invalid Data',
+                'erros' =>$e->getMessage()
             ], 404);
 
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
+                'errors' => $e->getMessage()
             ], 500);
         }
     }

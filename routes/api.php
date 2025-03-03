@@ -8,6 +8,7 @@ use App\Http\Controllers\SingleInsertionController;
 use App\Http\Controllers\TestController;
 use App\Models\Course;
 use App\Models\juniorlecturer;
+use App\Models\offered_courses;
 use App\Models\section;
 use App\Models\session;
 use App\Models\student;
@@ -34,7 +35,7 @@ Route::post('/update-pass', [AuthenticationController::class, 'updatePassword'])
 Route::get('/load-file', [TeachersController::class, 'LoadFile']);
 Route::get('/CanBePromoted', [ExtraKhattaController::class, 'Sample']);
 Route::post('/send-Notification', [StudentsController::class, 'sendNotification']);
-Route::post('/uplaod/SubjectFullResult', [ExtraKhattaController::class, 'AddSubjectResult']);
+
 Route::post('/send', [FCMController::class, 'sendN']);
 
 
@@ -138,8 +139,6 @@ Route::prefix('Datacells')->group(function () {
     Route::post('/process-temporary-enrollments', [TeachersController::class, 'ProcessTemporaryEnrollments']);
     Route::post('/update-datacell-image', [DatacellsController::class, 'updateDataCellImage']);
     Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
-    Route::get('/timetable/section', [DatacellsController::class, 'getTimetableGroupedBySection']);
-    Route::get('/AllStudent', [DatacellsController::class, 'AllStudent']);
     Route::post('/NewOfferedCourse', [DatacellsController::class, 'AddNewOfferedCourse']);
     Route::post('/offered-courses/add-or-check', [ExtraKhattaController::class, 'addOrCheckOfferedCourses']);
     Route::post('/teacher-offered-courses/add-multiple', [ExtraKhattaController::class, 'addTeacherOfferedCourses']);
@@ -182,23 +181,27 @@ Route::prefix('Admin')->group(function () {
     Route::post('/update-add-program', [AdminController::class, 'addOrUpdateProgram']);
 });
 Route::prefix('Uploading')->group(function () {
+    Route::post('/uplaod/Result', [DatacellModuleController::class, 'UploadExamAwardList']);
+    Route::post('/uplaod/Topic', [DatacellModuleController::class, 'UploadCourseContentTopic']);
+    Route::post('/excel-upload/assign-juniorlecturer', [DatacellModuleController::class, 'assignJuniorLecturer']);
+    Route::post('/excel-uploading/graders-assign', [DatacellModuleController::class, 'assignGrader']);
+    Route::post('/excel-upload/student-enrollments', [DatacellModuleController::class, 'uploadStudentEnrollments']);
     Route::post('/excel-upload/offeredcourse_teacherallocation', [DatacellModuleController::class, 'OfferedCourseTeacheruploadExcel']);
+    Route::post('/excel-upload/add-or-update-courses', [DatacellModuleController::class, 'AddOrUpdateCourses']);
     Route::post('/excel-upload/excluded_days', [DatacellModuleController::class, 'ExcludedDays']);
     Route::post('/excel-upload/session', [DatacellModuleController::class, 'processSessionRecords']);
     Route::post('/excel-upload/venues', [DatacellModuleController::class, 'importVenues']);
     Route::post('/excel-upload/sections', [DatacellModuleController::class, 'importSections']);
-    Route::post('/excel-upload/student-enrollments', [DatacellModuleController::class, 'uploadStudentEnrollments']);
     Route::post('/excel-uplaod/add-or-update-student', [DatacellModuleController::class, 'addOrUpdateStudent']);
     Route::post('/excel-upload/add-or-update-teacher', [DatacellModuleController::class, 'addOrUpdateTeacher']);
     Route::post('/excel-upload/upload-junior-lecturers', [DatacellModuleController::class, 'AddOrUpdateJuniorLecturers']);
-    Route::post('/excel-uploading/graders-assign', [DatacellModuleController::class, 'assignGrader']);
-    Route::post('/excel-upload/add-or-update-courses', [DatacellModuleController::class, 'AddOrUpdateCourses']);
-    Route::post('/excel-upload/assign-juniorlecturer', [DatacellModuleController::class, 'assignJuniorLecturer']);
-    Route::post('/uplaod/Exam', [DatacellModuleController::class, 'CreateExam']);
-    Route::post('/uplaod/Topic', [DatacellModuleController::class, 'UploadCourseContentTopic']);
-    Route::post('/uplaod/Result', [DatacellModuleController::class, 'UploadExamAwardList']);
     Route::post('/uplaod/timetable', [DatacellModuleController::class, 'UploadTimetableExcel']);
     Route::post('/timetable/section', [DatacellModuleController::class, 'getTimetableGroupedBySection']);
+    Route::post('/uplaod/SubjectFullResult', [ExtraKhattaController::class, 'AddSubjectResult']);
+    Route::post('/uplaod/Exam', [DatacellModuleController::class, 'CreateExam']);
+
+
+    
     Route::post('/uplaod/course-content', [DatacellModuleController::class, 'CreateCourseContent']);
     Route::get('/getArchivesDetails', [DatacellModuleController::class, 'Archives']);
     Route::delete('/DeleteFolderByPath', [DatacellModuleController::class, 'DeleteFolderByPath']);
@@ -260,5 +263,28 @@ Route::prefix('Dropdown')->group(function () {
         });
 
         return response()->json($formattedSections);
+    });
+    Route::get('/AllSessions', function () {
+        $sessions = Session::orderBy('start_date', 'desc')->get();
+    
+        $formattedSessions = $sessions->map(function ($session) {
+            return (new Session())->getSessionNameByID($session->id);
+        });
+    
+        return response()->json($formattedSessions);
+    });
+    Route::get('/AllOfferedCourse', function () {
+        $offeredCourses = offered_courses::with(['course', 'session'])
+        ->get()
+        ->sortByDesc(fn($course) => $course->session->start_date ?? '0000-00-00') // Handle missing session dates
+        ->map(function ($course) {
+            return [
+                'id' => $course->id,
+                'data' => $course->course->name . ' (' . (new Session())->getSessionNameByID($course->session->id) . ')'
+            ];
+        })
+        ->values(); // Ensure it returns a sequential array
+
+        return response()->json($offeredCourses, 200);
     });
 });
