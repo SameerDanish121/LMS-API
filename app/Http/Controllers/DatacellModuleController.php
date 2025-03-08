@@ -761,7 +761,7 @@ class DatacellModuleController extends Controller
             $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
             $filteredData = [];
             foreach ($sheetData as $row) {
-                $filteredData[] = array_slice($row, 0, 4);
+                $filteredData[] = array_slice($row, 0, 5);
             }
             $nonEmpty = [];
             foreach ($filteredData as $row) {
@@ -783,36 +783,64 @@ class DatacellModuleController extends Controller
             $errorMessages = [];
             foreach ($nonEmpty as $singleRow) {
                 $RowNo++;
+
                 $name = $singleRow['A'];
                 $dateOfBirth = $singleRow['B'];
                 $gender = $singleRow['C'];
                 $email = $singleRow['D'];
-                $username = strtolower(str_replace(' ', '', $name)) . '@biit.edu';
-                $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
-                $password = Action::generateUniquePassword($name);
-                $userId = Action::addOrUpdateUser($username, $password, $email, 'Teacher');
-                if (!$userId) {
-                    $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+                $cnic = $singleRow['E'];
+                if (!isset($name) || trim($name) === "" || empty($name)) {
+                    $errorMessages[]=["status" => 'failed', "reason" => " Name is required for  {$RowNo}."];
                     continue;
                 }
-                $teacher = Teacher::where('name', $name)->first();
+                
+                if (!isset($dateOfBirth) || trim($dateOfBirth) === "" || empty($dateOfBirth)) {
+                    $errorMessages[]=["status" => 'failed', "reason" => " Date Of Birth is required for  {$RowNo}."];
+                    continue;
+                }
+                
+                if (!isset($gender) || trim($gender) === "" || empty($gender)) {
+                    $errorMessages[]=["status" => 'failed', "reason" => " Gender is required for  {$RowNo}."];
+                    continue;
+                }
+                if (!isset($cnic) || trim($cnic) === "" || empty($cnic)) {
+                    $errorMessages[] = ["status" => 'failed', "reason" => "Required Field of CNIC/EMPLOYEE# for  {$name}."];
+                    continue;
+                } 
+                if(teacher::where('cnic',$cnic)->exists()){
+                    $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user Because of Exsisting Employee#/CNIC {$cnic}."];
+                    continue;
+                }
+                $username =strtolower(str_replace(' ', '', $name)) .$cnic. '@biit.edu';
+                $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
+                $teacher = Teacher::where('cnic', $cnic)->first();
                 if ($teacher) {
                     $teacher->update([
-                        'user_id' => $userId,
                         'date_of_birth' => $formattedDOB,
                         'gender' => $gender
                     ]);
                     $user=User::find($userId);
                     $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated.","username"=>$username,"password"=>$user->password];
                 } else {
+                    $password = Action::generateUniquePassword($name);
+                    $userId = Action::addOrUpdateUser($username, $password, $email, 'Teacher');
+                    if (!$userId) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+                        continue;
+                    }
                     Teacher::create([
                         'user_id' => $userId,
                         'name' => $name,
                         'date_of_birth' => $formattedDOB,
-                        'gender' => $gender
+                        'gender' => $gender,
+                        'cnic'=>$cnic
                     ]);
                     $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was added.","username"=>$username,"password"=>$password];
                 }
+              
+               
+              
+               
             }
 
             return response()->json(
@@ -845,6 +873,120 @@ class DatacellModuleController extends Controller
             ], 500);
         }
     }
+    public function AddOrUpdateJuniorLecturers(Request $request)
+    {
+        try {
+            $request->validate([
+                'excel_file' => 'required|mimes:xlsx,xls'
+            ]);
+            $file = $request->file('excel_file');
+            $spreadsheet = IOFactory::load($file->getPathname());
+            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+            $filteredData = [];
+            foreach ($sheetData as $row) {
+                $filteredData[] = array_slice($row, 0, 5);
+            }
+            $nonEmpty = [];
+            foreach ($filteredData as $row) {
+                if (
+                    array_filter($row, function ($value) {
+                        return !is_null($value);
+                    })
+                ) {
+                    if ($row['A'] != 'Name') {
+                        $row = array_map('trim', $row);
+                        $nonEmpty[] = $row;
+                    }
+                }
+            }
+            $RowNo = 1;
+            $status = [];
+            $successMessages = [];
+            $errorMessages = [];
+            foreach ($nonEmpty as $singleRow) {
+                $RowNo++;
+                $name = $singleRow['A'];
+                $dateOfBirth = $singleRow['B'];
+                $gender = $singleRow['C'];
+                $email = $singleRow['D'];
+                $cnic = $singleRow['E'];
+                if (!isset($name) || trim($name) === "" || empty($name)) {
+                    $errorMessages[]=["status" => 'failed', "reason" => " Name is required for  {$RowNo}."];
+                    continue;
+                }
+                if (!isset($dateOfBirth) || trim($dateOfBirth) === "" || empty($dateOfBirth)) {
+                    $errorMessages[]=["status" => 'failed', "reason" => " Date Of Birth is required for  {$RowNo}."];
+                    continue;
+                }
+                if (!isset($gender) || trim($gender) === "" || empty($gender)) {
+                    $errorMessages[]=["status" => 'failed', "reason" => " Gender is required for  {$RowNo}."];
+                    continue;
+                }
+                if (!isset($cnic) || trim($cnic) === "" || empty($cnic)) {
+                    $errorMessages[] = ["status" => 'failed', "reason" => "Required Field of CNIC/EMPLOYEE# for  {$name}."];
+                    continue;
+                } 
+                if(juniorlecturer::where('cnic',$cnic)->exists()){
+                    $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user Because of Exsisting Employee#/CNIC {$cnic}."];
+                    continue;
+                }
+                $username =strtolower(str_replace(' ', '', $name)) .$cnic. '_jl@biit.edu';
+                $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
+                $teacher = juniorlecturer::where('cnic', $cnic)->first();
+                if ($teacher) {
+                    $teacher->update([
+                        'date_of_birth' => $formattedDOB,
+                        'gender' => $gender
+                    ]);
+                    $user=User::find($userId);
+                    $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated.","username"=>$username,"password"=>$user->password];
+                } else {
+                    $password = Action::generateUniquePassword($name);
+                    $userId = Action::addOrUpdateUser($username, $password, $email, 'JuniorLecturer');
+                    if (!$userId) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+                        continue;
+                    }
+                    juniorlecturer::create([
+                        'user_id' => $userId,
+                        'name' => $name,
+                        'date_of_birth' => $formattedDOB,
+                        'gender' => $gender,
+                        'cnic'=>$cnic
+                    ]);
+                    $successMessages[] = ["status" => 'success', "Logs" => "The Junior Lecturer with Name: {$name} was added.","username"=>$username,"password"=>$password];
+                }    
+            }
+            return response()->json(
+                [
+                    'Message' => 'Junior Lecturer Processed Successfully!',
+                    'success' => $successMessages,
+                    'failed' => $errorMessages
+                ],
+                200
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Data not found'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+   
     public function AddOrUpdateStudent(Request $request)
     {
         try {
@@ -1073,118 +1215,7 @@ class DatacellModuleController extends Controller
             ], 500);
         }
     }
-    public function AddOrUpdateJuniorLecturers(Request $request)
-    {
-        try {
-            $request->validate([
-                'excel_file' => 'required|mimes:xlsx,xls'
-            ]);
-            $file = $request->file('excel_file');
-            $spreadsheet = IOFactory::load($file->getPathname());
-            $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
-            $filteredData = [];
-            foreach ($sheetData as $row) {
-                $filteredData[] = array_slice($row, 0, 4); // Fetch only necessary columns
-            }
-            $nonEmpty = [];
-            foreach ($filteredData as $row) {
-                if (
-                    array_filter($row, function ($value) {
-                        return !is_null($value);
-                    })
-                ) {
-                    if ($row['A'] != 'Name') {
-                        $row = array_map('trim', $row);
-                        $nonEmpty[] = $row;
-                    }
-                }
-            }
-            $RowNo = 1;
-            $status = [];
-            foreach ($nonEmpty as $singleRow) {
-                $RowNo++;
-                $name = $singleRow['A'];
-                $dateOfBirth = $singleRow['B'];
-                $gender = $singleRow['C'];
-                $email = $singleRow['D'];
-                $username = strtolower(str_replace(' ', '', $name)) . '_jl@biit.edu'; // Custom username format for JuniorLecturer
-                $userExists = User::where('username', $username)->exists();
-                if ($userExists) {
-                    $status[] = ["status" => 'failed', "reason" => "Username {$username} already exists!"];
-                    continue;
-                }
-                $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
-                $password = Action::generateUniquePassword($name);
-                $userId = Action::addOrUpdateUser($username, $password, $email, 'JuniorLecturer'); // Set User type as JuniorLecturer
-
-                if (!$userId) {
-                    $status[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
-                    continue;
-                }
-                $juniorLecturer = JuniorLecturer::where('name', $name)->first();
-
-                if ($juniorLecturer) {
-                    $juniorLecturer->update([
-                        'user_id' => $userId,
-                        'name' => $name,
-                        'date_of_birth' => $formattedDOB,
-                        'gender' => $gender
-                    ]);
-                    $user=User::find($userId);
-                    $status[] = ["status" => 'success', "Logs" => "The JuniorLecturer with Name: {$name} was updated.","username"=>$username,"password"=>$user->password];
-                } else {
-                    JuniorLecturer::create([
-                        'user_id' => $userId,
-                        'name' => $name,
-                        'date_of_birth' => $formattedDOB,
-                        'gender' => $gender
-                    ]);
-                    $status[] = ["status" => 'success', "Logs" => "The JuniorLecturer with Name: {$name} was added.","username"=>$username,"password"=>$password];
-                }
-            }
-
-            // Categorize success and failed messages
-            $successMessages = [];
-            $errorMessages = [];
-            foreach ($status as $stat) {
-                if ($stat['status'] === 'success') {
-                    $successMessages[] = $stat;
-                } else {
-                    $errorMessages[] = $stat;
-                }
-            }
-
-            // Return the response
-            return response()->json(
-                [
-                    'Message' => 'JuniorLecturers Processed Successfully!',
-                    'success' => $successMessages,
-                    'failed' => $errorMessages
-                ],
-                200
-            );
-
-        } catch (ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-
-        } catch (ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Data not found'
-            ], 404);
-
-        } catch (Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
+    
     public function assignGrader(Request $request)
     {
         try {

@@ -254,6 +254,11 @@ public function getTeacherJuniorLecturers(Request $request)
             }
             foreach ($students as $student) {
                 $originalPath = $student->image;
+                
+                    $program = in_array($student->section->program, ['BCS', 'BAI', 'BSE', 'BIT'])
+                        ? $student->section->program . '-'
+                        : $student->section->program;
+                    $student->section_id=$program . $student->section->semester . $student->section->group;
                 if (!$originalPath) {
                     $student->image = null;
                 } else if (file_exists(public_path($originalPath))) {
@@ -409,54 +414,7 @@ public function getTeacherJuniorLecturers(Request $request)
         return response()->json($sections);
     }
 
-    public function AllTeacher(Request $request)
-    {
-        try {
-            // Initialize an empty array for teachers
-            $teachers = [];
-
-            // Apply filters if provided
-            if ($request->user_id) {
-                // Fetch teacher by user_id
-                $teachers = Teacher::where('user_id', $request->user_id)->first();
-            } elseif ($request->name) {
-                // Fetch teachers by name
-                $teachers = Teacher::where('name', $request->name)->get();
-            } else {
-                // Fetch all teachers with related user data
-                $teachers = Teacher::with(['user'])->get();
-            }
-
-            // Process each teacher's image
-            foreach ($teachers as $teacher) {
-                $originalPath = $teacher->image; // Relative path to the image
-
-                // Check if the file exists in the public directory
-                if ($originalPath && file_exists(public_path($originalPath))) {
-                    // File exists, convert the image to base64
-                    $imageContent = file_get_contents(public_path($originalPath));
-                    $teacher->image = base64_encode($imageContent);
-                } else {
-                    // File doesn't exist, set the image field to null
-                    $teacher->image = null;
-                }
-            }
-
-            // Return the teachers as a JSON response
-            return response()->json([
-                'message' => 'Teachers fetched successfully',
-                'Teacher' => $teachers,
-            ], 200);
-
-        } catch (Exception $e) {
-            // Handle any unexpected errors
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
+    
 
 
     public function AllCourse(Request $request)
@@ -474,14 +432,14 @@ public function getTeacherJuniorLecturers(Request $request)
                 $courses = Course::where('name', $request->name)->select('id', 'code', 'name', 'credit_hours', 'pre_req_main', 'lab')->get();
             } else {
                 // If no filters are provided, get all courses with only the necessary fields
-                $courses = Course::select('id', 'code', 'name', 'credit_hours', 'pre_req_main', 'lab')->get();
+                $courses = Course::select('id', 'code', 'name', 'credit_hours', 'pre_req_main', 'lab','description')->get();
             }
 
             // Loop through each course to modify the 'pre_req_main' field and encode the response
             foreach ($courses as $course) {
                 // Check if 'pre_req_main' is null and modify the value accordingly
                 if (is_null($course->pre_req_main)) {
-                    $course->pre_req_main = 'main'; // Set to "main" if null
+                    $course->pre_req_main = 'Main'; // Set to "main" if null
                 } else {
                     // If it's not null, get the prerequisite course name
                     $course->pre_req_main = $course->prerequisite ? $course->prerequisite->name : 'Not Available';
@@ -1299,45 +1257,50 @@ $sec = $section->getNameByID($section_id);
     }
 
     public function AllGrades(Request $request)
-    {
-        try {
-            // Initialize an empty array for grades
-            $grades = [];
+{
+    try {
+        $currentSessionId =(new session())->getCurrentSessionId();
+        $grades = Grader::with('student')
+            ->get()
+            ->map(function ($grader) use ($currentSessionId) {
+                // Find teacher_grader for the current session
+                $teacherGrader = teacher_grader::where('grader_id', $grader->id)
+                    ->where('session_id', $currentSessionId)
+                    ->first();
 
-            // Check if specific filters are provided in the request
-            if ($request->student_id) {
-                // If a student_id is provided, filter grades by student_id
-                $grades = grader::where('student_id', $request->student_id)
-                    ->with('student')  // Eager load related student data if needed
-                    ->get();
-            } else if ($request->status) {
-                // If status is provided, filter grades by status
-                $grades = Grader::where('status', $request->status)
-                    ->with('student')  // Eager load related student data
-                    ->get();
-            } else {
-                // If no filters are provided, return all grades
-                $grades = Grader::with('student')  // Eager load related student data
-                    ->get();
-            }
+                return [
+                    'grader_id' => $grader->id,
+                    'regNo'     => optional($grader->student)->RegNo,
+                    'name'      => optional($grader->student)->name, 
+                    'section'   => optional($grader->student)->section_id?(new section())->getNameByID($grader->student->section_id):'N/A',
+                    'image'     => !empty($grader->student->image) 
+                        ? asset($grader->student->image) 
+                        : null,
+                    'status'    => $grader->status,
+                    'type'      => $grader->type,
+                     // Get section from student
+                    'Grader of Teacher in Current Session' => $teacherGrader && $teacherGrader->teacher
+                        ? $teacherGrader->teacher->name
+                        : "N/A",
+                    
+                ];
+            })
+            // Sort: Active ones first (assuming 'active' means status = 'active')
+            ->sortByDesc(fn($item) => strtolower($item['status']) === 'active')
+            ->values(); // Reset array keys
 
-            // Return the grades as JSON with a success message
-            return response()->json(
-                [
-                    'message' => 'Grades Fetched Successfully',
-                    'Grades' => $grades,
-                ],
-                200
-            );
-        } catch (Exception $e) {
-            // In case of an error, return the error details
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'message' => 'Graders Fetched Successfully',
+            'Grader'  => $grades,
+        ], 200);
+    } catch (Exception $e) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'An unexpected error occurred',
+            'error'   => $e->getMessage()
+        ], 500);
     }
+}
     public function getAllTeacherGraders(Request $request)
     {
         try {
@@ -1365,43 +1328,100 @@ $sec = $section->getNameByID($section_id);
             ], 500);
         }
     }
-
+    
     public function getAllSessions(Request $request)
     {
         try {
-            // Fetch all sessions
-            $sessions = session::all()->map(function ($session) {
-                // Check if the session is active
-                $currentDate = now();
-                $isActive = $currentDate->between(Carbon::parse($session->start_date), Carbon::parse($session->end_date));
-
+            $currentDate = now();
+            $sessions = Session::all()->map(function ($session) use ($currentDate) {
+                $startDate = Carbon::parse($session->start_date);
+                $endDate = Carbon::parse($session->end_date);
+                $remainingDays = $currentDate->diffInDays($endDate, false);
+                $remainingDays=floor($remainingDays);
+                if ($remainingDays > 0) {
+                    $timeDiff = "{$remainingDays} days remaining";
+                } elseif ($remainingDays == 0) {
+                    $timeDiff = "Ends today";
+                } else {
+                    $timeDiff = $startDate->diffForHumans($currentDate);
+                }
+    
+                // Determine session status
+                $status = 'Previous';
+                if ($currentDate->between($startDate, $endDate)) {
+                    $status = 'Current';
+                } elseif ($startDate->isFuture()) {
+                    $status = 'Upcoming';
+                }
+    
                 return [
                     'id' => $session->id,
-                    'name' => $session->name,
-                    'year' => $session->year,
+                    'name' => "{$session->name}-{$session->year}",
                     'start_date' => $session->start_date,
                     'end_date' => $session->end_date,
-                    'status' => $isActive ? 'Active' : 'Inactive',
+                    'remaining_time' => $timeDiff,
+                    'status' => $status,
                 ];
             });
-
-            // Filter based on status if requested
+    
+            // Filtering based on request parameter
             if ($request->has('status')) {
-                $status = strtolower($request->status);
-                if ($status === 'active') {
-                    $sessions = $sessions->filter(fn($session) => $session['status'] === 'Active');
-                } elseif ($status === 'inactive') {
-                    $sessions = $sessions->filter(fn($session) => $session['status'] === 'Inactive');
+                $status = ucfirst(strtolower($request->status));
+                $sessions = $sessions->filter(fn($session) => $session['status'] === $status);
+            }
+    
+            return response()->json([
+                'message' => 'Sessions fetched successfully',
+                'data' => $sessions->values(),
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    
+    public function AllTeacher(Request $request)
+    {
+        try {
+            // Initialize an empty array for teachers
+            $teachers = [];
+
+            // Apply filters if provided
+            if ($request->user_id) {
+                // Fetch teacher by user_id
+                $teachers = Teacher::where('user_id', $request->user_id)->first();
+            } elseif ($request->name) {
+                // Fetch teachers by name
+                $teachers = Teacher::where('name', $request->name)->get();
+            } else {
+                // Fetch all teachers with related user data
+                $teachers = Teacher::with(['user'])->get();
+            }
+
+            // Process each teacher's image
+            foreach ($teachers as $teacher) {
+                $originalPath = $teacher->image; // Relative path to the image
+
+                // Check if the file exists in the public directory
+                if ($originalPath && file_exists(public_path($originalPath))) {
+                    $teacher->image = asset($originalPath);
+                } else {
+                    // File doesn't exist, set the image field to null
+                    $teacher->image = null;
                 }
             }
 
-            // Return the filtered sessions as JSON
+            // Return the teachers as a JSON response
             return response()->json([
-                'message' => 'Sessions fetched successfully',
-                'data' => $sessions->values(), // Reset array keys after filtering
+                'message' => 'Teachers fetched successfully',
+                'Teacher' => $teachers,
             ], 200);
+
         } catch (Exception $e) {
-            // Handle errors
+            // Handle any unexpected errors
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
@@ -1412,21 +1432,19 @@ $sec = $section->getNameByID($section_id);
     public function allJuniorLecturers(Request $request)
     {
         try {
-            $query = juniorlecturer::query();
-            if ($request->filled('name')) {
-                $query->where('name', 'LIKE', '%' . $request->name . '%');
-            }
+            // $query = juniorlecturer::query();
+            // if ($request->filled('name')) {
+            //     $query->where('name', 'LIKE', '%' . $request->name . '%');
+            // }
 
-            // Retrieve the results
-            $lecturers = $query->get();
-
+            // // Retrieve the results
+            // $lecturers = $query->get();
+            $lecturers=juniorlecturer::with(['user'])->get();
             // Process each lecturer to encode the image as Base64
             foreach ($lecturers as $lecturer) {
                 $originalPath = $lecturer->image;
                 if ($originalPath && file_exists(public_path($originalPath))) {
-                    // If the image exists, convert it to Base64
-                    $imageContent = file_get_contents(public_path($originalPath));
-                    $lecturer->image = base64_encode($imageContent); // Set the Base64-encoded image
+                    $lecturer->image = asset($originalPath); // Set the Base64-encoded image
                 } else {
                     $lecturer->image = null; // Set to null if the image doesn't exist
                 }
@@ -1436,7 +1454,7 @@ $sec = $section->getNameByID($section_id);
             return response()->json(
                 [
                     'message' => 'Junior Lecturers Fetched Successfully',
-                    'lecturers' => $lecturers,
+                    'Teacher' => $lecturers,
                 ],
                 200
             );

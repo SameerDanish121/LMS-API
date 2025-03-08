@@ -9,6 +9,7 @@
         "php": "^8.2",
         "barryvdh/laravel-dompdf": "^3.1",
         "google/auth": "^1.46",
+        "intervention/image": "^3.11",
         "kreait/firebase-php": "^7.17",
         "laravel/framework": "^11.31",
         "laravel/sanctum": "^4.0",

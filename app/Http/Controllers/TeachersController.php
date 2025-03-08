@@ -1569,6 +1569,7 @@ class TeachersController extends Controller
                 return [
                     'Request id' => $enrollment->id,
                     'RegNo' => $enrollment->RegNo,
+                    'image'=>$student->image?asset($student->image):null,
                     'Student Name' => optional($student)->name,
                     'Teacher Name' => $teacherName,
                     'Course Name' => $courseName,

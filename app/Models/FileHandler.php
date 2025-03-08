@@ -109,11 +109,8 @@ class FileHandler extends Model
             }
             $folderDetails = self::scanFolder($path, $basePath);
 
-            return response()->json([
-                'success' => true,
-                'base_path' => $basePath,
-                'folder_details' => $folderDetails,
-            ]);
+               return $folderDetails;
+           
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,

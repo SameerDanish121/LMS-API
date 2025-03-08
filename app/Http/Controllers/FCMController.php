@@ -1,10 +1,12 @@
 <?php
 
 namespace App\Http\Controllers;
-use Kreait\Firebase\Factory;
-use App\Models\user_fcm_tokens;
 use Illuminate\Http\Request;
+use Kreait\Firebase\Factory;
+use Intervention\Image\Image;
+use App\Models\user_fcm_tokens;
 use Kreait\Firebase\Messaging\CloudMessage;
+use Intervention\Image\ImageManager;
 
 class FCMController extends Controller
 {
@@ -121,5 +123,4 @@ class FCMController extends Controller
             return response()->json(['error' => 'An Unexpected Error Occurred', 'message' => $e->getMessage()], 500);
         }
     }
-    
 }

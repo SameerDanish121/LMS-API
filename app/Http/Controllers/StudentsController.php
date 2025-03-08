@@ -46,11 +46,220 @@ use Illuminate\Validation\ValidationException;
 use App\Models\session;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-use function Laravel\Prompts\select;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\File;
+use Intervention\Image\ImageManager;
 class StudentsController extends Controller
 {
+    private function compressVideo($filePath)
+    {
+        $compressedFile = str_replace('.', '_compressed.', $filePath);
+        shell_exec("ffmpeg -i $filePath -vcodec h264 -b:v 800k -acodec aac -b:a 128k $compressedFile");
+
+        if (file_exists($compressedFile)) {
+            unlink($filePath);
+            rename($compressedFile, $filePath);
+        }
+    }
+
+    private function compressPDF($filePath)
+    {
+        $compressedFile = str_replace('.pdf', '_compressed.pdf', $filePath);
+        shell_exec("gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen -q -o $compressedFile $filePath");
+
+        if (file_exists($compressedFile)) {
+            unlink($filePath); // Delete old file
+            rename($compressedFile, $filePath); // Replace with compressed file
+        }
+    }
+    
+    // private function compressImage($filePath)
+    // {
+       
+    //     $image = Image::make($filePath);
+    //     $image->encode('webp', 75); // Convert to WebP with 75% quality
+    //     $image->save($filePath);
+    // }
+
+    public function compressFolder(Request $request)
+    {
+        try {
+            // Get the folder path from request
+            $relativePath = $request->input('folder_path');
+    
+            if (!$relativePath) {
+                throw new Exception("Folder path is required.");
+            }
+    
+            $folderPath = public_path($relativePath);
+    
+            // Check if the folder exists
+            if (!File::exists($folderPath)) {
+                throw new Exception("The specified folder does not exist.");
+            }
+    
+            // Get folder size before compression
+            $sizeBefore = $this->calculateFolderSize($folderPath);
+    
+            // Get all files inside the folder (including subfolders)
+            $allFiles = File::allFiles($folderPath);
+            $errorFiles = [];
+            $compressedCount = 0;
+    
+            foreach ($allFiles as $file) {
+                try {
+                    $filePath = $file->getRealPath();
+                    $extension = strtolower($file->getExtension());
+    
+                    if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                        // $this->compressImage($filePath);
+                    } elseif ($extension === 'pdf') {
+                        $this->compressPDF($filePath);
+                    } elseif (in_array($extension, ['mp4', 'avi', 'mov', 'mkv'])) {
+                        $this->compressVideo($filePath);
+                    }
+    
+                    $compressedCount++;
+                } catch (Exception $e) {
+                    $errorFiles[] = [
+                        'file' => $file->getFilename(),
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            }
+    
+            // Get folder size after compression
+            $sizeAfter = $this->calculateFolderSize($folderPath);
+    
+            // Calculate difference in size
+            $sizeReduced = $sizeBefore - $sizeAfter;
+    
+            return response()->json([
+                'message' => 'Folder Files Compressed Successfully!',
+                'folder_path' => $relativePath,
+                'total_files' => count($allFiles),
+                'compressed_files' => $compressedCount,
+                'size_before' => $this->formatSizes($sizeBefore),
+                'size_after' => $this->formatSizes($sizeAfter),
+                'size_reduced' => $this->formatSizes($sizeReduced),
+                'errors' => $errorFiles,
+            ], 200);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    
+    private function calculateFolderSize($folderPath)
+    {
+        $size = 0;
+        if (!File::exists($folderPath)) { 
+            return 0;
+        }
+        $files = File::allFiles($folderPath);
+        foreach ($files as $file) {
+            $size += File::size($file);
+        }
+        return $size;
+    }
+    private function formatSize($sizeInBytes)
+    {
+        if ($sizeInBytes >= (1024 ** 3)) {
+            return round($sizeInBytes / (1024 ** 3), 2) . ' GB';
+        } elseif ($sizeInBytes >= (1024 ** 2)) {
+            return round($sizeInBytes / (1024 ** 2), 2) . ' MB';
+        } else {
+            return round($sizeInBytes / 1024, 2) . ' KB';
+        }
+    }
+    private function formatSizes($size)
+{
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $i = 0;
+    while ($size >= 1024 && $i < count($units) - 1) {
+        $size /= 1024;
+        $i++;
+    }
+    return round($size, 2) . ' ' . $units[$i];
+}
+
+    public function getBIITFolderInfo()
+    {
+        try {
+            $basePath = 'storage/BIIT';
+            $biitPath = public_path($basePath);
+            if (!File::exists($biitPath)) {
+                throw new Exception("The BIIT folder does not exist.");
+            }
+            $totalSize = $this->calculateFolderSize($biitPath);
+            $formattedTotalSize = $this->formatSize($totalSize);
+            $subFolders = File::directories($biitPath);
+            $folderDetails = [];
+            foreach ($subFolders as $subFolder) {
+                $folderName = basename($subFolder);
+                $folderSize = $this->calculateFolderSize($subFolder);
+                $formattedSize = $this->formatSize($folderSize);
+                $relativePath = str_replace(public_path(), '', $subFolder);
+                $relativePath = ltrim($relativePath, DIRECTORY_SEPARATOR);
+                $relativePath = str_replace('\\', '/', $relativePath);
+                $folderDetails[] = [
+                    'folder_name' => $folderName,
+                    'path' => $relativePath,
+                    'size' => $formattedSize,
+                ];
+            }
+            return response()->json([
+                'message' => 'BIIT Folder Details Fetched Successfully!',
+                'main_folder' => 'BIIT',
+                'path' => $basePath,
+                'total_size' => $formattedTotalSize,
+                'details' => $folderDetails,
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function cleanTranscriptFolder()
+    {
+        try {
+            $basePath = 'storage/BIIT/Transcript';
+            $transcriptPath = public_path($basePath);
+
+            if (!File::exists($transcriptPath)) {
+                throw new Exception("The Transcript folder does not exist.");
+            }
+
+            $files = File::files($transcriptPath);
+            $directories = File::directories($transcriptPath);
+
+            // Delete all files inside Transcript folder
+            foreach ($files as $file) {
+                File::delete($file);
+            }
+
+            // Delete all subdirectories inside Transcript folder
+            foreach ($directories as $directory) {
+                File::deleteDirectory($directory);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Transcript folder cleaned successfully!'
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
     public function sendNotification(Request $request)
     {
         try {
@@ -66,7 +275,7 @@ class StudentsController extends Controller
                 'TL_sender_id' => 'nullable|integer',
             ]);
             $sender = $request->sender;
-            $r= $request->reciever;
+            $r = $request->reciever;
             if ($r === 'Admin' || $r === 'Datacell') {
                 return response()->json(['message' => 'Cant Send Messages Between Admin and Datacell'], 400);
             }
@@ -84,7 +293,7 @@ class StudentsController extends Controller
             ];
 
             if ($sender === 'Teacher' || $sender === 'JuniorLecturer') {
-                $data['TL_sender_id'] = $request->TL_sender_id ; // Default sender ID for teachers
+                $data['TL_sender_id'] = $request->TL_sender_id; // Default sender ID for teachers
             } elseif ($sender === 'Admin') {
                 $data['TL_sender_id'] = $request->TL_sender_id ?? 262; // Set a valid default for Admin (if needed)
             } elseif ($sender === 'Datacell') {
@@ -110,14 +319,14 @@ class StudentsController extends Controller
                 ->where('username', $request->username)
                 ->where('password', $request->password)
                 ->firstOrFail();
-               
+
             $role = $user->role->type;
             if ($role == 'Student') {
                 $student = student::where('user_id', $user->id)->with(['program', 'user'])
                     ->first();
-                if(!$student){
+                if (!$student) {
                     throw new Exception('No user Found');
-                }                    
+                }
                 $student_id = $student->value('id');
                 $section_id = $student->section_id;
                 $attribute = excluded_days::checkHoliday() ? 'Holiday' : 'Timetable';
@@ -131,7 +340,7 @@ class StudentsController extends Controller
                 }
                 $studentInfo = [
                     "id" => $student->id,
-                    "name" => $student->name??'N/A',
+                    "name" => $student->name ?? 'N/A',
                     "RegNo" => $student->RegNo,
                     "CGPA" => $student->cgpa,
                     "Gender" => $student->gender,
@@ -140,19 +349,19 @@ class StudentsController extends Controller
                     "password" => $student->user->password,
                     "email" => $student->user->email,
                     "InTake" => (new session())->getSessionNameByID($student->session_id),
-                    "Program" => $student->program->name??'N/A',
-                    "Is Grader ?"=> grader::where('student_id',$student->id)->exists(),
+                    "Program" => $student->program->name ?? 'N/A',
+                    "Is Grader ?" => grader::where('student_id', $student->id)->exists(),
                     "Section" => (new section())->getNameByID($student->section_id),
                     "Total Enrollments" => student_offered_courses::GetCountOfTotalEnrollments($student->id),
                     "Current Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?: 'N/A',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
-                     "Attendance" => (new attendance())->getAttendanceByID($student_id),
-                    "Image" => $student->image?asset($student->image):null
+                    "Attendance" => (new attendance())->getAttendanceByID($student_id),
+                    "Image" => $student->image ? asset($student->image) : null
                 ];
                 if ($rescheduled) {
                     $studentInfo['Notice'] = $Notice;
                 }
-              
+
                 return response()->json([
                     'Type' => $role,
                     'StudentInfo' => $studentInfo,
@@ -169,11 +378,11 @@ class StudentsController extends Controller
                     "Designation" => $Admin->Designation,
                     "Username" => $Admin->user->username,
                     "Password" => $Admin->user->password,
-                    "user_id"=>$Admin->user->id,
+                    "user_id" => $Admin->user->id,
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",
-                    "image" => $Admin->image?asset($Admin->image):null
+                    "image" => $Admin->image ? asset($Admin->image) : null
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -201,7 +410,7 @@ class StudentsController extends Controller
                     "Password" => $teacher->user->password,
                     "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
-                    "image" =>$teacher->image?asset($teacher->image):null,
+                    "image" => $teacher->image ? asset($teacher->image) : null,
                 ];
                 if ($rescheduled) {
                     $Teacher['Notice !'] = $Notice;
@@ -222,11 +431,11 @@ class StudentsController extends Controller
                     "Designation" => $Datacell->Designation,
                     "Username" => $Datacell->user->username,
                     "Password" => $Datacell->user->password,
-                    "user_id"=>$Datacell->user->id,
+                    "user_id" => $Datacell->user->id,
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",
-                    "image" =>$Datacell->image?asset($Datacell->image):null,
+                    "image" => $Datacell->image ? asset($Datacell->image) : null,
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -253,7 +462,7 @@ class StudentsController extends Controller
                     "Date Of Birth" => $jl->date_of_birth,
                     "Username" => $jl->user->username,
                     "Password" => $jl->user->password,
-                   
+
                     "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
                     "image" => asset($jl->image),
@@ -345,7 +554,7 @@ class StudentsController extends Controller
             $pdfContent = $pdf->output();
 
             $fileName = 'transcript_' . $student->RegNo . '_' . now()->format('Y-m-d_H-i-s') . '.pdf';
-            $directory = 'storage/BIIT/temp'; // Relative to public_path()
+            $directory = 'storage/BIIT/Transcript'; // Relative to public_path()
             $fullPath = public_path($directory . '/' . $fileName);
             if (!File::exists(public_path($directory))) {
                 File::makeDirectory(public_path($directory), 0777, true);
@@ -409,7 +618,7 @@ class StudentsController extends Controller
             ], 500);
         }
     }
-    
+
     public function FullTimetable(Request $request)
     {
         try {
@@ -1342,16 +1551,16 @@ class StudentsController extends Controller
             'teacher_offered_course_id' => 'required|integer',
             'student_id' => 'required|integer',
         ]);
-        if(!student::find($validated['student_id'])){
+        if (!student::find($validated['student_id'])) {
             return 'No Student Found  !';
         }
-        $teacherOfferedCourse=teacher_offered_courses::with(['offeredCourse'])->find($validated['teacher_offered_course_id']);
-        if(!$teacherOfferedCourse){
+        $teacherOfferedCourse = teacher_offered_courses::with(['offeredCourse'])->find($validated['teacher_offered_course_id']);
+        if (!$teacherOfferedCourse) {
             return 'The Teacher Allocation Found Esist !';
         }
         $offeredCourseId = $teacherOfferedCourse->offeredCourse->id;
         $studentId = $validated['student_id'];
-        $exams =exam::where('offered_course_id', $offeredCourseId)->with(['questions'])->get();
+        $exams = exam::where('offered_course_id', $offeredCourseId)->with(['questions'])->get();
 
         if ($exams->isEmpty()) {
             return response()->json([
@@ -1368,11 +1577,11 @@ class StudentsController extends Controller
                 'exam_type' => $exam->type,
                 'total_marks' => $exam->total_marks,
                 'solid_marks' => $exam->Solid_marks,
-                'obtained_marks'=>0,
-                'solid_marks_equivalent'=>0,
+                'obtained_marks' => 0,
+                'solid_marks_equivalent' => 0,
                 'status' => 'Declared',
                 'questions' => [],
-               
+
             ];
             $examTotalObtained = 0;
             foreach ($exam->questions as $question) {
@@ -1395,8 +1604,8 @@ class StudentsController extends Controller
                 }
             }
             $examData['obtained_marks'] = $examTotalObtained;
-            $examData['solid_marks_equivalent'] =$exam->Solid_marks > 0
-                ? ($examTotalObtained /  $exam->total_marks) * $exam->Solid_marks
+            $examData['solid_marks_equivalent'] = $exam->Solid_marks > 0
+                ? ($examTotalObtained / $exam->total_marks) * $exam->Solid_marks
                 : 0;
             $totalObtainedMarks += $examTotalObtained;
             $totalMarks += $exam->total_marks;
@@ -1404,10 +1613,10 @@ class StudentsController extends Controller
 
             $results[$exam->type][] = $examData;
         }
-        $student=student::find($studentId);
+        $student = student::find($studentId);
         return response()->json([
-            'Student Name'=>$student->name,
-            'Registration Number'=>$student->RegNo,
+            'Student Name' => $student->name,
+            'Registration Number' => $student->RegNo,
             'total_marks' => $totalMarks,
             'solid_marks' => $solidMarks,
             'obtained_marks' => $totalObtainedMarks,

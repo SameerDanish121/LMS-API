@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\notification;
 use App\Models\program;
+use App\Models\role;
 use App\Models\section;
 use App\Models\session;
 use App\Models\student;
@@ -32,22 +33,22 @@ class SingleInsertionController extends Controller
                 'gender' => 'required|string',
                 'cnic' => 'required',
                 'email' => 'nullable|email',
-                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048' 
+                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048'
             ]);
 
             $name = trim($request->input('name'));
             $dateOfBirth = $request->input('date_of_birth');
             $gender = $request->input('gender');
             $cnic = $request->input('cnic');
-            $email = $request->input('email') ?? null; 
+            $email = $request->input('email') ?? null;
             $username = strtolower(str_replace(' ', '', $name)) . '@biit.edu';
-            if(teacher::where('cnic',$cnic)->exists()){
+            if (teacher::where('cnic', $cnic)->exists()) {
                 return response()->json([
                     'status' => 'failed',
                     'message' => "The teacher with cnic: {$cnic} already exists."
                 ], 409);
             }
-            
+
             $existingUser = User::where('username', $username)->first();
             if ($existingUser) {
                 return response()->json([
@@ -128,7 +129,7 @@ class SingleInsertionController extends Controller
             $cnic = $request->input('cnic');
             $email = $request->input('email') ?? null; // Default to null if not provided
             $username = strtolower(str_replace(' ', '', $name)) . '@biit.edu';
-            if(juniorlecturer::where('cnic',$cnic)->exists()){
+            if (juniorlecturer::where('cnic', $cnic)->exists()) {
                 return response()->json([
                     'status' => 'failed',
                     'message' => "The JuniorLecturer with cnic: {$cnic} already exists."
@@ -555,10 +556,10 @@ class SingleInsertionController extends Controller
                 'email' => 'nullable|email',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
                 'password' => 'nullable|string|min:6',
-                'id'=>'required|integer'
+                'id' => 'required|integer'
             ]);
-            $id=$request->input('id');
-            $role = ucfirst(strtolower($request->input('role'))); 
+            $id = $request->input('id');
+            $role = ucfirst(strtolower($request->input('role')));
             $name = trim($request->input('name'));
             $phone = $request->input('phone_number');
             $designation = $request->input('Designation');
@@ -587,21 +588,22 @@ class SingleInsertionController extends Controller
             $userAccount = User::find($user->user_id);
             if ($userAccount) {
                 $userAccount->update([
-                    'username' =>$username // Hash password before saving
+                    'username' => $username // Hash password before saving
                 ]);
             }
             if (!empty($password)) {
                 $userAccount = User::find($user->user_id);
                 if ($userAccount) {
                     $userAccount->update([
-                        'password' =>$password // Hash password before saving
+                        'password' => $password // Hash password before saving
                     ]);
                 }
-            } if (!empty($email)) {
+            }
+            if (!empty($email)) {
                 $userAccount = User::find($user->user_id);
                 if ($userAccount) {
                     $userAccount->update([
-                        'email' =>$email // Hash password before saving
+                        'email' => $email // Hash password before saving
                     ]);
                 }
             }
@@ -613,13 +615,13 @@ class SingleInsertionController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => "{$role} user with ID: {$id} was updated successfully.",
-                'name'=>$name,
-                'designation'=>$designation,
-                'username'=>$username,
-                'email'=>$email,
-                'phone'=>$phone,
-                'password'=>$password,
-                'image'=>$user->image?asset($user->image):null,
+                'name' => $name,
+                'designation' => $designation,
+                'username' => $username,
+                'email' => $email,
+                'phone' => $phone,
+                'password' => $password,
+                'image' => $user->image ? asset($user->image) : null,
             ], 200);
 
         } catch (ValidationException $e) {
@@ -644,5 +646,173 @@ class SingleInsertionController extends Controller
         }
     }
 
+    public function addStudent(Request $request)
+    {
+        try {
+            $request->validate([
+                'RegNo' => 'required|unique:student,RegNo',
+                'name' => 'required',
+                'email' => 'required|email|unique:user,email',
+                'program_id' => 'required|exists:program,id',
+                'section_id' => 'nullable|exists:section,id',
+                'session_id' => 'nullable|exists:session,id',
+                'cgpa' => 'nullable|numeric|min:0|max:4',
+                'gender' => 'nullable|in:Male,Female',
+                'date_of_birth' => 'nullable|date',
+                'guardian' => 'nullable|string',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+                'status' => 'nullable|in:Graduate,UnderGraduate,Freeze'
+            ]);
 
+            $regNo = $request->RegNo;
+            $name = $request->name;
+            $email = $request->email;
+            $program_id = $request->program_id;
+            $section_id = $request->section_id;
+            $session_id = $request->session_id;
+            $cgpa = $request->cgpa;
+            $gender = $request->gender;
+            $date_of_birth = $request->date_of_birth;
+            $guardian = $request->guardian;
+            $status = $request->status;
+            $password = Action::generateUniquePassword($name);
+            $imagePath = null;
+            if ($request->hasFile('image')) {
+                $imagePath = Action::storeFile($request->file('image'), 'Images/Student', $regNo);
+            }
+            $user = User::create([
+                'username' => $regNo,
+                'password' => $password,
+                'email' => $email,
+                'role_id' => role::where('type', 'Student')->value('id')
+            ]);
+
+            $student = Student::create([
+                'RegNo' => $regNo,
+                'name' => $name,
+                'cgpa' => $cgpa,
+                'gender' => $gender,
+                'date_of_birth' => $date_of_birth,
+                'guardian' => $guardian,
+                'image' => $imagePath,
+                'user_id' => $user->id,
+                'section_id' => $section_id,
+                'program_id' => $program_id,
+                'session_id' => $session_id,
+                'status' => $status
+            ]);
+
+            return response()->json([
+                'message' => 'Student added successfully!',
+                'username' => $regNo,
+                'password' => $password
+            ], 201);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function addSession(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string',
+            'year' => 'required',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        // // Split "name-year" (e.g., "Spring-2025" → name="Spring", year="2025")
+        // $nameParts = explode('-', $request->name);
+        // if (count($nameParts) != 2 || !is_numeric($nameParts[1])) {
+        //     return response()->json(['message' => 'Invalid session name format. Use "name-year" (e.g., Spring-2025).'], 400);
+        // }
+        $name = $request->name;
+        $year = $request->year;
+        $existingSession = Session::where('name', $name)
+            ->where('year', $year)
+            ->exists();
+
+        if ($existingSession) {
+            return response()->json(['message' => 'A session with the same name and year already exists.'], 400);
+        }
+        // Check for date range overlap
+        $overlap = Session::where(function ($query) use ($request) {
+            $query->whereBetween('start_date', [$request->start_date, $request->end_date])
+                ->orWhereBetween('end_date', [$request->start_date, $request->end_date])
+                ->orWhere(function ($query) use ($request) {
+                    $query->where('start_date', '<=', $request->start_date)
+                        ->where('end_date', '>=', $request->end_date);
+                });
+        })->exists();
+
+        if ($overlap) {
+            return response()->json(['message' => 'Session date range overlaps with an existing session.'], 400);
+        }
+
+        // Create session
+        $session = Session::create([
+            'name' => $name,
+            'year' => $year,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+        ]);
+
+        return response()->json(['message' => 'Session added successfully.', 'session' => $session], 201);
+    }
+
+    // Update an existing session
+    public function updateSession(Request $request, $id)
+    {
+        $request->validate([
+            'name' => 'required|string',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $session = Session::find($id);
+        if (!$session) {
+            return response()->json(['message' => 'Session not found.'], 404);
+        }
+
+        // Split "name-year" format
+        $nameParts = explode('-', $request->name);
+        if (count($nameParts) != 2 || !is_numeric($nameParts[1])) {
+            return response()->json(['message' => 'Invalid session name format. Use "name-year" (e.g., Spring-2025).'], 400);
+        }
+        [$name, $year] = $nameParts;
+
+        // Check for date range overlap (excluding current session)
+        $overlap = Session::where('id', '!=', $id)
+            ->where(function ($query) use ($request) {
+                $query->whereBetween('start_date', [$request->start_date, $request->end_date])
+                    ->orWhereBetween('end_date', [$request->start_date, $request->end_date])
+                    ->orWhere(function ($query) use ($request) {
+                        $query->where('start_date', '<=', $request->start_date)
+                            ->where('end_date', '>=', $request->end_date);
+                    });
+            })->exists();
+
+        if ($overlap) {
+            return response()->json(['message' => 'Session date range overlaps with an existing session.'], 400);
+        }
+
+        // Update session
+        $session->update([
+            'name' => $name,
+            'year' => $year,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+        ]);
+
+        return response()->json(['message' => 'Session updated successfully.', 'session' => $session], 200);
+    }
 }
