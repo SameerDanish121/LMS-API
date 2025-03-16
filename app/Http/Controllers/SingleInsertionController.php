@@ -32,7 +32,7 @@ class SingleInsertionController extends Controller
                 'date_of_birth' => 'required|date',
                 'gender' => 'required|string',
                 'cnic' => 'required',
-                'email' => 'nullable|email',
+                'email' => 'nullable',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048'
             ]);
 
@@ -73,7 +73,8 @@ class SingleInsertionController extends Controller
                 'name' => $name,
                 'date_of_birth' => $formattedDOB,
                 'gender' => $gender,
-                'email' => $email // Store email even if it's null
+                'email' => $email,
+                'cnic'=>$cnic
             ]);
             // Handle image upload only if it's provided
             if ($request->hasFile('image')) {
@@ -119,7 +120,7 @@ class SingleInsertionController extends Controller
                 'date_of_birth' => 'required|date',
                 'gender' => 'required|string',
                 'cnic' => 'required',
-                'email' => 'nullable|email', // Email is optional
+                'email' => 'nullable', // Email is optional
                 'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048' // Image is optional
             ]);
 
@@ -154,23 +155,20 @@ class SingleInsertionController extends Controller
                     'message' => "Failed to create or update user for {$name}."
                 ], 500);
             }
-
             $juniorLecturer = juniorlecturer::create([
                 'user_id' => $userId,
                 'name' => $name,
                 'date_of_birth' => $formattedDOB,
                 'gender' => $gender,
-                'email' => $email // Store email even if it's null
+                'email' => $email,
+                'cnic'=>$cnic 
             ]);
-
-            // Handle image upload only if it's provided
             if ($request->hasFile('image')) {
                 $image = $request->file('image');
                 $directory = 'Images/JuniorLecturer';
                 $storedFilePath = FileHandler::storeFile($juniorLecturer->user_id, $directory, $image);
                 $juniorLecturer->update(['image' => $storedFilePath]);
             }
-
             return response()->json([
                 'status' => 'success',
                 'message' => "The Junior Lecturer with Name: {$name} was added.",
@@ -717,7 +715,7 @@ class SingleInsertionController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
+                'errors' => $e->getMessage()
             ], 500);
         }
     }

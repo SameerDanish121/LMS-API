@@ -55,29 +55,59 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ExtraKhattaController extends Controller
 {
-        use SendNotificationTrait; // Include the trait
-        public function send(Request $request)
-        {
-            $request->validate([
-                'user_id' => 'required',
-                'title'   => 'required|string',
-                'body'    => 'required|string',
-            ]);
-    
-            // Retrieve user and their FCM token
-            // $user = User::find($request->user_id);
-            // if (!$user->fcm_token) {
-            //     return response()->json(['error' => 'User does not have an FCM token'], 400);
-            // }
-    
-            // Optional custom data
-            $data = $request->input('data', []);
-    
-            // Send the notification
-            $response = $this->sendNotification($request->user_id, $request->title, $request->body, $data);
-    
-            return response()->json($response);
+    use SendNotificationTrait; // Include the trait
+    public function send(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required',
+            'title' => 'required|string',
+            'body' => 'required|string',
+        ]);
+
+        // Retrieve user and their FCM token
+        // $user = User::find($request->user_id);
+        // if (!$user->fcm_token) {
+        //     return response()->json(['error' => 'User does not have an FCM token'], 400);
+        // }
+
+        // Optional custom data
+        $data = $request->input('data', []);
+
+        // Send the notification
+        $response = $this->sendNotification($request->user_id, $request->title, $request->body, $data);
+
+        return response()->json($response);
+    }
+    public static function EligibleToEnroll($student_id, $section_id)
+    {
+        $section = Section::find($section_id);
+        if (!$section || !isset($section->semester)) {
+            return false;
         }
+        $student = student::find($student_id);
+        if (!$student) {
+            return false; 
+        }
+        $currentSemester = $section->semester;
+        $promotionPolicies = [
+            2 => 2.0,
+            3 => 2.1,
+            4 => 2.2,
+            5 => 2.3,
+            6 => 2.4,
+            7 => 2.5,
+            8 => 2.6
+        ];
+    
+        // Get required CGPA (default to 2.5 if semester is not listed)
+        $requiredCgpa = $promotionPolicies[$currentSemester] ?? 2.5;
+    
+        // Check CGPA condition
+        if ($student->cgpa < $requiredCgpa) {
+            return false;
+        }
+        return true; // Student meets promotion criteria
+    }
     
 
     public function AddSubjectResult(Request $request)
@@ -89,7 +119,7 @@ class ExtraKhattaController extends Controller
                 'offered_course_id' => 'required|integer',
             ]);
             $section_id = $request->section_id;
-            $section_id=(new section())->getIDByName($section_id);
+            $section_id = (new section())->getIDByName($section_id);
             $offered_course_id = $request->offered_course_id;
             $offeredCourse = offered_courses::with('course:id,name,credit_hours,lab')->findOrFail($offered_course_id);
             $course = $offeredCourse->course;
@@ -724,114 +754,95 @@ class ExtraKhattaController extends Controller
         }
     }
 
+
     public function assignGrader(Request $request)
     {
         try {
             $request->validate([
-                'data' => 'required|array|min:1', // Array of records for grader assignments
-                'data.*.session_id' => 'required|integer',
-                'data.*.teacher_id' => 'required|integer',
-                'data.*.grader_id' => 'required|integer',
+                'teacher_id' => 'required',
+                'grader_id' => 'required',
             ]);
 
-            $status = [];
+            $sessionId = (new session())->getCurrentSessionId();
+            if ($sessionId == 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No Current Session Found! Try to Add the Grader From Add Option'
+                ], 404);
+            }
 
-            foreach ($request->input('data') as $entry) {
-                $sessionId = $entry['session_id'];
-                $teacherId = $entry['teacher_id'];
-                $graderId = $entry['grader_id'];
+            $teacherId = $request->input('teacher_id');
+            $graderId = $request->input('grader_id');
 
-                // Check if Grader exists
-                $grader = Grader::find($graderId);
-                if (!$grader) {
-                    // If Grader doesn't exist, create it and set status as active
-                    $grader = Grader::create([
-                        'id' => $graderId,
-                        'status' => 'active'
-                    ]);
-                    $status[] = [
-                        'status' => 'success',
-                        'message' => "Grader created and set as active.",
-                        'grader_id' => $graderId
-                    ];
-                } else {
-                    // Update Grader status to active if it exists
-                    $grader->update(['status' => 'active']);
-                    $status[] = [
-                        'status' => 'success',
-                        'message' => "Grader updated and status set to active.",
-                        'grader_id' => $graderId
-                    ];
-                }
+            // Check if Grader exists
+            $grader = Grader::find($graderId);
+            if (!$grader) {
+                $grader = Grader::create([
+                    'id' => $graderId,
+                    'status' => 'active'
+                ]);
+                $status = "Grader created and set as active.";
+            } else {
+                $grader->update(['status' => 'active']);
+                $status = "Grader updated and status set to active.";
+            }
 
-                // Check if Grader is already assigned to another Teacher in the same Session
-                $existingAssignment = teacher_grader::where([
+            // Check if Grader is already assigned to another Teacher in the same Session
+            $existingAssignment = teacher_grader::where([
+                'grader_id' => $graderId,
+                'session_id' => $sessionId
+            ])->exists();
+
+            if ($existingAssignment) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "The Grader is already assigned to another teacher in the given session.",
                     'grader_id' => $graderId,
                     'session_id' => $sessionId
-                ])->exists();
+                ], 400);
+            }
 
-                if ($existingAssignment) {
-                    $status[] = [
-                        'status' => 'error',
-                        'message' => "The Grader is already assigned to another teacher in the given session.",
-                        'grader_id' => $graderId,
-                        'session_id' => $sessionId
-                    ];
-                    continue;
-                }
+            // Check if Grader is already assigned to the same Teacher in this Session
+            $existingAssignmentForTeacher = teacher_grader::where([
+                'grader_id' => $graderId,
+                'teacher_id' => $teacherId,
+                'session_id' => $sessionId
+            ])->exists();
 
-                // Check if Grader is already assigned to the same Teacher in this Session
-                $existingAssignmentForTeacher = teacher_grader::where([
+            if (!$existingAssignmentForTeacher) {
+                teacher_grader::create([
+                    'grader_id' => $graderId,
+                    'teacher_id' => $teacherId,
+                    'session_id' => $sessionId,
+                    'feedback' => ''
+                ]);
+                return response()->json([
+                    'status' => 'success',
+                    'message' => "Grader assigned to teacher successfully.",
                     'grader_id' => $graderId,
                     'teacher_id' => $teacherId,
                     'session_id' => $sessionId
-                ])->first();
-
-                if (!$existingAssignmentForTeacher) {
-                    // Assign Grader to Teacher for the given session
-                    teacher_grader::create([
-                        'grader_id' => $graderId,
-                        'teacher_id' => $teacherId,
-                        'session_id' => $sessionId,
-                        'feedback' => ''
-                    ]);
-                    $status[] = [
-                        'status' => 'success',
-                        'message' => "Grader assigned to teacher successfully.",
-                        'grader_id' => $graderId,
-                        'teacher_id' => $teacherId,
-                        'session_id' => $sessionId
-                    ];
-                } else {
-                    $status[] = [
-                        'status' => 'success',
-                        'message' => "Grader is already assigned to the teacher for this session.",
-                        'grader_id' => $graderId,
-                        'teacher_id' => $teacherId,
-                        'session_id' => $sessionId
-                    ];
-                }
+                ], 200);
             }
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Grader assignment processed.',
-                'details' => $status
+                'message' => "Grader is already assigned to the teacher for this session.",
+                'grader_id' => $graderId,
+                'teacher_id' => $teacherId,
+                'session_id' => $sessionId
             ], 200);
-
         } catch (ValidationException $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Validation failed',
                 'errors' => $e->errors()
             ], 422);
-
         } catch (ModelNotFoundException $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Data not found'
             ], 404);
-
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -840,6 +851,105 @@ class ExtraKhattaController extends Controller
             ], 500);
         }
     }
+    public function AddGrader(Request $request)
+    {
+        try {
+            $request->validate([
+                'teacher_id' => 'required',
+                'grader_id' => 'required',
+                'session_id' => 'required', // Session ID is now coming from frontend
+                'type' => 'nullable|in:merit,need-based' // Optional type validation
+            ]);
+
+            $teacherId = $request->input('teacher_id');
+            $graderId = $request->input('grader_id');
+            $sessionId = $request->input('session_id');
+            $type = $request->input('type')??null; // Optional
+            $status='in-active';
+            if($sessionId===(new session())->getCurrentSessionId()){
+                $status='active';
+            }
+            $grader = Grader::where('student_id', $graderId)->first();
+            
+            if (!$grader) {
+                $grader = Grader::create([
+                    'student_id' => $graderId,
+                    'status' => $status,
+                    'type'=>$type
+                ]);
+                $statusMessage = "Grader created and set as active.";
+            } else {
+                $grader->update(['status' => 'active']);
+                $statusMessage = "Grader updated and status set to active.";
+            }
+            $graderId=$grader->id;
+            // Check if the Grader is already assigned to a different Teacher in this session
+            $existingAssignment = teacher_grader::where([
+                'grader_id' => $graderId,
+                'session_id' => $sessionId
+            ])->exists();
+
+            if ($existingAssignment) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "The Grader is already assigned to another teacher in the given session.",
+                    'grader_id' => $graderId,
+                    'session_id' => $sessionId
+                ], 400);
+            }
+
+            // Check if Grader is already assigned to the same Teacher in this Session
+            $existingAssignmentForTeacher = teacher_grader::where([
+                'grader_id' => $graderId,
+                'teacher_id' => $teacherId,
+                'session_id' => $sessionId
+            ])->exists();
+
+            if (!$existingAssignmentForTeacher) {
+                teacher_grader::create([
+                    'grader_id' => $graderId,
+                    'teacher_id' => $teacherId,
+                    'session_id' => $sessionId,
+                    'feedback' => ''
+                ]);
+                return response()->json([
+                    'status' => 'success',
+                    'message' => "Grader assigned to teacher successfully.",
+                    'grader_id' => $graderId,
+                    'teacher_id' => $teacherId,
+                    'session_id' => $sessionId,
+                    'type' => $type
+                ], 200);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Grader is already assigned to the teacher for this session.",
+                'grader_id' => $graderId,
+                'teacher_id' => $teacherId,
+                'session_id' => $sessionId,
+                'type' => $type
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'error' => $e->errors()
+            ], 422);
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Data not found'
+            ], 404);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
 
     public function addStudentEnrollment(Request $request)
     {
@@ -885,13 +995,13 @@ class ExtraKhattaController extends Controller
 
         // Fetch the course name of the given offered_course_id
         $newCourse = offered_courses::with('course')->find($offered_course_id);
-        $newCourseName = $newCourse->course->name;
+        $newCourseName = $newCourse->course->code;
 
         $canReEnroll = false;
 
         // Check if any of the student's courses match the new course name and grade
         foreach ($existingStudentCourses as $enrollment) {
-            $courseName = $enrollment->offeredCourse->course->name;
+            $courseName = $enrollment->offeredCourse->course->code;
 
             if ($courseName === $newCourseName) {
                 $grade = $enrollment->grade;
@@ -967,19 +1077,19 @@ class ExtraKhattaController extends Controller
                 4 => 16,
                 default => 0,
             };
-            $mid_marks = self::CountExamMarks('Mid',$s->student->id,$teacher_offered_c->id);
-            $final_marks = self::CountExamMarks('Final',$s->student->id,$teacher_offered_c->id);
+            $mid_marks = self::CountExamMarks('Mid', $s->student->id, $teacher_offered_c->id);
+            $final_marks = self::CountExamMarks('Final', $s->student->id, $teacher_offered_c->id);
             $lab_marks = $isLab ? 0 : null;
             if ($isLab) {
                 $lab_marks = self::getLabTaskResult($s->student->id, $teacher_offered_c->id);
             }
             $internal_marks = self::compileInternalMarks($s->student->id, $teacher_offered_c->id, $total_marks == 80 ? 12 : (($total_marks == 60 && $isLab) ? 8 : 12));
             $obtained_marks = $internal_marks + $mid_marks + $final_marks + ($isLab ? $lab_marks : 0);
-            $theorymarks=$total_marks;
-            if($isLab){
-                 $theorymarks=$theorymarks-20;
+            $theorymarks = $total_marks;
+            if ($isLab) {
+                $theorymarks = $theorymarks - 20;
             }
-            $theory_per =($internal_marks + $mid_marks + $final_marks)>0?(($internal_marks + $mid_marks + $final_marks)/$theorymarks)*100:0;
+            $theory_per = ($internal_marks + $mid_marks + $final_marks) > 0 ? (($internal_marks + $mid_marks + $final_marks) / $theorymarks) * 100 : 0;
             $percentage = ($total_marks > 0) ? ($obtained_marks / $total_marks) * 100 : 0;
             $grade = 'F';
             if ($isLab && $lab_marks < 8) {
@@ -999,10 +1109,10 @@ class ExtraKhattaController extends Controller
                     $quality_points == 3 ? 10 : 14;
                 } elseif ($percentage >= 55) {
                     $grade = 'C';
-                    $quality_points  == 3 ? 9 : 12;
+                    $quality_points == 3 ? 9 : 12;
                 } elseif ($percentage >= 40) {
                     $grade = 'D';
-                    $quality_points  == 3 ? 7 : 10;
+                    $quality_points == 3 ? 7 : 10;
                 } else {
                     $grade = 'F';
                     $quality_points = 0;
@@ -1032,25 +1142,25 @@ class ExtraKhattaController extends Controller
             $s->update(['grade' => $grade]);
             $GPA = self::calculateAndStoreGPA($s->student_id, $offered_course->session_id);
             $CGPA = self::calculateAndUpdateCGPA($s->student_id);
-            if($s->student->id==36){
+            if ($s->student->id == 36) {
                 return [
-                    "Student Name"=>$s->student->name,
-                    "Subject Name"=>$course->name,
-                    "Mid Marks"=>$mid_marks,
-                    "Final"=>$final_marks,
-                    "Lab Marks"=>$lab_marks,
-                    "Internal Marks"=>$internal_marks,
-                    "Grade"=>$grade,
-                    "Quality Points"=>$quality_points,
-                    "Total Marks of Subject"=>$total_marks,
-                    "Obtained Total"=>$obtained_marks,
-                    "Percentage of Theory"=>$theory_per,
-                    "Percentage of Total"=>$percentage,
-                    "Updated CGPA"=>$CGPA,
-                    "Updated GPA"=>$GPA
+                    "Student Name" => $s->student->name,
+                    "Subject Name" => $course->name,
+                    "Mid Marks" => $mid_marks,
+                    "Final" => $final_marks,
+                    "Lab Marks" => $lab_marks,
+                    "Internal Marks" => $internal_marks,
+                    "Grade" => $grade,
+                    "Quality Points" => $quality_points,
+                    "Total Marks of Subject" => $total_marks,
+                    "Obtained Total" => $obtained_marks,
+                    "Percentage of Theory" => $theory_per,
+                    "Percentage of Total" => $percentage,
+                    "Updated CGPA" => $CGPA,
+                    "Updated GPA" => $GPA
                 ];
             }
-            
+
         }
     }
 
@@ -1293,7 +1403,7 @@ class ExtraKhattaController extends Controller
                     // 'atteandance per' => self::SingleSubjectAttendance(36, 64),
                     // 'Inernal Marks' => self::compileInternalMarks(36, 64, 12),
                     // 'Lab Marks' => self::getLabTaskResult(36, 64)
-                    "REUSLT"=>self::CompilerResult(18,16)
+                    "REUSLT" => self::CompilerResult(18, 16)
                 ],
                 200
             );

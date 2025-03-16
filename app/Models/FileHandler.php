@@ -33,7 +33,7 @@ class FileHandler extends Model
             if (!$fileExtension) {
                 throw new Exception('Unsupported file type.');
             }
-            
+            // $fileName=self::sanitizeFileName($fileName);
             $filePath = $storagePath . '/' . $fileName . '.' . $fileExtension;
             File::put($filePath, $decodedData);
             return $directoryPath . '/' . $fileName . '.' . $fileExtension;
@@ -60,6 +60,7 @@ class FileHandler extends Model
             if (!File::exists($storagePath)) {
                 File::makeDirectory($storagePath, 0777, true);
             }
+            // $fileName=self::sanitizeFileName($fileName);
             $filePath = 'storage/BIIT/' . $remainingDirectory;
             $file->move($storagePath, $fileName . '.' . $getfileExtension);
             return $filePath . '/' . $fileName . '.' . $getfileExtension;
@@ -167,6 +168,15 @@ class FileHandler extends Model
             return round($sizeInBytes / 1024, 2) . ' KB';
         }
     }
+    function sanitizeFileName($fileName) {
+        // Define the list of unsafe characters
+        $unsafeChars = ['#', '?', '&', '%', '+', '=', ':', ';', '"', "'", '*', '<', '>', '|', '(', ')', '[', ']', '{', '}', ' '];
+        
+        // Replace them with underscores or remove them
+        $safeFileName = str_replace($unsafeChars, '_', $fileName);
+    
+        return $safeFileName;
+    }
     public static function deleteFolder($relativeFolderPath)
     {
         try {
@@ -244,6 +254,7 @@ class FileHandler extends Model
             if (!File::exists($storagePath)) {
                 File::makeDirectory($storagePath, 0777, true);
             }
+            // $newFileName=self::sanitizeFileName($newFileName);
             $destinationFilePath = $storagePath . '/' . $newFileName . '.' . $fileExtension;
             
             $copySucces= File::copy(public_path($originalPath), $destinationFilePath);

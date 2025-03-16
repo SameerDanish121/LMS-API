@@ -82,17 +82,17 @@ class GraderController extends Controller
     public function SubmitNumberList(Request $request)
     {
         try {
-            $submissions = $request->submissions; 
-            $task_id=$request->task_id;
-            $Logs=[];
+            $submissions = $request->submissions;
+            $task_id = $request->task_id;
+            $Logs = [];
             foreach ($submissions as $submission) {
                 $student_RegNo = $submission['regNo'];
-                $obtainedMarks = $submission['obtainedMarks']; 
+                $obtainedMarks = $submission['obtainedMarks'];
                 $result = student_task_result::storeOrUpdateResult($task_id, $student_RegNo, $obtainedMarks);
                 if (!$result) {
-                    $Logs[]=["Message"=>"Error in Uploading the Number of $student_RegNo","Data"=>$submission];
-                }else{
-                    $Logs[]=["Message"=>"successfully Uploaded the Number of $student_RegNo","Data"=>$submission];
+                    $Logs[] = ["Message" => "Error in Uploading the Number of $student_RegNo", "Data" => $submission];
+                } else {
+                    $Logs[] = ["Message" => "successfully Uploaded the Number of $student_RegNo", "Data" => $submission];
                 }
             }
             if ($task_id) {
@@ -100,7 +100,7 @@ class GraderController extends Controller
             }
             return response()->json([
                 'message' => 'All submissions processed successfully!',
-                'data'=>$Logs
+                'data' => $Logs
             ], 200);
         } catch (Exception $e) {
             return response()->json([
@@ -110,7 +110,7 @@ class GraderController extends Controller
             ], 500);
         }
     }
-     //task_id;
+    //task_id;
     public function ListOfStudentForTask(Request $request)
     {
         try {
@@ -141,8 +141,8 @@ class GraderController extends Controller
                     $submission = $submissions->firstWhere('Student_id', $student->id);
                     if ($submission) {
                         if ($submission->Answer) {
-                          
-                            $submission->Answer = asset( $submission->Answer);
+
+                            $submission->Answer = asset($submission->Answer);
                         } else {
                             $submission->Answer = null;
                         }
@@ -180,11 +180,11 @@ class GraderController extends Controller
     {
         try {
             $graderId = $request->grader_id;
-            if(!$graderId){
+            if (!$graderId) {
                 throw new Exception('Please Provide with the Grader ID');
             }
             $session_id = (new session())->getCurrentSessionId();
-            $assignedTasks = grader_task::with(['task','task.teacherOfferedCourse.section','task.teacherOfferedCourse.offeredCourse.course', 'task.teacherOfferedCourse.offeredCourse.session','task.courseContent'])
+            $assignedTasks = grader_task::with(['task', 'task.teacherOfferedCourse.section', 'task.teacherOfferedCourse.offeredCourse.course', 'task.teacherOfferedCourse.offeredCourse.session', 'task.courseContent'])
                 ->where('Grader_id', $graderId)
                 ->whereHas('task.teacherOfferedCourse.offeredCourse.session', function ($query) use ($session_id) {
                     $query->where('id', $session_id);
@@ -193,19 +193,19 @@ class GraderController extends Controller
                 ->map(function ($graderTask) {
                     $task = $graderTask->task;
                     $markingInfo = null;
-                    $taskdetails=task::with(['teacherOfferedCourse.section','teacherOfferedCourse.offeredCourse.course'])->find($task->id);
-                   
+                    $taskdetails = task::with(['teacherOfferedCourse.section', 'teacherOfferedCourse.offeredCourse.course'])->find($task->id);
+
                     if ($task->isMarked) {
                         $markingInfo = $this->getMarkingInfo($task->id);
-                        $Teacher=teacher::find($taskdetails->teacherOfferedCourse->teacher_id);
+                        $Teacher = teacher::find($taskdetails->teacherOfferedCourse->teacher_id);
                         return [
                             'task_id' => $task->id,
-                            'Course Name'=>$taskdetails->teacherOfferedCourse->offeredCourse->course->name,
-                            'Section Name'=> (new section())->getNameByID($taskdetails->teacherOfferedCourse->section->id),
-                            'Teacher Name' =>$Teacher->name??null,
+                            'Course Name' => $taskdetails->teacherOfferedCourse->offeredCourse->course->name,
+                            'Section Name' => (new section())->getNameByID($taskdetails->teacherOfferedCourse->section->id),
+                            'Teacher Name' => $Teacher->name ?? null,
                             'title' => $task->title,
                             'type' => $task->type,
-                            'File' => $task->courseContent?asset($task->courseContent->content):'null',
+                            'File' => $task->courseContent ? asset($task->courseContent->content) : 'null',
                             'created_by' => $task->CreatedBy,
                             'Total Marks' => $task->points,
                             'start_date' => $task->start_date,
@@ -214,15 +214,15 @@ class GraderController extends Controller
                             'marking_info' => $markingInfo,
                         ];
                     } else {
-                        $Teacher=teacher::find($taskdetails->teacherOfferedCourse->teacher_id);
+                        $Teacher = teacher::find($taskdetails->teacherOfferedCourse->teacher_id);
                         return [
                             'task_id' => $task->id,
-                            'Course Name'=>$task->teacherOfferedCourse->offeredCourse->course->name,
-                            'Section Name'=> (new section())->getNameByID($task->teacherOfferedCourse->section->id),
-                            'Teacher Name' => $Teacher->name??null,
+                            'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
+                            'Section Name' => (new section())->getNameByID($task->teacherOfferedCourse->section->id),
+                            'Teacher Name' => $Teacher->name ?? null,
                             'title' => $task->title,
                             'type' => $task->type,
-                            'File' => $task->courseContent?asset($task->courseContent->content):'null',
+                            'File' => $task->courseContent ? asset($task->courseContent->content) : 'null',
                             'created_by' => $task->CreatedBy,
                             'Total Marks' => $task->points,
                             'start_date' => $task->start_date,
@@ -243,7 +243,7 @@ class GraderController extends Controller
             $ongoingTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
                 return $task['start_date'] <= $currentDate && $task['due_date'] >= $currentDate;
             });
-           
+
             $unmarkedTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
                 return !$task['marking_status'] === 'Marked' && $task['due_date'] < $currentDate;
             });
@@ -283,7 +283,7 @@ class GraderController extends Controller
             'top' => [
                 'student_name' => $topMark->student_name,
                 'obtained_marks' => $topMark->obtained_marks,
-                'title' => 'Good',  
+                'title' => 'Good',
             ],
             'average' => [
                 'student_name' => $topMark->student_name,
@@ -323,28 +323,29 @@ class GraderController extends Controller
                     'session.id as  session_id',
                     DB::raw("CONCAT(session.name,'-',session.year) as session"),
                     'session.id as session_id',
-                    DB::raw("CASE WHEN session.id = $currentSessionId THEN 'active' ELSE 'non_active' END as session_status"),
+                    DB::raw("CASE WHEN session.id = $currentSessionId THEN 'active' ELSE 'non-active' END as session_status"),
                     DB::raw("CASE WHEN session.id = $currentSessionId THEN NULL ELSE teacher_grader.feedback END as feedback")
                 )
                 ->get()
                 ->groupBy('grader_id')
-                ->map(function ($group)  {
+                ->map(function ($group) {
                     $first = $group->first();
                     return [
                         'grader_id' => $first->id,
                         'grader_name' => $first->name,
                         'grader_RegNo' => $first->regno,
+                        'image' => $first->image?asset($first->image):null,
                         'grader_section' => (new section())->getNameByID($first->section),
                         'This Session' => $first->status,
                         'type' => $first->type,
-                        'Grader Allocations' => $group->map(function ($item)  {
+                        'Grader Allocations' => $group->map(function ($item) {
                             return [
-                                'Session is ? '=>$item->session_id===(new session())->getCurrentSessionId()?' Current Session':' Previous Session',
+                                'Session is ? ' => $item->session_id === (new session())->getCurrentSessionId() ? ' Current Session' : ' Previous Session',
                                 'teacher_name' => $item->teacher_name,
                                 'session_name' => $item->session,
+                                'teacher_image' => $item->teacher_image?asset($item->teacher_image):null,
                                 'Allocation Status' => $item->session_status,
-                                'feedback' => $item->feedback ?? 'Not Added By Instructor',
-                                
+                                'feedback' => (!empty($item->feedback) || $item->feedback === '0') ? $item->feedback : 'Not Added By Instructor',
                             ];
                         }),
                     ];

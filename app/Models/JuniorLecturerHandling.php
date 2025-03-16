@@ -42,52 +42,68 @@ class JuniorLecturerHandling extends Model
             });
         return $timetable;
     }
-
     public static function getJuniorLecturerCourseGroupedByActivePrevious($juniorLecturerId)
     {
         try {
             $currentSessionId = (new session())->getCurrentSessionId();
+            
+            // Fetch data with necessary relationships
             $assignments = teacher_juniorlecturer::where('juniorlecturer_id', $juniorLecturerId)
-                ->with(['teacherOfferedCourse.offeredCourse.course', 'teacherOfferedCourse.section', 'teacherOfferedCourse.teacher'])
+                ->with([
+                    'teacherOfferedCourse.offeredCourse.course',
+                    'teacherOfferedCourse.offeredCourse.session',
+                    'teacherOfferedCourse.section',
+                    'teacherOfferedCourse.teacher',
+                    'teacherOfferedCourse.offeredCourse.course.program',
+                ])
                 ->get();
+    
             $activeCourses = [];
             $previousCourses = [];
             foreach ($assignments as $assignment) {
-                $offeredCourse = $assignment->teacherOfferedCourse->offeredCourse;
-                if (!$offeredCourse) {
-                    continue;
+                $teacherOfferedCourse = $assignment->teacherOfferedCourse;
+                if (!$teacherOfferedCourse || !$teacherOfferedCourse->offeredCourse || !$teacherOfferedCourse->offeredCourse->course) {
+                    continue; 
                 }
-
-                $sessionId = $offeredCourse->session_id;
-
+                $offeredCourse = $teacherOfferedCourse->offeredCourse;
+                $course = $offeredCourse->course;
+                $session = $offeredCourse->session;
+                $program= $course->program;
                 $courseDetails = [
-                    'teacher_offered_course_id' => $assignment->teacherOfferedCourse->id,
-                    'course_name' => $offeredCourse->course->name,
-                    'course_code' => $offeredCourse->course->code,
-                    'credit_hours' => $offeredCourse->course->credit_hours,
-                    'course_type' => $offeredCourse->course->type,
-                    'description' => $offeredCourse->course->description,
-                    'lab' => $offeredCourse->course->lab ? 'Yes' : 'No',
-                    'prerequisite' => $offeredCourse->course->prerequisite ? $offeredCourse->course->prerequisite->name : 'Main',
-                    'teacher_name' => $assignment->teacherOfferedCourse->teacher->name,
-                    'section_name' => $assignment->teacherOfferedCourse->section->getNameByID($assignment->teacherOfferedCourse->section_id),
-                    'session_name' => $offeredCourse->session->name . '-' . $offeredCourse->session->year,
-                    'program_name' => $offeredCourse->course->program->name,
+                    'teacher_offered_course_id' => $teacherOfferedCourse->id,
+                    'course_name' => $course->name,
+                    'course_code' => $course->code,
+                    'credit_hours' => $course->credit_hours,
+                    'course_type' => $course->type,
+                    'description' => $course->description,
+                    'lab' => $course->lab ? 'Yes' : 'No',
+                    'prerequisite' => $course->pre_req_main ? $course->pre_req_main : 'Main',
+                    'teacher_name' => $teacherOfferedCourse->teacher ? $teacherOfferedCourse->teacher->name : 'Unknown',
+                    'teacher_image' => $teacherOfferedCourse->image ? asset($teacherOfferedCourse->teacher->image):null,
+                    'section_name' => $teacherOfferedCourse->section ? $teacherOfferedCourse->section->group : 'Unknown',
+                    'session_name' => $session ? $session->name . '-' . $session->year : 'Unknown',
+                    'program_name' => $program ? $program->name : 'N/A',
                 ];
-                if ($sessionId == $currentSessionId) {
+    
+                if ($offeredCourse->session_id == $currentSessionId) {
                     $activeCourses[] = $courseDetails;
                 } else {
                     $previousCourses[] = $courseDetails;
                 }
             }
-
+    
             return [
                 'active_courses' => $activeCourses,
                 'previous_courses' => $previousCourses,
             ];
         } catch (Exception $ex) {
+            return [
+                'active_courses' => [],
+                'previous_courses' => [],
+            ];
         }
     }
+    
     public static function getActiveCoursesForJuniorLecturer($juniorLecturerId)
     {
         try {
@@ -225,9 +241,9 @@ class JuniorLecturerHandling extends Model
                     'task_id' => $task->id,
                     'title' => $task->title,
                     'type' => $task->type,
-                    ($task->courseContent->content=='MCQS')?'MCQS':'File'=>($task->courseContent->content=='MCQS')
-                    ?Action::getMCQS($task->courseContent->id)
-                    :FileHandler::getFileByPath($task->courseContent->content),
+                    ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
+                        ? Action::getMCQS($task->courseContent->id)
+                        : FileHandler::getFileByPath($task->courseContent->content),
                     'created_by' => $task->CreatedBy,
                     'points' => $task->points,
                     'start_date' => $task->start_date,
@@ -408,9 +424,9 @@ class JuniorLecturerHandling extends Model
             ->where('junior_lecturer_id', $juniorLecturer_id)
             ->where('type', 'Lab')
             ->whereHas('dayslot', function ($query) {
-                $query->where('day', Carbon::now()->format('l')); 
+                $query->where('day', Carbon::now()->format('l'));
             })
-            ->where('session_id', $currentSessionId) 
+            ->where('session_id', $currentSessionId)
             ->get()
             ->map(function ($item) use ($currentSessionId) {
                 $offeredCourse = offered_courses::where('course_id', $item->course->id)
@@ -423,7 +439,7 @@ class JuniorLecturerHandling extends Model
                 return [
                     'coursename' => $item->course->name ?? 'N/A',
                     'description' => $item->course->description ?? 'N/A',
-                    'section' =>(new section())->getNameByID($item->section_id) ?? 'N/A',
+                    'section' => (new section())->getNameByID($item->section_id) ?? 'N/A',
                     'venue' => $item->venue->venue ?? 'N/A',
                     'venue_id' => $item->venue->id ?? null,
                     'day' => $item->dayslot->day ?? 'N/A',

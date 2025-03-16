@@ -64,7 +64,7 @@ class DatacellModuleController extends Controller
                 throw new Exception('NO SESSION EXISIT FOR THE PROVIDED NAME ');
             }
             $file = $request->file('excel_file');
-           
+
             $spreadsheet = IOFactory::load($file->getPathname());
             $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
             $filteredData = [];
@@ -782,67 +782,95 @@ class DatacellModuleController extends Controller
             $successMessages = [];
             $errorMessages = [];
             foreach ($nonEmpty as $singleRow) {
-                $RowNo++;
-
-                $name = $singleRow['A'];
-                $dateOfBirth = $singleRow['B'];
-                $gender = $singleRow['C'];
-                $email = $singleRow['D'];
-                $cnic = $singleRow['E'];
-                if (!isset($name) || trim($name) === "" || empty($name)) {
-                    $errorMessages[]=["status" => 'failed', "reason" => " Name is required for  {$RowNo}."];
-                    continue;
-                }
-                
-                if (!isset($dateOfBirth) || trim($dateOfBirth) === "" || empty($dateOfBirth)) {
-                    $errorMessages[]=["status" => 'failed', "reason" => " Date Of Birth is required for  {$RowNo}."];
-                    continue;
-                }
-                
-                if (!isset($gender) || trim($gender) === "" || empty($gender)) {
-                    $errorMessages[]=["status" => 'failed', "reason" => " Gender is required for  {$RowNo}."];
-                    continue;
-                }
-                if (!isset($cnic) || trim($cnic) === "" || empty($cnic)) {
-                    $errorMessages[] = ["status" => 'failed', "reason" => "Required Field of CNIC/EMPLOYEE# for  {$name}."];
-                    continue;
-                } 
-                if(teacher::where('cnic',$cnic)->exists()){
-                    $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user Because of Exsisting Employee#/CNIC {$cnic}."];
-                    continue;
-                }
-                $username =strtolower(str_replace(' ', '', $name)) .$cnic. '@biit.edu';
-                $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
-                $teacher = Teacher::where('cnic', $cnic)->first();
-                if ($teacher) {
-                    $teacher->update([
-                        'date_of_birth' => $formattedDOB,
-                        'gender' => $gender
-                    ]);
-                    $user=User::find($userId);
-                    $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated.","username"=>$username,"password"=>$user->password];
-                } else {
-                    $password = Action::generateUniquePassword($name);
-                    $userId = Action::addOrUpdateUser($username, $password, $email, 'Teacher');
-                    if (!$userId) {
-                        $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+                try {
+                    $RowNo++;
+                    $name = trim($singleRow['A']);
+                    $dateOfBirth = trim($singleRow['B']);
+                    $gender = trim($singleRow['C']);
+                    $email = $singleRow['D'] ? trim($singleRow['D']) : null;
+                    $cnic = (int) trim($singleRow['E']);
+            
+                    if (!isset($name) || trim($name) === "" || empty($name)) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => " Name is required for  {$RowNo}."];
                         continue;
                     }
-                    Teacher::create([
-                        'user_id' => $userId,
-                        'name' => $name,
-                        'date_of_birth' => $formattedDOB,
-                        'gender' => $gender,
-                        'cnic'=>$cnic
-                    ]);
-                    $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was added.","username"=>$username,"password"=>$password];
+            
+                    if (!isset($dateOfBirth) || trim($dateOfBirth) === "" || empty($dateOfBirth)) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => " Date Of Birth is required for  {$RowNo}."];
+                        continue;
+                    }
+            
+                    if (!isset($gender) || trim($gender) === "" || empty($gender)) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => " Gender is required for  {$RowNo}."];
+                        continue;
+                    }
+                    if (!isset($cnic) || trim($cnic) === "" || empty($cnic)) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => "Required Field of CNIC/EMPLOYEE# for  {$name}."];
+                        continue;
+                    }
+            
+                    $username = strtolower(str_replace(' ', '', $name)) . $cnic . '@biit.edu';
+                    $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
+                    $teacher = Teacher::where('cnic', $cnic)->first();
+            
+                    if ($teacher) {
+                        $teacher->update([
+                            'date_of_birth' => $formattedDOB,
+                            'gender' => $gender
+                        ]);
+                        $user = User::find($teacher->user_id);
+                        $successMessages[] = [
+                            "status" => 'success',
+                            "Logs" => "The teacher with Name: {$name} was updated.",
+                            "username" => $username,
+                            "password" => $user->password
+                        ];
+                    } else {
+                        $password = Action::generateUniquePassword($name);
+                        $role = Role::where('type', 'Teacher')->first();
+                        if (!$role) {
+                            $role = Role::create(["type" => 'Teacher']);
+                        }
+            
+                        $user = new User();
+                        $user->username = $username;
+                        $user->password = $password;
+                        $user->role_id = $role->id;
+                        if (!empty($email)) {
+                            $user->email = $email;
+                        }
+                        $user->save();
+                        $userId = $user->id;
+            
+                        if (!$userId) {
+                            $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+                            continue;
+                        }
+            
+                        Teacher::create([
+                            'user_id' => $userId,
+                            'name' => $name,
+                            'date_of_birth' => $formattedDOB,
+                            'gender' => $gender,
+                            'cnic' => $cnic
+                        ]);
+            
+                        $successMessages[] = [
+                            "status" => 'success',
+                            "Logs" => "The teacher with Name: {$name} was added.",
+                            "username" => $username,
+                            "password" => $password
+                        ];
+                    }
+                } catch (Exception $e) {
+                    $errorMessages[] = [
+                        "status" => 'failed',
+                        "reason" => "Error processing row {$RowNo}: " . $e->getMessage()
+                    ];
+                    continue;
                 }
-              
-               
-              
-               
             }
-
+            
             return response()->json(
                 [
                     'Message' => 'Teachers Processed Successfully!',
@@ -901,70 +929,108 @@ class DatacellModuleController extends Controller
             }
             $RowNo = 1;
             $status = [];
+
             $successMessages = [];
             $errorMessages = [];
             foreach ($nonEmpty as $singleRow) {
-                $RowNo++;
-                $name = $singleRow['A'];
-                $dateOfBirth = $singleRow['B'];
-                $gender = $singleRow['C'];
-                $email = $singleRow['D'];
-                $cnic = $singleRow['E'];
-                if (!isset($name) || trim($name) === "" || empty($name)) {
-                    $errorMessages[]=["status" => 'failed', "reason" => " Name is required for  {$RowNo}."];
-                    continue;
-                }
-                if (!isset($dateOfBirth) || trim($dateOfBirth) === "" || empty($dateOfBirth)) {
-                    $errorMessages[]=["status" => 'failed', "reason" => " Date Of Birth is required for  {$RowNo}."];
-                    continue;
-                }
-                if (!isset($gender) || trim($gender) === "" || empty($gender)) {
-                    $errorMessages[]=["status" => 'failed', "reason" => " Gender is required for  {$RowNo}."];
-                    continue;
-                }
-                if (!isset($cnic) || trim($cnic) === "" || empty($cnic)) {
-                    $errorMessages[] = ["status" => 'failed', "reason" => "Required Field of CNIC/EMPLOYEE# for  {$name}."];
-                    continue;
-                } 
-                if(juniorlecturer::where('cnic',$cnic)->exists()){
-                    $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user Because of Exsisting Employee#/CNIC {$cnic}."];
-                    continue;
-                }
-                $username =strtolower(str_replace(' ', '', $name)) .$cnic. '_jl@biit.edu';
-                $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
-                $teacher = juniorlecturer::where('cnic', $cnic)->first();
-                if ($teacher) {
-                    $teacher->update([
-                        'date_of_birth' => $formattedDOB,
-                        'gender' => $gender
-                    ]);
-                    $user=User::find($userId);
-                    $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated.","username"=>$username,"password"=>$user->password];
-                } else {
-                    $password = Action::generateUniquePassword($name);
-                    $userId = Action::addOrUpdateUser($username, $password, $email, 'JuniorLecturer');
-                    if (!$userId) {
-                        $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+                try {
+                    $RowNo++;
+                    $name = trim($singleRow['A']);
+                    $dateOfBirth = trim($singleRow['B']);
+                    $gender = trim($singleRow['C']);
+                    $email = $singleRow['D'] ? trim($singleRow['D']) : null;
+                    $cnic = (int) trim($singleRow['E']);
+            
+                    if (!isset($name) || trim($name) === "" || empty($name)) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => " Name is required for  {$RowNo}."];
                         continue;
                     }
-                    juniorlecturer::create([
-                        'user_id' => $userId,
-                        'name' => $name,
-                        'date_of_birth' => $formattedDOB,
-                        'gender' => $gender,
-                        'cnic'=>$cnic
-                    ]);
-                    $successMessages[] = ["status" => 'success', "Logs" => "The Junior Lecturer with Name: {$name} was added.","username"=>$username,"password"=>$password];
-                }    
+            
+                    if (!isset($dateOfBirth) || trim($dateOfBirth) === "" || empty($dateOfBirth)) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => " Date Of Birth is required for  {$RowNo}."];
+                        continue;
+                    }
+            
+                    if (!isset($gender) || trim($gender) === "" || empty($gender)) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => " Gender is required for  {$RowNo}."];
+                        continue;
+                    }
+                    if (!isset($cnic) || trim($cnic) === "" || empty($cnic)) {
+                        $errorMessages[] = ["status" => 'failed', "reason" => "Required Field of CNIC/EMPLOYEE# for  {$name}."];
+                        continue;
+                    }
+            
+                    $username = strtolower(str_replace(' ', '', $name)) . $cnic . '_jl@biit.edu';
+                    $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
+                    $teacher = juniorlecturer::where('cnic', $cnic)->first();
+            
+                    if ($teacher) {
+                        $teacher->update([
+                            'date_of_birth' => $formattedDOB,
+                            'gender' => $gender
+                        ]);
+                        $user = User::find($teacher->user_id);
+                        $successMessages[] = [
+                            "status" => 'success',
+                            "Logs" => "The Junior Lecturer with Name: {$name} was updated.",
+                            "username" => $username,
+                            "password" => $user->password
+                        ];
+                    } else {
+                        $password = Action::generateUniquePassword($name);
+                        $role = Role::where('type', 'JuniorLecturer')->first();
+                        if (!$role) {
+                            $role = Role::create(["type" => 'JuniorLecturer']);
+                        }
+            
+                        $user = new User();
+                        $user->username = $username;
+                        $user->password = $password;
+                        $user->role_id = $role->id;
+                        if (!empty($email)) {
+                            $user->email = $email;
+                        }
+                        $user->save();
+                        $userId = $user->id;
+            
+                        if (!$userId) {
+                            $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+                            continue;
+                        }
+            
+                        juniorlecturer::create([
+                            'user_id' => $userId,
+                            'name' => $name,
+                            'date_of_birth' => $formattedDOB,
+                            'gender' => $gender,
+                            'cnic' => $cnic
+                        ]);
+            
+                        $successMessages[] = [
+                            "status" => 'success',
+                            "Logs" => "The Junior Lecturer with Name: {$name} was added.",
+                            "username" => $username,
+                            "password" => $password
+                        ];
+                    }
+                } catch (Exception $e) {
+                    $errorMessages[] = [
+                        "status" => 'failed',
+                        "reason" => "Error processing row {$RowNo}: " . $e->getMessage()
+                    ];
+                    continue;
+                }
             }
+            
             return response()->json(
                 [
-                    'Message' => 'Junior Lecturer Processed Successfully!',
+                    'Message' => 'Junior Processed Processed Successfully!',
                     'success' => $successMessages,
                     'failed' => $errorMessages
                 ],
                 200
             );
+
         } catch (ValidationException $e) {
             return response()->json([
                 'status' => 'error',
@@ -986,7 +1052,120 @@ class DatacellModuleController extends Controller
             ], 500);
         }
     }
-   
+    // public function AddOrUpdateJuniorLecturers(Request $request)
+    // {
+    //     try {
+    //         $request->validate([
+    //             'excel_file' => 'required|mimes:xlsx,xls'
+    //         ]);
+    //         $file = $request->file('excel_file');
+    //         $spreadsheet = IOFactory::load($file->getPathname());
+    //         $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+    //         $filteredData = [];
+    //         foreach ($sheetData as $row) {
+    //             $filteredData[] = array_slice($row, 0, 5);
+    //         }
+    //         $nonEmpty = [];
+    //         foreach ($filteredData as $row) {
+    //             if (
+    //                 array_filter($row, function ($value) {
+    //                     return !is_null($value);
+    //                 })
+    //             ) {
+    //                 if ($row['A'] != 'Name') {
+    //                     $row = array_map('trim', $row);
+    //                     $nonEmpty[] = $row;
+    //                 }
+    //             }
+    //         }
+    //         $RowNo = 1;
+    //         $status = [];
+    //         $successMessages = [];
+    //         $errorMessages = [];
+    //         foreach ($nonEmpty as $singleRow) {
+    //             $RowNo++;
+    //             $name = $singleRow['A'];
+    //             $dateOfBirth = $singleRow['B'];
+    //             $gender = $singleRow['C'];
+    //             $email = $singleRow['D'];
+    //             $cnic = $singleRow['E'];
+    //             if (!isset($name) || trim($name) === "" || empty($name)) {
+    //                 $errorMessages[] = ["status" => 'failed', "reason" => " Name is required for  {$RowNo}."];
+    //                 continue;
+    //             }
+    //             if (!isset($dateOfBirth) || trim($dateOfBirth) === "" || empty($dateOfBirth)) {
+    //                 $errorMessages[] = ["status" => 'failed', "reason" => " Date Of Birth is required for  {$RowNo}."];
+    //                 continue;
+    //             }
+    //             if (!isset($gender) || trim($gender) === "" || empty($gender)) {
+    //                 $errorMessages[] = ["status" => 'failed', "reason" => " Gender is required for  {$RowNo}."];
+    //                 continue;
+    //             }
+    //             if (!isset($cnic) || trim($cnic) === "" || empty($cnic)) {
+    //                 $errorMessages[] = ["status" => 'failed', "reason" => "Required Field of CNIC/EMPLOYEE# for  {$name}."];
+    //                 continue;
+    //             }
+    //             if (juniorlecturer::where('cnic', $cnic)->exists()) {
+    //                 $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user Because of Exsisting Employee#/CNIC {$cnic}."];
+    //                 continue;
+    //             }
+    //             $username = strtolower(str_replace(' ', '', $name)) . $cnic . '_jl@biit.edu';
+    //             $formattedDOB = (new DateTime($dateOfBirth))->format('Y-m-d');
+    //             $teacher = juniorlecturer::where('cnic', $cnic)->first();
+    //             if ($teacher) {
+    //                 $teacher->update([
+    //                     'date_of_birth' => $formattedDOB,
+    //                     'gender' => $gender
+    //                 ]);
+    //                 $user = User::find($userId);
+    //                 $successMessages[] = ["status" => 'success', "Logs" => "The teacher with Name: {$name} was updated.", "username" => $username, "password" => $user->password];
+    //             } else {
+    //                 $password = Action::generateUniquePassword($name);
+    //                 $userId = Action::addOrUpdateUser($username, $password, $email, 'JuniorLecturer');
+    //                 if (!$userId) {
+    //                     $errorMessages[] = ["status" => 'failed', "reason" => "Failed to create or update user for {$name}."];
+    //                     continue;
+    //                 }
+    //                 juniorlecturer::create([
+    //                     'user_id' => $userId,
+    //                     'name' => $name,
+    //                     'date_of_birth' => $formattedDOB,
+    //                     'gender' => $gender,
+    //                     'cnic' => $cnic
+    //                 ]);
+    //                 $successMessages[] = ["status" => 'success', "Logs" => "The Junior Lecturer with Name: {$name} was added.", "username" => $username, "password" => $password];
+    //             }
+    //         }
+    //         return response()->json(
+    //             [
+    //                 'Message' => 'Junior Lecturer Processed Successfully!',
+    //                 'success' => $successMessages,
+    //                 'failed' => $errorMessages
+    //             ],
+    //             200
+    //         );
+    //     } catch (ValidationException $e) {
+    //         return response()->json([
+    //             'status' => 'error',
+    //             'message' => 'Validation failed',
+    //             'errors' => $e->errors()
+    //         ], 422);
+
+    //     } catch (ModelNotFoundException $e) {
+    //         return response()->json([
+    //             'status' => 'error',
+    //             'message' => 'Data not found'
+    //         ], 404);
+
+    //     } catch (Exception $e) {
+    //         return response()->json([
+    //             'status' => 'error',
+    //             'message' => 'An unexpected error occurred',
+    //             'error' => $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
+
     public function AddOrUpdateStudent(Request $request)
     {
         try {
@@ -1049,15 +1228,15 @@ class DatacellModuleController extends Controller
                 if (!$program_id) {
                     $errorMessages[] = ["status" => 'failed', "reason" => "The Field Disciplein  {$Discipline} Format is Not Correct !"];
                 }
-                $addorUpdate='Added';
-                if(student::where('RegNo',$regNo)->exists()){
-                    $addorUpdate='Updated';
+                $addorUpdate = 'Added';
+                if (student::where('RegNo', $regNo)->exists()) {
+                    $addorUpdate = 'Updated';
                 }
-                
+
                 $student = StudentManagement::addOrUpdateStudent($regNo, $Name, $cgpa, $gender, $dob, $guardian, null, $user_id, $section_id, $program_id, $session_id, $status);
 
                 if ($student) {
-                    $password=user::where('username',$regNo)->first()->password;
+                    $password = user::where('username', $regNo)->first()->password;
                     $successMessages[] = ["status" => 'success', "Logs" => "The Student with RegNo : {$regNo} ,Name : {$Name}  is {$addorUpdate} ! ", "Username" => $regNo, "Password" => $password];
                 } else {
                     $errorMessages[] = ["status" => 'failed', 'Reason' => 'Unknown'];
@@ -1215,7 +1394,7 @@ class DatacellModuleController extends Controller
             ], 500);
         }
     }
-    
+
     public function assignGrader(Request $request)
     {
         try {
@@ -1485,8 +1664,9 @@ class DatacellModuleController extends Controller
     public function CreateExam(Request $request)
     {
         try {
+
             $request->validate([
-                'offered_course_id' => 'required|exists:offered_courses,id',
+                'offered_course_id' => 'required',
                 'type' => 'required|string',
                 'Solid_marks' => 'required',
                 'QuestionPaper' => 'required|file|mimes:pdf',
@@ -1494,20 +1674,24 @@ class DatacellModuleController extends Controller
                 'questions.*.q_no' => 'required|integer',
                 'questions.*.marks' => 'required|integer'
             ]);
+
             $offered_course_id = $request->offered_course_id;
             $type = $request->type;
             $Solid_marks = $request->Solid_marks;
             $questionPaperFile = $request->file('QuestionPaper');
             $TotalMarks = 0;
+
             $offered_course = offered_courses::where('id', $offered_course_id)->with(['course', 'session'])->first();
             if (!$offered_course) {
                 throw new Exception('No Course Found in Given Session');
             }
             $course_name = $offered_course->course->name;
             $session_name = $offered_course->session->name . '-' . $offered_course->session->year;
+
             $directory = $session_name . '/' . 'Exam/' . $type;
-            $madeupname = $course_name . '-(' . $session_name . ')-' . $type;
+            $madeupname = $course_name . '_' . $session_name . '_' . $type;
             $path = FileHandler::storeFile($madeupname, $directory, $questionPaperFile);
+
             $exam = exam::where('offered_course_id', $offered_course_id)
                 ->where('type', $type)
                 ->first();
@@ -1549,7 +1733,7 @@ class DatacellModuleController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Invalid username or password',
-                 'errors' => $e->getMessage()
+                'errors' => $e->getMessage()
             ], 404);
 
         } catch (Exception $e) {
@@ -1670,18 +1854,18 @@ class DatacellModuleController extends Controller
         if (!$offered_course_id || !$section_id) {
             return;
         }
-        $offered_course=offered_courses::with([''])->find($offered_course_id);
+        $offered_course = offered_courses::with(['course', 'session'])->find($offered_course_id);
 
         $teacher_offered_Course_id = teacher_offered_courses::where('offered_course_id', $offered_course_id)->where('section_id', $section_id)->first();
         if (!$teacher_offered_Course_id) {
             return;
         }
         $students = student_offered_courses::where('section_id', $section_id)
-                ->where('offered_course_id', $offered_course_id)
-                ->with('student')
-                ->get();
-        foreach($students as $s){
-            $internalmarks=0;
+            ->where('offered_course_id', $offered_course_id)
+            ->with('student')
+            ->get();
+        foreach ($students as $s) {
+            $internalmarks = 0;
 
         }
     }
@@ -1696,8 +1880,8 @@ class DatacellModuleController extends Controller
             ]);
 
             $section_id = $request->section_id;
-            $section_id=(new section())->getIDByName($section_id);
-            if(!$section_id){
+            $section_id = (new section())->getIDByName($section_id);
+            if (!$section_id) {
                 throw new Exception('Section Not Found');
             }
             $offered_course_id = $request->offered_course_id;
@@ -1777,9 +1961,6 @@ class DatacellModuleController extends Controller
                         $qno = $index + 1;
                         $successfull[] = ["status" => "success", "Added" => " Qno {$qno} : Marks For {$RegNo}/{$Name} Added Successfully"];
                     }
-
-
-
                 }
 
             }
@@ -1806,8 +1987,8 @@ class DatacellModuleController extends Controller
                     continue;
                 }
             }
-            if($examType=='Final'){
-                self::CompilerResult($offered_course_id,$section_id);
+            if ($examType == 'Final') {
+                self::CompilerResult($offered_course_id, $section_id);
             }
             return response()->json([
                 'status' => 'success',
@@ -1828,7 +2009,7 @@ class DatacellModuleController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Invalid Data',
-                'erros' =>$e->getMessage()
+                'erros' => $e->getMessage()
             ], 404);
 
         } catch (Exception $e) {
@@ -1846,13 +2027,13 @@ class DatacellModuleController extends Controller
                 'excel_file' => 'required|mimes:xlsx,xls',
                 'session' => 'required'
             ]);
-          
+
             $session_name = $request->session;
             $session_id = (new session())->getSessionIdByName($session_name);
             if (!$session_id) {
                 $session_id = (new session())->getUpcomingSessionId();
             }
-           
+
             $file = $request->file('excel_file');
             $spreadsheet = IOFactory::load($file->getPathname());
             $sheetData = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
@@ -2221,63 +2402,63 @@ class DatacellModuleController extends Controller
     //     ], 200);
     // }
     public function getTimetableGroupedBySection(Request $request)
-{
-    $session_id = $request->session_id ?? (new Session())->getCurrentSessionId();
-    if (!$session_id) {
-        return response()->json(['error' => 'Session ID is required.'], 400);
+    {
+        $session_id = $request->session_id ?? (new Session())->getCurrentSessionId();
+        if (!$session_id) {
+            return response()->json(['error' => 'Session ID is required.'], 400);
+        }
+        $session_name = (new session())->getSessionNameByID($session_id);
+        $timetable = Timetable::with([
+            'course:name,id,description',
+            'teacher:name,id',
+            'venue:venue,id',
+            'dayslot:day,start_time,end_time,id',
+            'juniorLecturer:id,name',
+        ])
+            ->where('session_id', $session_id)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'section' => (new Section())->getNameByID($item->section_id) ?? 'N/A',
+                    'name' => $item->course->name ?? 'N/A',
+                    'description' => $item->course->description ?? 'N/A',
+                    'teacher' => $item->teacher->name ?? 'N/A',
+                    'junior_lecturer' => $item->juniorLecturer->name ?? 'N/A',
+                    'venue' => $item->venue->venue ?? 'N/A',
+                    'day' => $item->dayslot->day ?? 'N/A',
+                    'time' => ($item->dayslot->start_time && $item->dayslot->end_time)
+                        ? Carbon::parse($item->dayslot->start_time)->format('g:i') . ' - ' . Carbon::parse($item->dayslot->end_time)->format('g:i')
+                        : 'N/A',
+                ];
+            })
+            ->groupBy('section')
+            ->sortBy(function ($items, $sectionName) {
+                // Extract program, batch, and section
+                if (preg_match('/^(BCS)-(\d+)([A-Z]*)$/', $sectionName, $matches)) {
+                    $program = $matches[1];  // BCS
+                    $batch = (int) $matches[2]; // Numeric batch
+                    $section = $matches[3] ?? ''; // Section letter
+                    return [0, $batch, $section]; // Prioritize BCS
+                }
+
+                // For other standard formats, place them next
+                if (preg_match('/^([A-Z]+)-(\d+)([A-Z]*)$/', $sectionName, $matches)) {
+                    $program = $matches[1];
+                    $batch = (int) $matches[2];
+                    $section = $matches[3] ?? '';
+                    return [1, $batch, $section];
+                }
+
+                // For ExtraSection or other non-standard names, push to the end
+                return [2, $sectionName];
+            });
+
+        return response()->json([
+            "status" => "Successfull",
+            "sesssion" => $session_name,
+            "timetable" => $timetable,
+        ], 200);
     }
-    $session_name=(new session())->getSessionNameByID($session_id);
-    $timetable = Timetable::with([
-        'course:name,id,description',
-        'teacher:name,id',
-        'venue:venue,id',
-        'dayslot:day,start_time,end_time,id',
-        'juniorLecturer:id,name',
-    ])
-        ->where('session_id', $session_id)
-        ->get()
-        ->map(function ($item) {
-            return [
-                'section' => (new Section())->getNameByID($item->section_id) ?? 'N/A',
-                'name' => $item->course->name ?? 'N/A',
-                'description' => $item->course->description ?? 'N/A',
-                'teacher' => $item->teacher->name ?? 'N/A',
-                'junior_lecturer' => $item->juniorLecturer->name ?? 'N/A',
-                'venue' => $item->venue->venue ?? 'N/A',
-                'day' => $item->dayslot->day ?? 'N/A',
-                'time' => ($item->dayslot->start_time && $item->dayslot->end_time)
-                    ? Carbon::parse($item->dayslot->start_time)->format('g:i') . ' - ' . Carbon::parse($item->dayslot->end_time)->format('g:i')
-                    : 'N/A',
-            ];
-        })
-        ->groupBy('section')
-        ->sortBy(function ($items, $sectionName) {
-            // Extract program, batch, and section
-            if (preg_match('/^(BCS)-(\d+)([A-Z]*)$/', $sectionName, $matches)) {
-                $program = $matches[1];  // BCS
-                $batch = (int) $matches[2]; // Numeric batch
-                $section = $matches[3] ?? ''; // Section letter
-                return [0, $batch, $section]; // Prioritize BCS
-            }
-
-            // For other standard formats, place them next
-            if (preg_match('/^([A-Z]+)-(\d+)([A-Z]*)$/', $sectionName, $matches)) {
-                $program = $matches[1];  
-                $batch = (int) $matches[2]; 
-                $section = $matches[3] ?? ''; 
-                return [1, $batch, $section];
-            }
-
-            // For ExtraSection or other non-standard names, push to the end
-            return [2, $sectionName];
-        });
-
-    return response()->json([
-        "status" => "Successfull",
-        "sesssion"=>$session_name,
-        "timetable" => $timetable,
-    ], 200);
-}
 
     public function CreateCourseContent(Request $request)
     {

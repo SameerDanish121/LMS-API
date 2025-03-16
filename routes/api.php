@@ -87,7 +87,6 @@ Route::prefix('Dropdown')->group(function () {
         $formattedSessions = $sessions->map(function ($session) {
             return (new Session())->getSessionNameByID($session->id);
         });
-
         return response()->json($formattedSessions);
     });
     Route::get('/AllOfferedCourse', function () {
@@ -97,11 +96,12 @@ Route::prefix('Dropdown')->group(function () {
             ->map(function ($course) {
                 return [
                     'id' => $course->id,
+                    'course'=>$course->course->name,
+                    'session'=>(new session())->getSessionNameByID($course->session->id),
                     'data' => $course->course->name . ' (' . (new Session())->getSessionNameByID($course->session->id) . ')'
                 ];
             })
-            ->values(); // Ensure it returns a sequential array
-
+            ->values();
         return response()->json($offeredCourses, 200);
     });
     Route::get('/AllProgram', function () {
@@ -118,10 +118,10 @@ Route::prefix('Dropdown')->group(function () {
         $programs = session::all()->map(function ($session) {
             return [
                 'id' => $session->id,
-                'data' => $session->name . '-' . $session->year
+                'data' => $session->name . '-' . $session->year,
+                'name' => $session->name . '-' . $session->year
             ];
         })->values();
-
         return response()->json($programs, 200);
     });
     Route::get('/AllSection', function () {
@@ -137,7 +137,24 @@ Route::prefix('Dropdown')->group(function () {
 
         return response()->json($sections, 200);
     });
-
+    Route::get('/get-teachers', function () {
+        $sections = teacher::all()->map(function ($section) {
+            return [
+                'id' => $section->id,
+                'name' => $section->name
+            ];
+        })->values();
+        return response()->json($sections, 200);
+    });
+    Route::get('get-students', function () {
+        $sections = student::all()->map(function ($section) {
+            return [
+                'id' => $section->id,
+                'name' => $section->name
+            ];
+        })->values();
+        return response()->json($sections, 200);
+    });
 });
 Route::prefix('Archives')->group(function () {
     Route::get('/Directory', [StudentsController::class, 'getBIITFolderInfo']);
@@ -146,8 +163,6 @@ Route::prefix('Archives')->group(function () {
     Route::post('/compress-folder', [StudentsController::class, 'compressFolder']);
     Route::delete('/DeleteFolderByPath', [DatacellModuleController::class, 'DeleteFolderByPath']);
 });
-
-
 Route::prefix('Admin')->group(function () {
     Route::get('/AllStudent', [AdminController::class, 'AllStudent']);
     Route::get('/sections', [AdminController::class, 'showSections']);
@@ -156,13 +171,15 @@ Route::prefix('Admin')->group(function () {
     Route::get('/junior-lectures', [AdminController::class, 'allJuniorLecturers']);
     Route::get('/grades', [AdminController::class, 'AllGrades']);
     Route::get('/sessions', [AdminController::class, 'getAllSessions']);
+    Route::get('/viewTranscript', [StudentsController::class, 'ViewTranscript']);
+    Route::get('/getCourseContent', [AdminController::class, 'getCourseContentWithTopics']);
+    Route::get('/getCourseAllocation', [AdminController::class, 'getAllAllocatedCourses']);
+    Route::get('/un-assigned/teacher-for-grader', [AdminController::class, 'unassignedTeacherWithGrader']);
+
 
 
     Route::post('/update-add-program', [AdminController::class, 'addOrUpdateProgram']);
     Route::get('/teacher-graders', [AdminController::class, 'getAllTeacherGraders']);
-
-
-
     Route::get('/course-content', [AdminController::class, 'getCourseContent']);
     Route::get('/search-admin', [AdminController::class, 'searchAdminByName']);
     Route::get('/search-datacell', [AdminController::class, 'GetDatacell']);
@@ -189,18 +206,20 @@ Route::prefix('Admin')->group(function () {
 Route::prefix('Datacells')->group(function () {
     Route::get('/temporary-enrollments', [TeachersController::class, 'getTemporaryEnrollmentsRequest']);
     Route::post('/process-temporary-enrollments', [TeachersController::class, 'ProcessTemporaryEnrollments']);
+    Route::post('/assign-grader', [ExtraKhattaController::class, 'assignGrader']);
+    Route::post('/add-grader', [ExtraKhattaController::class, 'AddGrader']);
 
-    Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
+
+    Route::post('/enroll-student', [ExtraKhattaController::class, 'addStudentEnrollment']);
     Route::post('/NewOfferedCourse', [DatacellsController::class, 'AddNewOfferedCourse']);
     Route::post('/offered-courses/add-or-check', [ExtraKhattaController::class, 'addOrCheckOfferedCourses']);
     Route::post('/teacher-offered-courses/add-multiple', [ExtraKhattaController::class, 'addTeacherOfferedCourses']);
     Route::post('/teacher-offered-courses/update-or-insert-multiple', [ExtraKhattaController::class, 'updateOrInsertTeacherOfferedCourses']);
     Route::post('/assign-junior-lecturer', [ExtraKhattaController::class, 'assignJuniorLecturer']);
     Route::post('/update-or-create-junior-lecturer', [ExtraKhattaController::class, 'updateOrCreateTeacherJuniorLecturer']);
-    Route::post('/assign-grader', [ExtraKhattaController::class, 'assignGrader']);
-    Route::post('/enroll-student', [ExtraKhattaController::class, 'addStudentEnrollment']);
+    
+    
 });
-
 
 
 Route::prefix('Students')->group(function () {
@@ -298,6 +317,7 @@ Route::prefix('Teachers')->group(function () {
     Route::post('/update-teacher-image', [TeachersController::class, 'updateTeacherImage']);
     Route::get('/get-exam-result', [TeachersController::class, 'getSectionExamList']);
     Route::post('/uplaod/course-content', [DatacellModuleController::class, 'CreateCourseContent']);
+    Route::get('/your-courses', [TeachersController::class, 'YourCourses']);
 });
 Route::prefix('Un-usable')->group(function () {
     Route::post('/store-fcmtoken', [FCMController::class, 'storeFcmToken']);
@@ -322,6 +342,9 @@ Route::prefix('Un-usable')->group(function () {
         return $trait->sendRichNotification($token, $title, $body, $imageUrl);
     });
     Route::post('/firebase-notification', [ExtraKhattaController::class, 'send']);
+    
+
+    Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
 });
 Route::get('/', function () {
     return response()->json(['status' => 'success'], 200);

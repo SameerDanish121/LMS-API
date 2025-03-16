@@ -382,7 +382,11 @@ class StudentsController extends Controller
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",
-                    "image" => $Admin->image ? asset($Admin->image) : null
+                    "image" => $Admin->image ? asset($Admin->image) : null,
+                    "course_count"=>course::count(),
+                    "offered_course_count"=>offered_courses::where('session_id',(new session())->getCurrentSessionId())->count(),
+                    "student_count"=>student::count(),
+                    "faculty_count"=>teacher::count()+juniorlecturer::count(),
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -436,6 +440,10 @@ class StudentsController extends Controller
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",
                     "image" => $Datacell->image ? asset($Datacell->image) : null,
+                    "course_count"=>course::count(),
+                    "offered_course_count"=>offered_courses::where('session_id',(new session())->getCurrentSessionId())->count(),
+                    "student_count"=>student::count(),
+                    "faculty_count"=>teacher::count()+juniorlecturer::count(),
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -502,6 +510,62 @@ class StudentsController extends Controller
             ], 500);
         }
     }
+    public function ViewTranscript(Request $request)
+    {
+        try {
+            $studentId = $request->query('student_id');
+            $student = student::with(['program', 'section'])->find($studentId);
+            $program = $student->program;
+            if (!$student) {
+                return response()->json(['status' => 'error', 'message' => 'Student not found'], 404);
+            }
+            $sessionResults = sessionresult::with([
+                'session:id,name,year,start_date',
+            ])
+                ->where('student_id', $studentId)
+                ->get()
+                ->sortByDesc(function ($sessionResult) {
+                    return $sessionResult->session->start_date;
+                })
+                ->map(function ($sessionResult) {
+                    $subjects = student_offered_courses::with([
+                        'offeredCourse.course:id,name,code,credit_hours',
+                    ])
+                        ->where('student_id', $sessionResult->student_id)
+                        ->whereHas('offeredCourse', function ($query) use ($sessionResult) {
+                            $query->where('session_id', $sessionResult->session_id);
+                        })
+                        ->get()
+                        ->map(function ($subject) {
+                            return [
+                                'course_name' => $subject->offeredCourse->course->name,
+                                'course_code' => $subject->offeredCourse->course->code,
+                                'credit_hours' => $subject->offeredCourse->course->credit_hours,
+                                'grade' => $subject->grade ?? 'Pending',
+                            ];
+                        });
+                    return [
+                        'total_credit_points' => $sessionResult->ObtainedCreditPoints,
+                        'GPA' => $sessionResult->GPA,
+                        'session_name' => $sessionResult->session->name . '-' . $sessionResult->session->year,
+                        'subjects' => $subjects,
+                    ];
+                });
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Transcript generated successfully',
+               'student' => $student,
+                'sessionResults' => $sessionResults,
+                'program' => $program,
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
     public function getTranscriptPdf(Request $request)
     {
         try {
@@ -561,12 +625,12 @@ class StudentsController extends Controller
             }
 
             File::put($fullPath, $pdfContent);
-            return asset($directory . '/' . $fileName);
-            // return response()->json([
-            //     'status' => 'success',
-            //     'message' => 'Transcript generated successfully',
-            //     'file_url' => 
-            // ]);
+            // return asset($directory . '/' . $fileName);
+            return response()->streamDownload(
+                fn() => print($pdf->output()), 
+                "Transcript_{$student->RegNo}.pdf",
+                ["Content-Type" => "application/pdf"]
+            );
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',

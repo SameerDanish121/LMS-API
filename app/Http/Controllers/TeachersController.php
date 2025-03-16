@@ -372,7 +372,7 @@ class TeachersController extends Controller
     public function getSectionTaskResult(Request $request)
     {
         $validated = $request->validate([
-            'teacher_offered_course_id' => 'required|integer',
+            'teacher_offered_course_id' => 'required',
         ]);
         $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
 
@@ -440,19 +440,35 @@ class TeachersController extends Controller
                     $totalMarks = $group['total_marks'];
                     $obtainedMarks = $group['obtained_marks'];
                     $groupedTasks[$type]['percentage'] = $totalMarks > 0 ? round(($obtainedMarks / $totalMarks) * 100, 2) : 0;
-                    $groupedTasks[$type]['obtained_display'] = $obtainedMarks . '/' . $totalMarks;
+                    $groupedTasks[$type]['obtained_display'] = $obtainedMarks;
                     $groupedTasks[$type]['percentage'] .= '%';
                 }
+                $overallObtained = $groupedTasks['LabTask']['obtained_display'] +
+                    $groupedTasks['Assignment']['obtained_display'] +
+                    $groupedTasks['Quiz']['obtained_display'];
+
+                $overallTotal = $groupedTasks['LabTask']['total_marks'] +
+                    $groupedTasks['Assignment']['total_marks'] +
+                    $groupedTasks['Quiz']['total_marks'];
+
+                $overallPercentage = $overallTotal > 0 ? round(($overallObtained / $overallTotal) * 100, 2) : 0;
                 $studentInfo = [
                     'Student_Id' => $student->id,
                     'Student_name' => $student->name,
                     'RegNo' => $student->RegNo,
+                    'image' => $student->image?asset($student->image):null,
                     'Lab_Task_Percentage' => $groupedTasks['LabTask']['percentage'],
                     'Lab_Task_Obtained Marks' => $groupedTasks['LabTask']['obtained_display'],
+                    'Lab_Task_Total Marks' => $groupedTasks['LabTask']['total_marks'],
                     'Assignment_Task_Percentage' => $groupedTasks['Assignment']['percentage'],
                     'Assignment_Task_Obtained Marks' => $groupedTasks['Assignment']['obtained_display'],
+                    'Assignment_Task_Total Marks' => $groupedTasks['Assignment']['total_marks'],
                     'Quiz_Task_Percentage' => $groupedTasks['Quiz']['percentage'],
                     'Quiz_Task_Obtained Marks' => $groupedTasks['Quiz']['obtained_display'],
+                    'Quiz_Task_Total Marks' => $groupedTasks['Quiz']['total_marks'],
+                    'Overall_Obtained_Marks' => $overallObtained,
+                    'Overall_Total_Marks' => $overallTotal,
+                    'Overall_Percentage' => $overallPercentage
                 ];
                 $result[] = $studentInfo;
             }
@@ -574,20 +590,33 @@ class TeachersController extends Controller
             $totalConductedClasses = attendance::where('teacher_offered_course_id', $teacherOfferedCourseId)
                 ->distinct('date_time')
                 ->count('date_time');
+            $totalConductedLab = attendance::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                ->distinct('date_time')->where('isLab', 1)
+                ->count('date_time');
+            $totalConductedLectures = attendance::where('teacher_offered_course_id', $teacherOfferedCourseId)
+                ->distinct('date_time')->where('isLab', 0)
+                ->count('date_time');
             foreach ($studentIds as $studentId) {
                 $attendanceData = attendance::getAttendanceBySubject($teacherOfferedCourseId, $studentId);
                 $studentInfo = [
                     'Student_Id' => $studentId,
+                    'Student_Image' => student::find($studentId)->image ? asset(student::find($studentId)->image) : null,
                     'Student_Name' => student::find($studentId)->name ?? 'Unknown',
                     'RegNo' => student::find($studentId)->RegNo ?? 'Unknown',
-                    'Total_Attended_Lectures' => $attendanceData['Total']['total_present'],
-                    'Class_Percentage' => $attendanceData['Total']['percentage'],
+                    'Lecture_Attended' => $attendanceData['Class']['total_present'] ?? 0,
+                    'Lecture_Percentage' => $attendanceData['Class']['percentage'] ?? 0,
+                    'Lab_Attended' => $attendanceData['Lab']['total_present'] ?? 0,
+                    'Lab_Percentage' => $attendanceData['Lab']['percentage'] ?? 0,
+                    'Total_Attended_Lectures' => $attendanceData['Total']['total_present'] ?? 0,
+                    'Total_Percentage' => $attendanceData['Total']['percentage'],
                 ];
                 $result[] = $studentInfo;
             }
 
             return response()->json([
-                'Total Number Of Conducted Classes' => $totalConductedClasses,
+                'total_conducted' => $totalConductedClasses,
+                'lab_conducted' => $totalConductedLab,
+                'classes_conducted' => $totalConductedLectures,
                 'students' => $result
             ], 200);
 
@@ -1569,7 +1598,7 @@ class TeachersController extends Controller
                 return [
                     'Request id' => $enrollment->id,
                     'RegNo' => $enrollment->RegNo,
-                    'image'=>$student->image?asset($student->image):null,
+                    'image' => $student->image ? asset($student->image) : null,
                     'Student Name' => optional($student)->name,
                     'Teacher Name' => $teacherName,
                     'Course Name' => $courseName,
@@ -1748,6 +1777,97 @@ class TeachersController extends Controller
 
         return response()->json($courses);
     }
+    public function YourCourses(Request $request)
+    {
+        try {
+            $jl_id = $request->teacher_id;
+            $course = self::getTeacherCourseGroupedByActivePrevious($jl_id);
+            return response()->json([
+                'status' => 'success',
+                'data' => $course
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public static function getTeacherCourseGroupedByActivePrevious($teacherId)
+{
+    try {
+        $currentSessionId = (new session())->getCurrentSessionId();
+        
+        // Fetch data with necessary relationships
+        $assignments = teacher_offered_courses::where('teacher_id', $teacherId)
+            ->with([
+                'offeredCourse.course',
+                'offeredCourse.session',
+                'section',
+                'teacher',
+                'offeredCourse.course.program'
+            ])
+            ->get();
+
+        $activeCourses = [];
+        $previousCourses = [];
+        foreach ($assignments as $assignment) {
+            $offeredCourse = $assignment->offeredCourse;
+            if (!$offeredCourse || !$offeredCourse->course) {
+                continue;
+            }
+            $course = $offeredCourse->course;
+            $session = $offeredCourse->session;
+            $program = $course->program;
+            
+            // Initialize course details
+            $courseDetails = [
+                'teacher_offered_course_id' => $assignment->id,
+                'course_name' => $course->name,
+                'course_code' => $course->code,
+                'credit_hours' => $course->credit_hours,
+                'course_type' => $course->type,
+                'description' => $course->description,
+                'lab' => $course->lab ? 'Yes' : 'No',
+                'prerequisite' => $course->pre_req_main ? $course->pre_req_main : 'Main',
+                'section_name' => $assignment->section ? (new section())->getNameByID($assignment->section->id) : 'Unknown',
+                'session_name' => $session ? $session->name . '-' . $session->year : 'Unknown',
+                'program_name' => $program ? $program->name : 'N/A',
+            ];
+
+            // Add junior lecturer details only if it's a lab course
+            if ($course->lab) {
+                $teacherJuniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $assignment->id)
+                    ->with('juniorLecturer')
+                    ->first();
+                if ($teacherJuniorLecturer && $teacherJuniorLecturer->juniorLecturer) {
+                    $courseDetails['junior_name'] = $teacherJuniorLecturer->juniorLecturer->name??'N/A';
+                    $courseDetails['junior_image'] = $teacherJuniorLecturer->juniorLecturer->image ? asset($teacherJuniorLecturer->juniorLecturer->image) : null;
+                }else{
+                    $courseDetails['junior_name'] = 'N/A';
+                    $courseDetails['junior_image'] = null;
+                }
+            }
+
+            if ($offeredCourse->session_id == $currentSessionId) {
+                $activeCourses[] = $courseDetails;
+            } else {
+                $previousCourses[] = $courseDetails;
+            }
+        }
+
+        return [
+            'active_courses' => $activeCourses,
+            'previous_courses' => $previousCourses,
+        ];
+    } catch (Exception $ex) {
+        return [
+            'active_courses' => [],
+            'previous_courses' => [],
+        ];
+    }
+}
 
     public function getLabAttendanceList(Request $request)
     {
@@ -1931,14 +2051,14 @@ class TeachersController extends Controller
     {
         $validated = $request->validate([
             'teacher_offered_course_id' => 'required|integer',
-            'attendance_type' => 'nullable|string|in:Class,Lab', 
+            'attendance_type' => 'nullable|string|in:Class,Lab',
             'students' => 'required|array', // List of students with seat number
             'students.*.student_id' => 'required|integer', // Each student must have an ID
-            'students.*.seatNo' => 'required|integer', 
+            'students.*.seatNo' => 'required|integer',
         ]);
-        $attendanceType = $validated['attendance_type']??null;
-        if(!$attendanceType){
-            $attendanceType="Class";
+        $attendanceType = $validated['attendance_type'] ?? null;
+        if (!$attendanceType) {
+            $attendanceType = "Class";
         }
         $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
         Attendance_Sheet_Sequence::where('teacher_offered_course_id', $teacherOfferedCourseId)
@@ -2114,20 +2234,19 @@ class TeachersController extends Controller
     {
         $student = student::find($student_id);
         if (!$student) {
-            return 'No Student Found!';
+            throw new Exception('No Student Found!');
         }
         $teacherOfferedCourse = teacher_offered_courses::with(['offeredCourse'])->find($teacher_offered_course_id);
         if (!$teacherOfferedCourse) {
-            return 'The Teacher Allocation Does Not Exist!';
+            throw new Exception('The Teacher Allocation Does Not Exist!');
         }
 
         $offeredCourseId = $teacherOfferedCourse->offeredCourse->id;
         $exams = exam::where('offered_course_id', $offeredCourseId)->with(['questions'])->get();
 
         if ($exams->isEmpty()) {
-            return response()->json([
-                'message' => 'No exams found for the given offered course.',
-            ], 404);
+
+            throw new Exception('No exams found for the given offered course.');
         }
 
         $results = [];
@@ -2168,7 +2287,7 @@ class TeachersController extends Controller
             ];
         }
 
-       return $results;
+        return $results;
     }
     public function getSectionExamList(Request $request)
     {
@@ -2207,7 +2326,7 @@ class TeachersController extends Controller
                 "student_id" => $student->id,
                 "name" => $student->name,
                 "RegNo" => $student->RegNo,
-                "Exam Results" => $examResults?: null,
+                "Exam Results" => $examResults ?: null,
             ];
         })->filter();
         return response()->json([

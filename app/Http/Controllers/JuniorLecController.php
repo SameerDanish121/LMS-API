@@ -926,7 +926,6 @@ class JuniorLecController extends Controller
             ]);
 
             $juniorLecturerId = $validated['junior_id'];
-            // Get active courses for the junior lecturer
             $activeCourses = self::getActiveCoursesForJuniorLecturer($juniorLecturerId);
 
             $result = [];

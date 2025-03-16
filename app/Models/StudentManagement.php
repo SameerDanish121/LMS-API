@@ -581,17 +581,17 @@ class StudentManagement extends Model
                 $teacherName = null;
                 $juniorLecturerName = null;
                 if ($teacherOfferedCourse) {
-
                     $teacher = teacher::find($teacherOfferedCourse->teacher_id);
                     $teacherName = $teacher ? $teacher->name : null;
-
-
                     $juniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
                     if ($juniorLecturer) {
                         $juniorLecturerName = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('name');
                     }
                 }
                 $course = Course::where('id', $offeredCourse->course_id)->first();
+                if(!$course->lab){
+                  $juniorLecturerName="Non-Lab";
+                }
                 $courseDetails = [
                     'course_name' => $course->name,
                     'course_code' => $course->code,
@@ -618,12 +618,8 @@ class StudentManagement extends Model
     public static function getYourPreviousEnrollments($student_id)
     {
         $currentSessionId = (new session())->getCurrentSessionId();
-        if ($currentSessionId == 0) {
-
-        }
         $offeredCourses = offered_courses::where('session_id', '!=', $currentSessionId)->get();
         $courses = [];
-
         foreach ($offeredCourses as $offeredCourse) {
             $enrolledCourse = student_offered_courses::where('student_id', $student_id)
                 ->where('offered_course_id', $offeredCourse->id)
@@ -631,12 +627,12 @@ class StudentManagement extends Model
                     $query->where('session_id', '!=', $currentSessionId);
                 })
                 ->first();
-
             if ($enrolledCourse) {
+                $offeredCourse=offered_courses::where('id',$enrolledCourse->offered_course_id)->with('session')->first();
+                $session=$offeredCourse->session;
                 $teacherOfferedCourse = teacher_offered_courses::where('offered_course_id', $offeredCourse->id)
                     ->where('section_id', $enrolledCourse->section_id)
                     ->first();
-
                 $teacherName = null;
                 $juniorLecturerName = null;
                 if ($teacherOfferedCourse) {
@@ -651,6 +647,9 @@ class StudentManagement extends Model
                 }
 
                 $course = Course::where('id', $offeredCourse->course_id)->first();
+                if(!$course->lab){
+                  $juniorLecturerName="Non-Lab";
+                }
                 $subjectResult = subjectresult::where('student_offered_course_id', $enrolledCourse->id)->first();
                 if ($subjectResult) {
                     $result = $enrolledCourse->grade == 'F' ? 'Failed' : $subjectResult;
@@ -666,6 +665,8 @@ class StudentManagement extends Model
                     'Pre-Requisite/Main' => $course->pre_req_main == null
                         ? 'Main' : Course::where('id', $course->pre_req_main)->value('name'),
                     'section' => (new section())->getNameByID($enrolledCourse->section_id),
+                    'session_name'=>$session->name.'-'.$session->year,
+                    'session_start'=>$session->start_date,
                     'program' => $course->program
                         ? program::where('id', $course->program_id)->value('name')
                         : 'N/A',
@@ -679,7 +680,12 @@ class StudentManagement extends Model
                 $courses[] = $courseDetails;
             }
         }
-
-        return $courses;
+        $groupedCourses = collect($courses)->groupBy('session_name')->toArray();
+        $sortedGroupedCourses = collect($groupedCourses)->sortByDesc(function ($group, $session_name) {
+            return strtotime($group[0]['session_start']);
+        })->toArray();
+        
+        return $sortedGroupedCourses;
+        //return $courses;
     }
 }

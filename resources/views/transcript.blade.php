@@ -92,7 +92,6 @@
     </style>
 </head>
 <body>
-    <!-- Watermark -->
     <div class="watermark">UNOFFICIAL</div>
 
     <div class="header">
