@@ -34,7 +34,7 @@ class session extends Model
     {
         $session = self::find($id);
         $name = $session->name . '-' . $session->year;
-        return $name ? $name : 'XYZ-0000';
+        return $name ? $name : null;
     }
     public function getSessionIdByName($Name = null): int
     {

@@ -4,6 +4,8 @@ use App\Http\Controllers\FCMController;
 use App\Http\Controllers\GraderController;
 use App\Http\Controllers\SingleInsertionController;
 use App\Models\Course;
+use App\Models\Director;
+use App\Models\Hod;
 use App\Models\juniorlecturer;
 use App\Models\offered_courses;
 use App\Models\program;
@@ -25,6 +27,7 @@ Route::get('/Login', [StudentsController::class, 'Login']);
 Route::post('/forgot-password', [AuthenticationController::class, 'sendOTP']);
 Route::post('/verify-otp', [AuthenticationController::class, 'verifyOTP']);
 Route::post('/update-pass', [AuthenticationController::class, 'updatePassword']);
+Route::post('/verify/login', [AuthenticationController::class, 'verifyLoginOTP']);
 Route::prefix('Uploading')->group(function () {
     Route::post('/uplaod/Result', [DatacellModuleController::class, 'UploadExamAwardList']);
     Route::post('/uplaod/Topic', [DatacellModuleController::class, 'UploadCourseContentTopic']);
@@ -96,13 +99,19 @@ Route::prefix('Dropdown')->group(function () {
             ->map(function ($course) {
                 return [
                     'id' => $course->id,
-                    'course'=>$course->course->name,
-                    'session'=>(new session())->getSessionNameByID($course->session->id),
+                    'course' => $course->course->name,
+                    'session' => (new session())->getSessionNameByID($course->session->id),
                     'data' => $course->course->name . ' (' . (new Session())->getSessionNameByID($course->session->id) . ')'
                 ];
             })
             ->values();
         return response()->json($offeredCourses, 200);
+    });
+    Route::get('/Director', function () {
+        return Director::all();
+    });
+    Route::get('/HOD', function () {
+        return  Hod::all();
     });
     Route::get('/AllProgram', function () {
         $programs = program::all()->map(function ($program) {
@@ -200,9 +209,6 @@ Route::prefix('Admin')->group(function () {
     Route::get('/history', [AdminController::class, 'getGraderHistory']);
 });
 
-
-
-
 Route::prefix('Datacells')->group(function () {
     Route::get('/temporary-enrollments', [TeachersController::class, 'getTemporaryEnrollmentsRequest']);
     Route::post('/process-temporary-enrollments', [TeachersController::class, 'ProcessTemporaryEnrollments']);
@@ -217,11 +223,7 @@ Route::prefix('Datacells')->group(function () {
     Route::post('/teacher-offered-courses/update-or-insert-multiple', [ExtraKhattaController::class, 'updateOrInsertTeacherOfferedCourses']);
     Route::post('/assign-junior-lecturer', [ExtraKhattaController::class, 'assignJuniorLecturer']);
     Route::post('/update-or-create-junior-lecturer', [ExtraKhattaController::class, 'updateOrCreateTeacherJuniorLecturer']);
-    
-    
 });
-
-
 Route::prefix('Students')->group(function () {
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);
     Route::get('/TranscriptPDF', [StudentsController::class, 'getTranscriptPdf']);
@@ -342,7 +344,7 @@ Route::prefix('Un-usable')->group(function () {
         return $trait->sendRichNotification($token, $title, $body, $imageUrl);
     });
     Route::post('/firebase-notification', [ExtraKhattaController::class, 'send']);
-    
+
 
     Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
 });

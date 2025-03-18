@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\contested_attendance;
+use App\Models\Director;
 use App\Models\exam;
 use App\Models\grader;
+use App\Models\Hod;
 use App\Models\student_exam_result;
 use App\Models\task_consideration;
 use Illuminate\Http\Request;
@@ -72,10 +74,10 @@ class StudentsController extends Controller
             rename($compressedFile, $filePath); // Replace with compressed file
         }
     }
-    
+
     // private function compressImage($filePath)
     // {
-       
+
     //     $image = Image::make($filePath);
     //     $image->encode('webp', 75); // Convert to WebP with 75% quality
     //     $image->save($filePath);
@@ -86,31 +88,31 @@ class StudentsController extends Controller
         try {
             // Get the folder path from request
             $relativePath = $request->input('folder_path');
-    
+
             if (!$relativePath) {
                 throw new Exception("Folder path is required.");
             }
-    
+
             $folderPath = public_path($relativePath);
-    
+
             // Check if the folder exists
             if (!File::exists($folderPath)) {
                 throw new Exception("The specified folder does not exist.");
             }
-    
+
             // Get folder size before compression
             $sizeBefore = $this->calculateFolderSize($folderPath);
-    
+
             // Get all files inside the folder (including subfolders)
             $allFiles = File::allFiles($folderPath);
             $errorFiles = [];
             $compressedCount = 0;
-    
+
             foreach ($allFiles as $file) {
                 try {
                     $filePath = $file->getRealPath();
                     $extension = strtolower($file->getExtension());
-    
+
                     if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
                         // $this->compressImage($filePath);
                     } elseif ($extension === 'pdf') {
@@ -118,7 +120,7 @@ class StudentsController extends Controller
                     } elseif (in_array($extension, ['mp4', 'avi', 'mov', 'mkv'])) {
                         $this->compressVideo($filePath);
                     }
-    
+
                     $compressedCount++;
                 } catch (Exception $e) {
                     $errorFiles[] = [
@@ -127,13 +129,13 @@ class StudentsController extends Controller
                     ];
                 }
             }
-    
+
             // Get folder size after compression
             $sizeAfter = $this->calculateFolderSize($folderPath);
-    
+
             // Calculate difference in size
             $sizeReduced = $sizeBefore - $sizeAfter;
-    
+
             return response()->json([
                 'message' => 'Folder Files Compressed Successfully!',
                 'folder_path' => $relativePath,
@@ -144,7 +146,7 @@ class StudentsController extends Controller
                 'size_reduced' => $this->formatSizes($sizeReduced),
                 'errors' => $errorFiles,
             ], 200);
-    
+
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -152,11 +154,11 @@ class StudentsController extends Controller
             ], 500);
         }
     }
-    
+
     private function calculateFolderSize($folderPath)
     {
         $size = 0;
-        if (!File::exists($folderPath)) { 
+        if (!File::exists($folderPath)) {
             return 0;
         }
         $files = File::allFiles($folderPath);
@@ -176,15 +178,15 @@ class StudentsController extends Controller
         }
     }
     private function formatSizes($size)
-{
-    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    $i = 0;
-    while ($size >= 1024 && $i < count($units) - 1) {
-        $size /= 1024;
-        $i++;
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $i = 0;
+        while ($size >= 1024 && $i < count($units) - 1) {
+            $size /= 1024;
+            $i++;
+        }
+        return round($size, 2) . ' ' . $units[$i];
     }
-    return round($size, 2) . ' ' . $units[$i];
-}
 
     public function getBIITFolderInfo()
     {
@@ -319,7 +321,6 @@ class StudentsController extends Controller
                 ->where('username', $request->username)
                 ->where('password', $request->password)
                 ->firstOrFail();
-
             $role = $user->role->type;
             if ($role == 'Student') {
                 $student = student::where('user_id', $user->id)->with(['program', 'user'])
@@ -371,6 +372,9 @@ class StudentsController extends Controller
                     ->with(['user'])
                     ->first();
                 $session = session::where('id', (new session())->getCurrentSessionId())->first();
+                if ($Admin->user->email) {
+                    AuthenticationController::sendTwoStepVer($Admin->user->id, $Admin->user->email, $Admin->name);
+                }
                 $admin = [
                     "id" => $Admin->id,
                     "name" => $Admin->name,
@@ -383,10 +387,10 @@ class StudentsController extends Controller
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",
                     "image" => $Admin->image ? asset($Admin->image) : null,
-                    "course_count"=>course::count(),
-                    "offered_course_count"=>offered_courses::where('session_id',(new session())->getCurrentSessionId())->count(),
-                    "student_count"=>student::count(),
-                    "faculty_count"=>teacher::count()+juniorlecturer::count(),
+                    "course_count" => course::count(),
+                    "offered_course_count" => offered_courses::where('session_id', (new session())->getCurrentSessionId())->count(),
+                    "student_count" => student::count(),
+                    "faculty_count" => teacher::count() + juniorlecturer::count(),
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -428,6 +432,9 @@ class StudentsController extends Controller
                     ->with(['user'])
                     ->first();
                 $session = session::where('id', (new session())->getCurrentSessionId())->first();
+                if ($Datacell->user->email) {
+                    AuthenticationController::sendTwoStepVer($Datacell->user->id, $Datacell->user->email, $Datacell->name);
+                }
                 $datacell = [
                     "id" => $Datacell->id,
                     "name" => $Datacell->name,
@@ -440,10 +447,10 @@ class StudentsController extends Controller
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",
                     "image" => $Datacell->image ? asset($Datacell->image) : null,
-                    "course_count"=>course::count(),
-                    "offered_course_count"=>offered_courses::where('session_id',(new session())->getCurrentSessionId())->count(),
-                    "student_count"=>student::count(),
-                    "faculty_count"=>teacher::count()+juniorlecturer::count(),
+                    "course_count" => course::count(),
+                    "offered_course_count" => offered_courses::where('session_id', (new session())->getCurrentSessionId())->count(),
+                    "student_count" => student::count(),
+                    "faculty_count" => teacher::count() + juniorlecturer::count(),
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -481,6 +488,63 @@ class StudentsController extends Controller
                 return response()->json([
                     'Type' => $role,
                     'TeacherInfo' => $Teacher,
+                ], 200);
+            } else if ($role == 'HOD') {
+                $HOD = Hod::where('user_id', $user->id)
+                    ->with(['user'])
+                    ->first();
+                $session = session::where('id', (new session())->getCurrentSessionId())->first();
+                if ($HOD->user->email) {
+                    AuthenticationController::sendTwoStepVer($HOD->user->id, $HOD->user->email, $HOD->name);
+                }
+                $admin = [
+                    "id" => $HOD->id,
+                    "name" => $HOD->name,
+                    "Designation" => $HOD->designation,
+                    "Department" => $HOD->department,
+                    "Username" => $HOD->user->username,
+                    "Password" => $HOD->user->password,
+                    "user_id" => $HOD->user->id,
+                    "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
+                    "Start Date" => $session->start_date ?? "N/A",
+                    "End Date" => $session->end_date ?? "N/A",
+                    "image" => $HOD->image ? asset($HOD->image) : null,
+                    "course_count" => course::count(),
+                    "offered_course_count" => offered_courses::where('session_id', (new session())->getCurrentSessionId())->count(),
+                    "student_count" => student::count(),
+                    "faculty_count" => teacher::count() + juniorlecturer::count(),
+                ];
+                return response()->json([
+                    'Type' => $role,
+                    'HODInfo' => $admin
+                ], 200);
+            } else if ($role == 'Director') {
+                $HOD = Director::where('user_id', $user->id)
+                    ->with(['user'])
+                    ->first();
+                if ($HOD->user->email) {
+                    AuthenticationController::sendTwoStepVer($HOD->user->id, $HOD->user->email, $HOD->name);
+                }
+                $session = session::where('id', (new session())->getCurrentSessionId())->first();
+                $admin = [
+                    "id" => $HOD->id,
+                    "name" => $HOD->name,
+                    "Designation" => $HOD->designation,
+                    "Username" => $HOD->user->username,
+                    "Password" => $HOD->user->password,
+                    "user_id" => $HOD->user->id,
+                    "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
+                    "Start Date" => $session->start_date ?? "N/A",
+                    "End Date" => $session->end_date ?? "N/A",
+                    "image" => $HOD->image ? asset($HOD->image) : null,
+                    "course_count" => course::count(),
+                    "offered_course_count" => offered_courses::where('session_id', (new session())->getCurrentSessionId())->count(),
+                    "student_count" => student::count(),
+                    "faculty_count" => teacher::count() + juniorlecturer::count(),
+                ];
+                return response()->json([
+                    'Type' => $role,
+                    'DirectorInfo' => $admin
                 ], 200);
             } else {
                 return response()->json([
@@ -554,7 +618,7 @@ class StudentsController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Transcript generated successfully',
-               'student' => $student,
+                'student' => $student,
                 'sessionResults' => $sessionResults,
                 'program' => $program,
             ]);
@@ -627,7 +691,7 @@ class StudentsController extends Controller
             File::put($fullPath, $pdfContent);
             // return asset($directory . '/' . $fileName);
             return response()->streamDownload(
-                fn() => print($pdf->output()), 
+                fn() => print ($pdf->output()),
                 "Transcript_{$student->RegNo}.pdf",
                 ["Content-Type" => "application/pdf"]
             );
