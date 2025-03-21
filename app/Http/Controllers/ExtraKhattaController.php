@@ -54,8 +54,7 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ExtraKhattaController extends Controller
-{
-    use SendNotificationTrait; // Include the trait
+{ // Include the trait
     public static function EligibleToEnroll($student_id, $section_id)
     {
         $section = Section::find($section_id);
@@ -112,7 +111,7 @@ class ExtraKhattaController extends Controller
                 $expectedHeaders[] = 'Lab';
             }
 
-            if (array_slice($header, 0, count($expectedHeaders)) !== $expectedHeaders) {
+            if (array_slice($header, 0, count(value: $expectedHeaders)) !== $expectedHeaders) {
                 throw new Exception("Invalid header format. Expected: " . implode(", ", $expectedHeaders));
             }
             $filteredData = array_slice($rows, 1);

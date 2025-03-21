@@ -1,7 +1,7 @@
 <?php
 use App\Http\Controllers\DatacellsController;
-use App\Http\Controllers\FCMController;
 use App\Http\Controllers\GraderController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SingleInsertionController;
 use App\Models\Course;
 use App\Models\Director;
@@ -13,7 +13,6 @@ use App\Models\section;
 use App\Models\session;
 use App\Models\student;
 use App\Models\teacher;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\JuniorLecController;
@@ -23,17 +22,25 @@ use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\ExtraKhattaController;
 use App\Http\Controllers\AuthenticationController;
 
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Testing~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
+Route::get('/', function () {
+    return response()->json(['status' => 'success'], 200);
+});
+Route::post('/test_fcm', [NotificationController::class, 'TestFirebase']);
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Authentication~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 Route::get('/Login', [StudentsController::class, 'Login']);
 Route::post('/forgot-password', [AuthenticationController::class, 'sendOTP']);
 Route::post('/verify-otp', [AuthenticationController::class, 'verifyOTP']);
 Route::post('/update-pass', [AuthenticationController::class, 'updatePassword']);
 Route::post('/verify/login', [AuthenticationController::class, 'verifyLoginOTP']);
-Route::post('/store-fcmtoken', [FCMController::class, 'storeFcmToken']);
-Route::post('send-fcm-notification', [FcmController::class, 'sendFcmNotification']);
+Route::post('/store-fcmtoken', [NotificationController::class, 'storeFcmToken']);
 Route::post('/remember', [StudentsController::class, 'RememberMe']);
+Route::post('/student/notification', [NotificationController::class, 'SendNotificationToStudent']);
 
-Route::prefix('Uploading')->group(function () {
-    
+
+
+Route::prefix('Uploading')->group(function () { 
     Route::post('/uplaod/Result', [DatacellModuleController::class, 'UploadExamAwardList']);
     Route::post('/uplaod/Topic', [DatacellModuleController::class, 'UploadCourseContentTopic']);
     Route::post('/excel-upload/assign-juniorlecturer', [DatacellModuleController::class, 'assignJuniorLecturer']);
@@ -336,6 +343,4 @@ Route::prefix('Un-usable')->group(function () {
     Route::post('/update-admin-image', [AdminController::class, 'updateAdminImage']);
     Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
 });
-Route::get('/', function () {
-    return response()->json(['status' => 'success'], 200);
-});
+
