@@ -56,28 +56,6 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 class ExtraKhattaController extends Controller
 {
     use SendNotificationTrait; // Include the trait
-    public function send(Request $request)
-    {
-        $request->validate([
-            'user_id' => 'required',
-            'title' => 'required|string',
-            'body' => 'required|string',
-        ]);
-
-        // Retrieve user and their FCM token
-        // $user = User::find($request->user_id);
-        // if (!$user->fcm_token) {
-        //     return response()->json(['error' => 'User does not have an FCM token'], 400);
-        // }
-
-        // Optional custom data
-        $data = $request->input('data', []);
-
-        // Send the notification
-        $response = $this->sendNotification($request->user_id, $request->title, $request->body, $data);
-
-        return response()->json($response);
-    }
     public static function EligibleToEnroll($student_id, $section_id)
     {
         $section = Section::find($section_id);

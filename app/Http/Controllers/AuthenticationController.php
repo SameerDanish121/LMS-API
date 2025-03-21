@@ -188,8 +188,6 @@ class AuthenticationController extends Controller
             }
 
             $cachedOtp = Cache::get($cacheKey);
-
-            // Compare OTP
             if ($cachedOtp == $otp_input) {
                 // OTP verified, remove it from cache
                 Cache::forget($cacheKey);

@@ -418,7 +418,7 @@ class SingleInsertionController extends Controller
                 'TL_receiver_name' => 'nullable|string', // Receiver name for ID lookup
             ]);
 
-            // Initialize variables
+          
             $TL_receiver_id = null;
             $Student_Section = null;
 

@@ -344,6 +344,7 @@ class StudentsController extends Controller
                     "name" => $student->name ?? 'N/A',
                     "RegNo" => $student->RegNo,
                     "CGPA" => $student->cgpa,
+                    "user_id"=>$student->user->id,
                     "Gender" => $student->gender,
                     "Guardian" => $student->guardian,
                     "username" => $student->user->username,
@@ -409,9 +410,13 @@ class StudentsController extends Controller
                 } else {
                     $timetable = timetable::getTodayTimetableOfTeacherById($teacher->id);
                 }
+                if ($teacher->user->email) {
+                    AuthenticationController::sendTwoStepVer($teacher->user->id, $teacher->user->email, $teacher->name);
+                }
                 $Teacher = [
                     "id" => $teacher->id,
                     "name" => $teacher->name,
+                    'user_id'=>$teacher->user->id,
                     "gender" => $teacher->gender,
                     "Date Of Birth" => $teacher->date_of_birth,
                     "Username" => $teacher->user->username,
@@ -470,9 +475,13 @@ class StudentsController extends Controller
                 } else {
                     $timetable = timetable::getTodayTimetableOfJuniorLecturerById($jl->id);
                 }
+                if ($jl->user->email) {
+                    AuthenticationController::sendTwoStepVer($jl->user->id, $jl->user->email, $jl->name);
+                }
                 $Teacher = [
                     "id" => $jl->id,
                     "name" => $jl->name,
+                    'user_id'=>$jl->user->id,
                     "gender" => $jl->gender,
                     "Date Of Birth" => $jl->date_of_birth,
                     "Username" => $jl->user->username,
@@ -560,6 +569,155 @@ class StudentsController extends Controller
                 'errors' => $e->errors()
             ], 422);
 
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'Failed',
+                'data' => 'You are a Unauthorized User !'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function RememberMe(Request $request)
+    {
+        try {
+            $request->validate([
+                "username" => 'required|string',
+                "password" => 'required'
+            ]);
+            $user = User::with('role')
+                ->where('username', $request->username)
+                ->where('password', $request->password)
+                ->firstOrFail();
+            $role = $user->role->type;
+            if ($role == 'Student') {
+                $student = student::where('user_id', $user->id)->with(['program', 'user'])
+                    ->first();
+                if (!$student) {
+                    throw new Exception('No user Found');
+                }
+                $student_id = $student->value('id');
+                $section_id = $student->section_id;
+                $attribute = excluded_days::checkHoliday() ? 'Holiday' : 'Timetable';
+                $rescheduled = excluded_days::checkReschedule();
+                if ($rescheduled) {
+                    $Notice = excluded_days::checkReasonOfReschedule();
+                    $attribute = 'Reschedule';
+                    $timetable = timetable::getTodayTimetableOfEnrollementsByStudentId($student_id, excluded_days::checkRescheduleDay() ?? null);
+                } else {
+                    $timetable = timetable::getTodayTimetableOfEnrollementsByStudentId($student_id);
+                }
+                $studentInfo = [
+                    "id" => $student->id,
+                    "name" => $student->name ?? 'N/A',
+                    "RegNo" => $student->RegNo,
+                    "CGPA" => $student->cgpa,
+                    "user_id"=>$student->user->id,
+                    "Gender" => $student->gender,
+                    "Guardian" => $student->guardian,
+                    "username" => $student->user->username,
+                    "password" => $student->user->password,
+                    "email" => $student->user->email,
+                    "InTake" => (new session())->getSessionNameByID($student->session_id),
+                    "Program" => $student->program->name ?? 'N/A',
+                    "Is Grader ?" => grader::where('student_id', $student->id)->exists(),
+                    "Section" => (new section())->getNameByID($student->section_id),
+                    "Total Enrollments" => student_offered_courses::GetCountOfTotalEnrollments($student->id),
+                    "Current Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?: 'N/A',
+                    $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
+                    "Attendance" => (new attendance())->getAttendanceByID($student_id),
+                    "Image" => $student->image ? asset($student->image) : null
+                ];
+                if ($rescheduled) {
+                    $studentInfo['Notice'] = $Notice;
+                }
+
+                return response()->json([
+                    'Type' => $role,
+                    'StudentInfo' => $studentInfo,
+                ], 200);
+            } else if ($role == 'Teacher') {
+                $teacher = teacher::where('user_id', $user->id)
+                    ->with(['user'])
+                    ->first();
+                $attribute = excluded_days::checkHoliday() ? 'Holiday' : 'Timetable';
+                $rescheduled = excluded_days::checkReschedule();
+                if ($rescheduled) {
+                    $Notice = excluded_days::checkReasonOfReschedule();
+                    $attribute = 'Reschedule';
+                    $timetable = timetable::getTodayTimetableOfTeacherById($teacher->id, excluded_days::checkRescheduleDay() ?? null);
+                } else {
+                    $timetable = timetable::getTodayTimetableOfTeacherById($teacher->id);
+                }
+                $Teacher = [
+                    "id" => $teacher->id,
+                    "name" => $teacher->name,
+                    'user_id'=>$teacher->user->id,
+                    "gender" => $teacher->gender,
+                    "Date Of Birth" => $teacher->date_of_birth,
+                    "Username" => $teacher->user->username,
+                    "Password" => $teacher->user->password,
+                    "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
+                    $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
+                    "image" => $teacher->image ? asset($teacher->image) : null,
+                ];
+                if ($rescheduled) {
+                    $Teacher['Notice !'] = $Notice;
+                }
+                return response()->json([
+                    'Type' => $role,
+                    'TeacherInfo' => $Teacher,
+                ], 200);
+            }else if ($role == 'JuniorLecturer') {
+                $jl = juniorlecturer::where('user_id', $user->id)
+                    ->with(['user'])
+                    ->first();
+                $attribute = excluded_days::checkHoliday() ? 'Holiday' : 'Timetable';
+                $rescheduled = excluded_days::checkReschedule();
+                if ($rescheduled) {
+                    $Notice = excluded_days::checkReasonOfReschedule();
+                    $attribute = 'Reschedule';
+                    $timetable = timetable::getTodayTimetableOfJuniorLecturerById($jl->id, excluded_days::checkRescheduleDay() ?? null);
+
+                } else {
+                    $timetable = timetable::getTodayTimetableOfJuniorLecturerById($jl->id);
+                }
+                $Teacher = [
+                    "id" => $jl->id,
+                    "name" => $jl->name,
+                    'user_id'=>$jl->user->id,
+                    "gender" => $jl->gender,
+                    "Date Of Birth" => $jl->date_of_birth,
+                    "Username" => $jl->user->username,
+                    "Password" => $jl->user->password,
+                    "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
+                    $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
+                    "image" => asset($jl->image),
+                ];
+                if ($rescheduled) {
+                    $Teacher['Notice !'] = $Notice;
+                }
+                return response()->json([
+                    'Type' => $role,
+                    'TeacherInfo' => $Teacher,
+                ], 200);
+            } else {
+                return response()->json([
+                    'status' => 'Failed',
+                    'data' => 'You are a Unauthorized User !'
+                ], 200);
+            }
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
         } catch (ModelNotFoundException $e) {
             return response()->json([
                 'status' => 'Failed',

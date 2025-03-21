@@ -28,7 +28,12 @@ Route::post('/forgot-password', [AuthenticationController::class, 'sendOTP']);
 Route::post('/verify-otp', [AuthenticationController::class, 'verifyOTP']);
 Route::post('/update-pass', [AuthenticationController::class, 'updatePassword']);
 Route::post('/verify/login', [AuthenticationController::class, 'verifyLoginOTP']);
+Route::post('/store-fcmtoken', [FCMController::class, 'storeFcmToken']);
+Route::post('send-fcm-notification', [FcmController::class, 'sendFcmNotification']);
+Route::post('/remember', [StudentsController::class, 'RememberMe']);
+
 Route::prefix('Uploading')->group(function () {
+    
     Route::post('/uplaod/Result', [DatacellModuleController::class, 'UploadExamAwardList']);
     Route::post('/uplaod/Topic', [DatacellModuleController::class, 'UploadCourseContentTopic']);
     Route::post('/excel-upload/assign-juniorlecturer', [DatacellModuleController::class, 'assignJuniorLecturer']);
@@ -111,7 +116,7 @@ Route::prefix('Dropdown')->group(function () {
         return Director::all();
     });
     Route::get('/HOD', function () {
-        return  Hod::all();
+        return Hod::all();
     });
     Route::get('/AllProgram', function () {
         $programs = program::all()->map(function ($program) {
@@ -322,30 +327,13 @@ Route::prefix('Teachers')->group(function () {
     Route::get('/your-courses', [TeachersController::class, 'YourCourses']);
 });
 Route::prefix('Un-usable')->group(function () {
-    Route::post('/store-fcmtoken', [FCMController::class, 'storeFcmToken']);
+
     Route::get('/load-file', [TeachersController::class, 'LoadFile']);
     Route::get('/CanBePromoted', [ExtraKhattaController::class, 'Sample']);
     Route::post('/send-Notification', [StudentsController::class, 'sendNotification']);
-    Route::post('/send', [FCMController::class, 'sendN']);
     Route::post('/update-datacell-image', [DatacellsController::class, 'updateDataCellImage']);
     Route::post('/add-session', [AdminController::class, 'addSingleSession']);
     Route::post('/update-admin-image', [AdminController::class, 'updateAdminImage']);
-    Route::post('/send-rich-notification', function (Request $request) {
-        $trait = new class {
-            use \App\Traits\SendNotificationTrait;
-        };
-        if (empty($request->fmctoken)) {
-            return response(['data' => 'error'], 200);
-        }
-        $token = $request->fmctoken;
-        $title = "Test Notification";
-        $body = "This is a test notification with rich content.";
-        $imageUrl = "https://img.freepik.com/free-vector/media-player-software-computer-application-geolocation-app-location-determination-function-male-implementor-programmer-cartoon-character_335657-1180.jpg?ga=GA1.1.1046342397.1717240298&semt=ais_hybrid";
-        return $trait->sendRichNotification($token, $title, $body, $imageUrl);
-    });
-    Route::post('/firebase-notification', [ExtraKhattaController::class, 'send']);
-
-
     Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
 });
 Route::get('/', function () {

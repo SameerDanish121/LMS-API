@@ -8,6 +8,7 @@
     "require": {
         "php": "^8.2",
         "barryvdh/laravel-dompdf": "^3.1",
+        "google/apiclient": "2.13",
         "google/auth": "^1.46",
         "intervention/image": "^3.11",
         "kreait/firebase-php": "^7.17",

@@ -35,7 +35,14 @@ return [
         ],
     ],
     'firebase' => [
-        'key_path' => public_path(env('FIREBASE_CREDENTIALS')) 
+        'key_path' => public_path(env('FIREBASE_CREDENTIALS'))
     ],
+
+    'fcm' => [
+        'key' => env('FCM_SERVER_KEY'),
+        'project_id' => env('FCM_PROJECT_ID'),
+    ],
+
+
 
 ];
