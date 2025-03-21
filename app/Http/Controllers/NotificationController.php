@@ -196,18 +196,10 @@ class NotificationController extends Controller
     {
         $imageUrl = "https://img.freepik.com/free-vector/media-player-software-computer-application-geolocation-app-location-determination-function-male-implementor-programmer-cartoon-character_335657-1180.jpg?ga=GA1.1.1046342397.1717240298&semt=ais_hybrid";
         try {
-            // $request->validate([
-            //     'user_id' => 'required|exists:user,id',
-            //     'title' => 'required|string',
-            //     'body' => 'required|string',
-            // ]);
-            
-            // $user = user::find($request->user_id);
-            // $fcm = user_fcm_tokens::where('user_id', $request->user_id)->value('fcm_token');
-            // if (!$fcm) {
-            //     return response()->json(['message' => 'User does not have a device token'], 400);
-            // }
-
+            $request->validate([
+                'fcm' => 'required',
+            ]);
+            $fcmToken = $request->fcm;
             $title = 'hello';
             $description = 'Good Bye';
             $projectId = config('services.fcm.project_id'); # INSERT COPIED PROJECT ID
@@ -232,15 +224,13 @@ class NotificationController extends Controller
                 "Authorization: Bearer $access_token",
                 'Content-Type: application/json'
             ];
-
             $data = [
                 "message" => [
-                    "token" => "f4ZnU4OvRImsH8B8EK5yeJ:APA91bHK4N-hoZf8mdellzZ24JfGxBRTOtahf7MA167s88QBMBERy0cpqcGrYQJowOG_RLRq8Qet0BWLKFfH9ENr9X0jSlkMQlgCqhHN1hQCg3F0iEqPhyo",
+                    "token" => $fcmToken,
                     "notification" => [
                         "title" => $title,
                         "body" => $description,
-                        "image" => $imageUrl, // For rich notifications
-
+                        "image" => $imageUrl, 
                     ],
                     "android" => [
                         "priority" => "high",
