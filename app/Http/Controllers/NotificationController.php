@@ -5,6 +5,7 @@ use App\Models\FileHandler;
 use App\Models\notification;
 use App\Models\student;
 use App\Models\user;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Kreait\Firebase\Messaging\CloudMessage;
@@ -15,24 +16,26 @@ class NotificationController extends Controller
     public function SendNotificationToStudent(Request $request)
     {
         try {
-        $request->validate([
-            'sender' => 'required|string',
-            'sender_id' => 'required|integer',
-            'title' => 'required|string',
-            'description' => 'required|string',
-            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp',
-            'Broadcast' => 'nullable|boolean',
-            'Student_Section' => 'nullable|integer',
-            'Student_id' => 'nullable|integer|exists:student,id',
-        ]);
+            $request->validate([
+                'sender' => 'required|string',
+                'sender_id' => 'required',
+                'title' => 'required|string',
+                'description' => 'required|string',
+                'image' => 'nullable',
+                'Broadcast' => 'nullable',
+                'Student_Section' => 'nullable',
+                'Student_id' => 'nullable',
+            ]);
 
-       
+
             $imageUrl = null;
             if ($request->hasFile('image')) {
-                $imagePath = FileHandler::storeFile('abc', 'Transcript', $request->file('image'));
-                $imageUrl = asset($imagePath);
+                $imagePath = FileHandler::storeFile(now()->timestamp, 'Transcript', $request->file('image'));
+                $imageUrl = $imagePath;
+            }else if($request->has('image')){
+                $imageUrl=$request->image;
             }
-             
+
             $userId = [];
             $notification = new notification();
             $notification->title = $request->title;
@@ -217,7 +220,7 @@ class NotificationController extends Controller
             $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
             $client->refreshTokenWithAssertion();
             $token = $client->getAccessToken();
-            
+
             $access_token = $token['access_token'];
 
             $headers = [
@@ -230,12 +233,12 @@ class NotificationController extends Controller
                     "notification" => [
                         "title" => $title,
                         "body" => $description,
-                        "image" => $imageUrl, 
+                        "image" => $imageUrl,
                     ],
                     "android" => [
                         "priority" => "high",
                         "notification" => [
-                           
+
                             "icon" => "ic_notification",
                             "color" => "#3969D7",
                             "sound" => "default"
@@ -273,7 +276,7 @@ class NotificationController extends Controller
                 return response()->json([
                     'message' => 'Notification has been sent',
                     'response' => json_decode($response, true),
-                  
+
                 ]);
             }
         } catch (\Exception $e) {

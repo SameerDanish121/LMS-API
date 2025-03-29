@@ -630,7 +630,7 @@ class DatacellModuleController extends Controller
                                 $course_name = $courseInfo[0];
                                 $course_code = $courseInfo[1];
                             } else {
-                                $response[] = ['status' => "error on Row No {$RowNo} , Cell NO {$CellNo}", 'message' => "The Data {$courseInfo} is in Incorrect Format"];
+                                $response[] = ['status' => "error on Row No {$RowNo} , Cell NO {$CellNo}", 'message' => "The Data  is in Incorrect Format"];
                                 $enrollmentExsist = null;
                                 $sectionExsist = null;
                                 continue;

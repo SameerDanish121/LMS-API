@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Action;
+use App\Models\admin;
 use App\Models\Attendance_Sheet_Sequence;
 use App\Models\coursecontent;
 use App\Models\coursecontent_topic;
+use App\Models\datacell;
 use App\Models\dayslot;
 use App\Models\exam;
 use App\Models\excluded_days;
@@ -60,13 +62,83 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 class TeachersController extends Controller
 {
+    public function getTeacherNotifications(Request $request)
+    {
+        try {
+            $teacherId = $request->teacher_id;
+            if (!$teacherId) {
+                return response()->json(['status' => false, 'message' => 'teacher_id is required'], 400);
+            }
+            $teacher = Teacher::find($teacherId);
+            if (!$teacher) {
+                return response()->json(['status' => false, 'message' => 'Teacher not found'], 404);
+            }
+            $userId = $teacher->user_id;
+            $broadcastNotifications = notification::where('Brodcast', true)
+                ->where(function ($query) {
+                    $query->where('reciever', 'Teacher')
+                        ->orWhereNull('reciever');
+                });
+            $directNotifications = notification::where('TL_receiver_id', $userId);
+            $notifications = $broadcastNotifications->get()->merge($directNotifications->get());
+            $sortedNotifications = $notifications->sortByDesc('notification_date')->values();
+            $finalResponse = $sortedNotifications->map(function ($note) {
+                $senderName = 'System';
+                $image = null;
+                if ($note->sender === 'Admin') {
+                    $Admin = admin::where('user_id', $note->TL_sender_id)->first();
+                    if ($Admin) {
+                        $senderName = $Admin->name ?? 'N/A';
+                        $image = $Admin->image ? asset($Admin->image) : null;
+                    }
+
+                } else if ($note->sender === 'DataCell') {
+                    $Datacell = datacell::where('user_id', $note->TL_sender_id)->first();
+                    if ($Datacell) {
+                        $senderName = $Datacell->name ?? 'N/A';
+                        $image = $Datacell->image ? asset($Datacell->image) : null;
+                    }
+                }
+                if (!empty($note->url)) {
+                    if (str_contains($note->url, 'https://') || str_contains($note->url, 'http://')) {
+                        $type = 'link';
+                        $imageOrLink = $note->url;
+                    } else {
+                        $type = 'image';
+                        $imageOrLink = asset($note->url);
+                    }
+                }
+
+                return [
+                    'id' => $note->id,
+                    'title' => $note->title,
+                    'description' => $note->description,
+                    'url' => $note->url,
+                    'notification_date' => $note->notification_date,
+                    'sender' => $note->sender,
+                    'sender_name' => $senderName,
+                    'sender_image' => $image,
+                    'media_type' => $type ?? null,
+                    'media' => $imageOrLink ?? null
+
+                ];
+            });
+
+            return response()->json(['status' => true, 'data' => $finalResponse], 200);
+
+        } catch (Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
     public function AddFeedback(Request $request)
     {
         try {
             $request->validate([
                 'teacher_grader_id' => 'required',
-                'feedback' => 'required|string|max:255'
+                'feedback' => 'nullable|string|max:255' // Allow null to remove feedback
             ]);
+    
             $teacherGrader = teacher_grader::find($request->teacher_grader_id);
             if (!$teacherGrader) {
                 return response()->json([
@@ -74,26 +146,30 @@ class TeachersController extends Controller
                     'message' => 'Teacher grader record not found.',
                 ], 404);
             }
-            $teacherGrader->feedback = $request->feedback;
+    
+            // Update or remove feedback
+            $teacherGrader->feedback = $request->feedback ?? null; // If feedback is null, remove it
             $teacherGrader->save();
+    
             return response()->json([
                 'success' => true,
-                'message' => 'Feedback updated successfully.',
+                'message' => $request->feedback ? 'Feedback updated successfully.' : 'Feedback removed successfully.',
                 'data' => $teacherGrader,
             ]);
+    
         } catch (ValidationException $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Validation failed',
                 'errors' => $e->errors()
             ], 422);
-
+    
         } catch (ModelNotFoundException $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Invalid username or password'
             ], 404);
-
+    
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -102,6 +178,7 @@ class TeachersController extends Controller
             ], 500);
         }
     }
+    
     public function CopySemester(Request $request)
     {
         try {
@@ -237,7 +314,6 @@ class TeachersController extends Controller
                 'coursecontent_id' => 'required|integer',
                 'status' => 'required|boolean',
             ]);
-
             $teacherOfferedCourseId = $validated['teacher_offered_courses_id'];
             $topicId = $validated['topic_id'];
             $courseContentId = $validated['coursecontent_id'];
@@ -456,7 +532,7 @@ class TeachersController extends Controller
                     'Student_Id' => $student->id,
                     'Student_name' => $student->name,
                     'RegNo' => $student->RegNo,
-                    'image' => $student->image?asset($student->image):null,
+                    'image' => $student->image ? asset($student->image) : null,
                     'Lab_Task_Percentage' => $groupedTasks['LabTask']['percentage'],
                     'Lab_Task_Obtained Marks' => $groupedTasks['LabTask']['obtained_display'],
                     'Lab_Task_Total Marks' => $groupedTasks['LabTask']['total_marks'],
@@ -661,89 +737,380 @@ class TeachersController extends Controller
 
         return response()->json($venues);
     }
+    public function TodayClass(Request $request)
+    {
+        try {
+            $teacherId = $request->teacher_id;
+            $todayDay = Carbon::now()->format('l');
+            if (excluded_days::checkHoliday()) {
+                return response()->json(['message' => excluded_days::checkHolidayReason()], 404);
+            }
+            if (excluded_days::checkReschedule()) {
+                $todayDay = excluded_days::checkRescheduleDay();
+            }
+            $currentSession = (new session())->getCurrentSessionId();
+            if ($currentSession == 0) {
+                return response()->json(['error' => 'No current session found'], 404);
+            }
+            $timetable = timetable::with([
+                'course:name,id,description',
+                'teacher:name,id',
+                'venue:venue,id',
+                'dayslot:day,start_time,end_time,id',
+                'juniorLecturer:name',
+                'section'
+            ])->whereHas('dayslot', function ($query) use ($todayDay) {
+                $query->where('day', $todayDay);
+            })
+                ->where('teacher_id', $teacherId)
+                ->where('session_id', (new session())->getCurrentSessionId())
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        // 'day' => $item->dayslot->day,
+                        'coursename' => $item->course->name,
+                        'description' => $item->course->description,
+                        'course_id' => $item->course->id,
+                        'section_id' => $item->section->id,
+                        'teachername' => $item->teacher->name ?? 'N/A',
+                        'juniorlecturername' => $item->juniorLecturer->name ?? 'N/A',
+                        'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
+                        'venue' => $item->venue->venue,
+                        'venue_id' => $item->venue->id,
+                        'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('H:i') : null,
+                        'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('H:i') : null,
+                    ];
+                });
+            $filteredTimetable = $timetable->map(function ($item) {
+                $sectionid = $item['section_id'];
+                $courseid = $item['course_id'];
+                $offeredCourseId = offered_courses::where('course_id', $courseid)
+                    ->where('session_id', (new session())->getCurrentSessionId())
+                    ->first();
+                if (!$offeredCourseId) {
+                    return null; // Skip if no offered_course found
+                }
 
+                $teacherOfferedCourse = teacher_offered_courses::where('section_id', $sectionid)
+                    ->where('offered_course_id', $offeredCourseId->id)
+                    ->first();
+
+                if (!$teacherOfferedCourse) {
+                    return null; // Skip if no teacher_offered_course found
+                }
+
+                $formattedDateTime = $item['start_time'];
+                $startDateTime = Carbon::createFromFormat('Y-m-d H:i', Carbon::now()->toDateString() . ' ' . $formattedDateTime)->format('Y-m-d H:i:s');
+
+                $attendanceMarked = Attendance::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                    ->where('date_time', $startDateTime)
+                    ->exists();
+
+                $status = $attendanceMarked ? 'Marked' : 'Unmarked';
+
+                return [
+                    "FormattedData" => $item['description'] . '_( ' . $item['section'] . ' )_' . $item['venue'] . '_(' . $item['start_time'] . '-' . $item['end_time'] . ')',
+                    "teacher_offered_course_id" => $teacherOfferedCourse->id,
+                    "attendance_status" => $status,
+                    "fixed_date" => $startDateTime,
+                    'coursename' => $item['coursename'],
+                    'description' => $item['description'],
+                    'course_id' => $item['course_id'],
+                    'section_id' => $item['section_id'],
+                    'teachername' => $item['teachername'],
+                    'juniorlecturername' => $item['juniorlecturername'],
+                    'section' => $item['section'],
+                    'venue' => $item['venue'],
+                    'venue_id' => $item['venue_id'],
+                    'start_time' => $item['start_time'],
+                    'end_time' => $item['end_time'],
+
+                ];
+            })->filter(); // To remove any nulls if courses or teacher_offered_courses are missing
+
+            return response()->json($filteredTimetable->values());
+
+
+        } catch (Exception $e) {
+            return response()->json(['error' => 'An unexpected error occurred', 'message' => $e->getMessage()], 500);
+        }
+    }
+    // public function TodayClass(Request $request)
+    // {
+    //     try {
+    //         $teacherId = $request->teacher_id;
+    //         $todayDay = Carbon::now()->format('l');
+    //         if (excluded_days::checkHoliday()) {
+    //             return response()->json(['message' => excluded_days::checkHolidayReason()], 404);
+    //         }
+    //         if (excluded_days::checkReschedule()) {
+    //             $todayDay = excluded_days::checkRescheduleDay();
+    //         }
+    //         $currentSession = (new session())->getCurrentSessionId();
+    //         if ($currentSession == 0) {
+    //             return response()->json(['error' => 'No current session found'], 404);
+    //         }
+    //         $timetable = timetable::with([
+    //             'course:name,id,description',
+    //             'teacher:name,id',
+    //             'venue:venue,id',
+    //             'dayslot:day,start_time,end_time,id',
+    //             'juniorLecturer:name',
+    //             'section'
+    //         ])->whereHas('dayslot', function ($query) use ($todayDay) {
+    //             $query->where('day', $todayDay);
+    //         })
+    //             ->where('teacher_id', $teacherId)
+    //             ->where('session_id', (new session())->getCurrentSessionId())
+    //             ->get()
+    //             ->map(function ($item) {
+    //                 return [
+    //                     'day' => $item->dayslot->day,
+    //                     'coursename' => $item->course->name,
+    //                     'description' => $item->course->description,
+    //                     'course_id' => $item->course->id,
+    //                     'section_id' => $item->section->id,
+    //                     'teachername' => $item->teacher->name ?? 'N/A',
+    //                     'juniorlecturername' => $item->juniorLecturer->name ?? 'N/A',
+    //                     'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
+    //                     'venue' => $item->venue->venue,
+    //                     'venue_id' => $item->venue->id,
+    //                     'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('H:i') : null,
+    //                     'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('H:i') : null,
+    //                 ];
+    //             });
+    //         $filteredTimetable = $timetable->map(function ($item) {
+    //             $sectionid = $item['section_id'];
+    //             $courseid = $item['course_id'];
+    //             $offeredCourseId = offered_courses::where('course_id', $courseid)
+    //                 ->where('session_id', (new session())->getCurrentSessionId())
+    //                 ->first();
+    //             if (!$offeredCourseId) {
+    //                 return null; // Skip if no offered_course found
+    //             }
+
+    //             $teacherOfferedCourse = teacher_offered_courses::where('section_id', $sectionid)
+    //                 ->where('offered_course_id', $offeredCourseId->id)
+    //                 ->first();
+
+    //             if (!$teacherOfferedCourse) {
+    //                 return null; // Skip if no teacher_offered_course found
+    //             }
+
+    //             $formattedDateTime = $item['start_time'];
+    //             $startDateTime = Carbon::createFromFormat('Y-m-d H:i', Carbon::now()->toDateString() . ' ' . $formattedDateTime)->format('Y-m-d H:i:s');
+
+    //             $attendanceMarked = Attendance::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+    //                 ->where('date_time', $startDateTime)
+    //                 ->exists();
+
+    //             $status = $attendanceMarked ? 'Marked' : 'Unmarked';
+
+    //             return [
+    //                 "FormattedData" => $item['description'] . '_( ' . $item['section'] . ' )_' . $item['venue'] . '_(' . $item['start_time'] . '-' . $item['end_time'] . ')',
+    //                 "teacher_offered_course_id" => $teacherOfferedCourse->id,
+    //                 "attendance_status" => $status,
+    //                 "fixed_date" => $startDateTime,
+    //                 'coursename' => $item['coursename'],
+    //                 'day' => $item['day'],
+    //                 'description' => $item['description'],
+    //                 'course_id' => $item['course_id'],
+    //                 'section_id' => $item['section_id'],
+    //                 'teachername' => $item['teachername'],
+    //                 'juniorlecturername' => $item['juniorlecturername'],
+    //                 'section' => $item['section'],
+    //                 'venue' => $item['venue'],
+    //                 'venue_id' => $item['venue_id'],
+    //                 'start_time' => $item['start_time'],
+    //                 'end_time' => $item['end_time'],
+
+    //             ];
+    //         })->filter(); // To remove any nulls if courses or teacher_offered_courses are missing
+
+    //         return response()->json($filteredTimetable->values());
+
+
+    //     } catch (Exception $e) {
+    //         return response()->json(['error' => 'An unexpected error occurred', 'message' => $e->getMessage()], 500);
+    //     }
+    // }
     public function getTodayClassesWithAttendanceStatus($teacherId)
     {
         $currentDay = Carbon::now()->format('l');
+
+        // Check holidays or reschedule
         if (excluded_days::checkHoliday()) {
             return response()->json(['message' => excluded_days::checkHolidayReason()], 404);
         }
         if (excluded_days::checkReschedule()) {
             $currentDay = excluded_days::checkRescheduleDay();
         }
+
         $currentDate = Carbon::now()->toDateString();
-        $classes = Timetable::join('venue', 'timetable.venue_id', '=', 'venue.id')
-            ->join('course', 'timetable.course_id', '=', 'course.id')
-            ->join('session', 'timetable.session_id', '=', 'session.id')
-            ->join('section', 'timetable.section_id', '=', 'section.id')
-            ->join('program', 'section.program', '=', 'program.name') // Join with the program table
-            ->join('dayslot', 'timetable.dayslot_id', '=', 'dayslot.id')
-            ->join('teacher', 'timetable.teacher_id', '=', 'teacher.id')
-            ->where('timetable.teacher_id', $teacherId)
-            ->where('dayslot.day', $currentDay)
-            ->select(
-                'timetable.id AS timetable_id',
-                'timetable.section_id',
-                'timetable.course_id AS offered_course_id',
-                'venue.venue AS venue_name',
-                'venue.id AS venue_id',
-                'course.name AS course_name',
-                DB::raw("CONCAT(program.name, '-', section.semester, section.group) AS section"),
-                'dayslot.day AS day_slot',
-                'dayslot.start_time',
-                'dayslot.end_time',
-                'timetable.type AS class_type'
-            )
+        $currentSessionId = (new session())->getCurrentSessionId();
+
+        // Fetch today's classes directly using Eloquent with relationships
+        $classes = Timetable::with(['venue', 'course', 'section.program', 'dayslot'])
+            ->where('teacher_id', $teacherId)
+            ->whereHas('dayslot', function ($q) use ($currentDay) {
+                $q->where('day', $currentDay);
+            })
             ->get();
 
         if ($classes->isEmpty()) {
             return response()->json(['message' => 'No classes found for today'], 404);
         }
 
-        $formattedClasses = $classes->map(function ($class) use ($teacherId, $currentDate) {
-            $offered_course_data = offered_courses::where('course_id', $class->offered_course_id)
-                ->where('session_id', (new session())->getCurrentSessionId())
-                ->first();
+        // Pre-fetch all relevant offered_courses for performance
+        $offeredCourses = offered_courses::whereIn('course_id', $classes->pluck('course_id'))
+            ->where('session_id', $currentSessionId)
+            ->get()
+            ->keyBy('course_id');
 
-            if (!$offered_course_data) {
+        // Pre-fetch teacher_offered_courses
+        $teacherOfferedCourses = teacher_offered_courses::where('teacher_id', $teacherId)
+            ->whereIn('section_id', $classes->pluck('section_id'))
+            ->whereIn('offered_course_id', $offeredCourses->pluck('id'))
+            ->get()
+            ->keyBy(function ($item) {
+                return $item->section_id . '-' . $item->offered_course_id;
+            });
+
+        // Map and prepare response
+        $formattedClasses = $classes->map(function ($class) use ($teacherOfferedCourses, $offeredCourses, $currentDate) {
+            $offeredCourse = $offeredCourses[$class->course_id] ?? null;
+
+            if (!$offeredCourse) {
                 $class->attendance_status = 'Unmarked';
                 $class->teacher_offered_course_id = null;
-                return $class;
+                return $this->formatClassTime($class);
             }
-            try {
-                $startDateTime = Carbon::parse($currentDate . ' ' . $class->start_time)->toDateTimeString();
-            } catch (Exception $e) {
-                $class->attendance_status = 'Unmarked';
-                $class->teacher_offered_course_id = null;
-                return $class;
-            }
-            $teacherOfferedCourse = teacher_offered_courses::where('teacher_id', $teacherId)
-                ->where('section_id', $class->section_id)
-                ->where('offered_course_id', $offered_course_data->id)
-                ->first();
 
+            $teacherCourseKey = $class->section_id . '-' . $offeredCourse->id;
+            $teacherOfferedCourse = $teacherOfferedCourses[$teacherCourseKey] ?? null;
             $class->teacher_offered_course_id = $teacherOfferedCourse->id ?? null;
+
             $attendanceMarked = false;
             if ($teacherOfferedCourse) {
+                $startDateTime = Carbon::parse($currentDate . ' ' . $class->dayslot->start_time)->toDateTimeString();
                 $attendanceMarked = Attendance::where('teacher_offered_course_id', $teacherOfferedCourse->id)
                     ->where('date_time', $startDateTime)
                     ->exists();
             }
-            try {
-                $class->start_time = Carbon::parse($class->start_time)->format('g:i A');
-                $class->end_time = Carbon::parse($class->end_time)->format('g:i A');
-            } catch (Exception $e) {
-                $class->start_time = 'Invalid Time';
-                $class->end_time = 'Invalid Time';
-            }
 
             $class->attendance_status = $attendanceMarked ? 'Marked' : 'Unmarked';
 
-            return $class;
+            return $this->formatClassTime($class);
         });
 
         return response()->json($formattedClasses);
     }
+
+    private function formatClassTime($class)
+    {
+        try {
+            $class->start_time = Carbon::parse($class->dayslot->start_time)->format('g:i A');
+            $class->end_time = Carbon::parse($class->dayslot->end_time)->format('g:i A');
+        } catch (Exception $e) {
+            $class->start_time = 'Invalid Time';
+            $class->end_time = 'Invalid Time';
+        }
+
+        $class->section = $class->section->program->name . '-' . $class->section->semester . $class->section->group;
+        $class->venue_name = $class->venue->venue;
+        $class->course_name = $class->course->name;
+        $class->day_slot = $class->dayslot->day;
+
+        unset($class->dayslot);
+        unset($class->venue);
+        unset($class->course);
+        unset($class->section->program);
+
+        return $class;
+    }
+
+    // public function getTodayClassesWithAttendanceStatus($teacherId)
+    // {
+    //     $currentDay = Carbon::now()->format('l');
+    //     if (excluded_days::checkHoliday()) {
+    //         return response()->json(['message' => excluded_days::checkHolidayReason()], 404);
+    //     }
+    //     if (excluded_days::checkReschedule()) {
+    //         $currentDay = excluded_days::checkRescheduleDay();
+    //     }
+    //     $currentDate = Carbon::now()->toDateString();
+    //     $classes = Timetable::join('venue', 'timetable.venue_id', '=', 'venue.id')
+    //         ->join('course', 'timetable.course_id', '=', 'course.id')
+    //         ->join('session', 'timetable.session_id', '=', 'session.id')
+    //         ->join('section', 'timetable.section_id', '=', 'section.id')
+    //         ->join('program', 'section.program', '=', 'program.name') // Join with the program table
+    //         ->join('dayslot', 'timetable.dayslot_id', '=', 'dayslot.id')
+    //         ->join('teacher', 'timetable.teacher_id', '=', 'teacher.id')
+    //         ->where('timetable.teacher_id', $teacherId)
+    //         ->where('dayslot.day', $currentDay)
+    //         ->select(
+    //             'timetable.id AS timetable_id',
+    //             'timetable.section_id',
+    //             'timetable.course_id AS offered_course_id',
+    //             'venue.venue AS venue_name',
+    //             'venue.id AS venue_id',
+    //             'course.name AS course_name',
+    //             DB::raw("CONCAT(program.name, '-', section.semester, section.group) AS section"),
+    //             'dayslot.day AS day_slot',
+    //             'dayslot.start_time',
+    //             'dayslot.end_time',
+    //             'timetable.type AS class_type'
+    //         )
+    //         ->get();
+
+    //     if ($classes->isEmpty()) {
+    //         return response()->json(['message' => 'No classes found for today'], 404);
+    //     }
+
+    //     $formattedClasses = $classes->map(function ($class) use ($teacherId, $currentDate) {
+    //         $offered_course_data = offered_courses::where('course_id', $class->offered_course_id)
+    //             ->where('session_id', (new session())->getCurrentSessionId())
+    //             ->first();
+
+    //         if (!$offered_course_data) {
+    //             $class->attendance_status = 'Unmarked';
+    //             $class->teacher_offered_course_id = null;
+    //             return $class;
+    //         }
+    //         try {
+    //             $startDateTime = Carbon::parse($currentDate . ' ' . $class->start_time)->toDateTimeString();
+    //         } catch (Exception $e) {
+    //             $class->attendance_status = 'Unmarked';
+    //             $class->teacher_offered_course_id = null;
+    //             return $class;
+    //         }
+    //         $teacherOfferedCourse = teacher_offered_courses::where('teacher_id', $teacherId)
+    //             ->where('section_id', $class->section_id)
+    //             ->where('offered_course_id', $offered_course_data->id)
+    //             ->first();
+
+    //         $class->teacher_offered_course_id = $teacherOfferedCourse->id ?? null;
+    //         $attendanceMarked = false;
+    //         if ($teacherOfferedCourse) {
+    //             $attendanceMarked = Attendance::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+    //                 ->where('date_time', $startDateTime)
+    //                 ->exists();
+    //         }
+    //         try {
+    //             $class->start_time = Carbon::parse($class->start_time)->format('g:i A');
+    //             $class->end_time = Carbon::parse($class->end_time)->format('g:i A');
+    //         } catch (Exception $e) {
+    //             $class->start_time = 'Invalid Time';
+    //             $class->end_time = 'Invalid Time';
+    //         }
+
+    //         $class->attendance_status = $attendanceMarked ? 'Marked' : 'Unmarked';
+
+    //         return $class;
+    //     });
+
+    //     return response()->json($formattedClasses);
+    // }
     public function ContestList(Request $request)
     {
         try {
@@ -762,6 +1129,7 @@ class TeachersController extends Controller
             $customData = $contents->map(function ($item) {
                 return [
                     'Message' => 'The Attendance with Following Info is Contested By Student !',
+                    'Image'=>student::find($item->attendance->student_id)->image ? asset(student::find($item->attendance->student_id)->image) : null,
                     'Student Name' => student::find($item->attendance->student_id)->name ?? 'N/A',
                     'Student Reg NO' => student::find($item->attendance->student_id)->RegNo ?? 'N/A',
                     'Date & Time' => $item->attendance->date_time,
@@ -1188,12 +1556,16 @@ class TeachersController extends Controller
                 $grader = grader::find($teacherGrader->grader_id);
                 if ($grader) {
                     $graderDetails = [
-                        'id' => $grader->id,
+                        'teacher_grader_id' => $teacherGrader->id,
+                        'grader_id' => $grader->id,
                         'RegNo' => $grader->student->RegNo,
+                        'image' => $grader->student->image ? asset($grader->student->image) : null,
                         'name' => $grader->student->name,
                         'section' => (new section())->getNameByID($grader->student->section_id),
                         'status' => $grader->status,
                         'feedback' => $teacherGrader->feedback,
+                        'type'=>$grader->type,
+                        'session'=>(new session())->getSessionNameByID($teacherGrader->session_id),
                     ];
                     if ($teacherGrader->session_id == $currentSessionId) {
                         $activeGraders[] = $graderDetails;
@@ -1202,6 +1574,7 @@ class TeachersController extends Controller
                     }
                 }
             }
+            $previousGraders = collect($previousGraders)->groupBy('session');
             return response()->json([
                 'status' => 'success',
                 'active_graders' => $activeGraders,
@@ -1795,79 +2168,78 @@ class TeachersController extends Controller
         }
     }
     public static function getTeacherCourseGroupedByActivePrevious($teacherId)
-{
-    try {
-        $currentSessionId = (new session())->getCurrentSessionId();
-        
-        // Fetch data with necessary relationships
-        $assignments = teacher_offered_courses::where('teacher_id', $teacherId)
-            ->with([
-                'offeredCourse.course',
-                'offeredCourse.session',
-                'section',
-                'teacher',
-                'offeredCourse.course.program'
-            ])
-            ->get();
+    {
+        try {
+            $currentSessionId = (new session())->getCurrentSessionId();
 
-        $activeCourses = [];
-        $previousCourses = [];
-        foreach ($assignments as $assignment) {
-            $offeredCourse = $assignment->offeredCourse;
-            if (!$offeredCourse || !$offeredCourse->course) {
-                continue;
-            }
-            $course = $offeredCourse->course;
-            $session = $offeredCourse->session;
-            $program = $course->program;
-            
-            // Initialize course details
-            $courseDetails = [
-                'teacher_offered_course_id' => $assignment->id,
-                'course_name' => $course->name,
-                'course_code' => $course->code,
-                'credit_hours' => $course->credit_hours,
-                'course_type' => $course->type,
-                'description' => $course->description,
-                'lab' => $course->lab ? 'Yes' : 'No',
-                'prerequisite' => $course->pre_req_main ? $course->pre_req_main : 'Main',
-                'section_name' => $assignment->section ? (new section())->getNameByID($assignment->section->id) : 'Unknown',
-                'session_name' => $session ? $session->name . '-' . $session->year : 'Unknown',
-                'program_name' => $program ? $program->name : 'N/A',
-            ];
+            // Fetch data with necessary relationships
+            $assignments = teacher_offered_courses::where('teacher_id', $teacherId)
+                ->with([
+                    'offeredCourse.course',
+                    'offeredCourse.session',
+                    'section',
+                    'teacher',
+                    'offeredCourse.course.program'
+                ])
+                ->get();
 
-            // Add junior lecturer details only if it's a lab course
-            if ($course->lab) {
-                $teacherJuniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $assignment->id)
-                    ->with('juniorLecturer')
-                    ->first();
-                if ($teacherJuniorLecturer && $teacherJuniorLecturer->juniorLecturer) {
-                    $courseDetails['junior_name'] = $teacherJuniorLecturer->juniorLecturer->name??'N/A';
-                    $courseDetails['junior_image'] = $teacherJuniorLecturer->juniorLecturer->image ? asset($teacherJuniorLecturer->juniorLecturer->image) : null;
-                }else{
-                    $courseDetails['junior_name'] = 'N/A';
-                    $courseDetails['junior_image'] = null;
+            $activeCourses = [];
+            $previousCourses = [];
+            foreach ($assignments as $assignment) {
+                $offeredCourse = $assignment->offeredCourse;
+                if (!$offeredCourse || !$offeredCourse->course) {
+                    continue;
+                }
+                $course = $offeredCourse->course;
+                $session = $offeredCourse->session;
+                $program = $course->program;
+                $enrollmentsCount=student_offered_courses::where('offered_course_id',$offeredCourse->id)->where('section_id', $assignment->section->id)->count();
+                $courseDetails = [
+                    'course_name' => $course->name,
+                    'course_code' => $course->code,
+                    'credit_hours' => $course->credit_hours,
+                    'course_type' => $course->type,
+                    'description' => $course->description,
+                    'lab' => $course->lab ? 'Yes' : 'No',
+                    'prerequisite' => $course->pre_req_main ? $course->pre_req_main : 'Main',
+                    'section_name' => $assignment->section ? (new section())->getNameByID($assignment->section->id) : 'Unknown',
+                    'session_name' => $session ? $session->name . '-' . $session->year : 'Unknown',
+                    'total_enrollments'=>$enrollmentsCount,
+                    'program_name' => $program ? $program->name : 'N/A',
+                    'offered_course_id'=>$offeredCourse->id,
+                    'teacher_offered_course_id' => $assignment->id,
+                ];
+                if ($course->lab) {
+                    $teacherJuniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $assignment->id)
+                        ->with('juniorLecturer')
+                        ->first();
+                    if ($teacherJuniorLecturer && $teacherJuniorLecturer->juniorLecturer) {
+                        $courseDetails['junior_name'] = $teacherJuniorLecturer->juniorLecturer->name ?? 'N/A';
+                        $courseDetails['junior_image'] = $teacherJuniorLecturer->juniorLecturer->image ? asset($teacherJuniorLecturer->juniorLecturer->image) : null;
+                    } else {
+                        $courseDetails['junior_name'] = 'N/A';
+                        $courseDetails['junior_image'] = null;
+                    }
+                }
+
+                if ($offeredCourse->session_id == $currentSessionId) {
+                    $activeCourses[] = $courseDetails;
+                } else {
+                    $previousCourses[] = $courseDetails;
                 }
             }
 
-            if ($offeredCourse->session_id == $currentSessionId) {
-                $activeCourses[] = $courseDetails;
-            } else {
-                $previousCourses[] = $courseDetails;
-            }
+            return [
+                'active_courses' => $activeCourses,
+                'previous_courses' => collect($previousCourses)->groupBy('session_name'),
+            ];
+        } catch (Exception $ex) {
+            return [
+                'active_courses' => [],
+                'previous_courses' => [],
+            ];
         }
-
-        return [
-            'active_courses' => $activeCourses,
-            'previous_courses' => $previousCourses,
-        ];
-    } catch (Exception $ex) {
-        return [
-            'active_courses' => [],
-            'previous_courses' => [],
-        ];
     }
-}
 
     public function getLabAttendanceList(Request $request)
     {
@@ -1963,15 +2335,14 @@ class TeachersController extends Controller
         // Validate request
         $validated = $request->validate([
             'teacher_offered_course_id' => 'required|integer',
-            'attendance_type' => 'nullable|string|in:Class,Lab',
+            'venue_name' => 'nullable',
         ]);
-
-        // Handle attendance_type with fallback
-        $type = $validated['attendance_type'] ?? 'Lab'; // Use Lab if attendance_type is null
-
+        if ($request->has('venue_name')) {
+            $type = str_contains(strtolower($validated['venue_name']), 'lab') ? 'Lab' : 'Class';
+        } else {
+            $type = 'Class';
+        }
         $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
-
-        // Retrieve the teacher offered course data
         $teacherOfferedCourse = teacher_offered_courses::with(['section', 'offeredCourse.course', 'offeredCourse.session'])
             ->find($teacherOfferedCourseId);
 
@@ -1980,23 +2351,17 @@ class TeachersController extends Controller
                 'error' => 'Teacher offered course not found.',
             ], 404);
         }
-
         $offeredCourseId = $teacherOfferedCourse->offered_course_id;
         $sectionId = $teacherOfferedCourse->section_id;
-
-        // Fetch student courses
         $studentCourses = student_offered_courses::where('offered_course_id', $offeredCourseId)
             ->where('section_id', $sectionId)
             ->with('student')
             ->get();
-
         if ($studentCourses->isEmpty()) {
             return response()->json([
                 'error' => 'No students found for the given teacher offered course.',
             ], 404);
         }
-
-        // Fetch attendance sheet sequence
         $attendanceRecords = Attendance_Sheet_Sequence::where('teacher_offered_course_id', $teacherOfferedCourseId)
             ->where('For', $type)
             ->with('student')
@@ -2006,39 +2371,123 @@ class TeachersController extends Controller
         $attendanceMap = $attendanceRecords->keyBy('student_id');
         $sortedStudents = [];
         $unsortedStudents = [];
-
-        // Loop through each student course and check for matching attendance records
         foreach ($studentCourses as $studentCourse) {
             $student = $studentCourse->student;
             if (!$student) {
                 continue;
             }
             $attendanceRecord = $attendanceMap->get($student->id);
-
+            $attendanceData = attendance::getAttendanceBySubject($teacherOfferedCourseId, $student->id);
             if ($attendanceRecord) {
                 $sortedStudents[] = [
                     'SeatNumber' => $attendanceRecord->SeatNumber,
+                    'student_id' => $student->id,
                     'name' => $student->name,
                     'RegNo' => $student->RegNo,
                     'image' => $student->image ? asset($student->image) : null,
+                    'percentage' => $attendanceData['Total']['percentage'],
                 ];
             } else {
                 $unsortedStudents[] = [
                     'SeatNumber' => null,
+                    'student_id' => $student->id,
                     'name' => $student->name,
                     'RegNo' => $student->RegNo,
                     'image' => $student->image ? asset($student->image) : null,
+                    'percentage' => $attendanceData['Total']['percentage'],
                 ];
             }
         }
         usort($sortedStudents, fn($a, $b) => $a['SeatNumber'] <=> $b['SeatNumber']);
-        // Merge sorted and unsorted students
         $finalList = array_merge($sortedStudents, $unsortedStudents);
 
         // Determine the list format
         $listFormat = count($attendanceRecords) > 0 ? 'Sorted' : 'Unsorted';
+        return response()->json([
+            'success' => true,
+            'Course Name' => $teacherOfferedCourse->offeredCourse->course->name,
+            'Section Name' => (new section())->getNameByID($teacherOfferedCourse->section->id),
+            'List Format' => $listFormat,
+            'students' => $finalList,
+        ], 200);
+    }
+    public function ReTakeAttendanceWithStatus(Request $request)
+    {
+        // Validate request
+        $validated = $request->validate([
+            'teacher_offered_course_id' => 'required|integer',
+            'venue_name' => 'nullable',
+            'fixed_date' => 'required',
+        ]);
+        $fixed_date=$validated['fixed_date'];
+        if ($request->has('venue_name')) {
+            $type = str_contains(strtolower($validated['venue_name']), 'lab') ? 'Lab' : 'Class';
+        } else {
+            $type = 'Class';
+        }
+        $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
+        $teacherOfferedCourse = teacher_offered_courses::with(['section', 'offeredCourse.course', 'offeredCourse.session'])
+            ->find($teacherOfferedCourseId);
 
-        // Return the JSON response
+        if (!$teacherOfferedCourse) {
+            return response()->json([
+                'error' => 'Teacher offered course not found.',
+            ], 404);
+        }
+        $offeredCourseId = $teacherOfferedCourse->offered_course_id;
+        $sectionId = $teacherOfferedCourse->section_id;
+        $studentCourses = student_offered_courses::where('offered_course_id', $offeredCourseId)
+            ->where('section_id', $sectionId)
+            ->with('student')
+            ->get();
+        if ($studentCourses->isEmpty()) {
+            return response()->json([
+                'error' => 'No students found for the given teacher offered course.',
+            ], 404);
+        }
+        $attendanceRecords = Attendance_Sheet_Sequence::where('teacher_offered_course_id', $teacherOfferedCourseId)
+            ->where('For', $type)
+            ->with('student')
+            ->orderBy('SeatNumber')
+            ->get();
+
+        $attendanceMap = $attendanceRecords->keyBy('student_id');
+        $sortedStudents = [];
+        $unsortedStudents = [];
+        foreach ($studentCourses as $studentCourse) {
+            $student = $studentCourse->student;
+            if (!$student) {
+                continue;
+            }
+            $attendanceRecord = $attendanceMap->get($student->id);
+            $attendanceData = attendance::getAttendanceBySubject($teacherOfferedCourseId, $student->id);
+            if ($attendanceRecord) {
+                $sortedStudents[] = [
+                    'SeatNumber' => $attendanceRecord->SeatNumber,
+                    'student_id' => $student->id,
+                    'name' => $student->name,
+                    'RegNo' => $student->RegNo,
+                    'image' => $student->image ? asset($student->image) : null,
+                    'percentage' => $attendanceData['Total']['percentage'],
+                    'attedance_status'=>attendance::where('student_id',$student->id)->where('teacher_offered_course_id',$teacherOfferedCourseId)->where('date_time',$fixed_date)->first()->status??null,
+                ];
+            } else {
+                $unsortedStudents[] = [
+                    'SeatNumber' => null,
+                    'student_id' => $student->id,
+                    'name' => $student->name,
+                    'RegNo' => $student->RegNo,
+                    'image' => $student->image ? asset($student->image) : null,
+                    'percentage' => $attendanceData['Total']['percentage'],
+                    'attedance_status'=>attendance::where('student_id',$student->id)->where('teacher_offered_course_id',$teacherOfferedCourseId)->where('date_time',$fixed_date)->first()->status??null,
+                ];
+            }
+        }
+        usort($sortedStudents, fn($a, $b) => $a['SeatNumber'] <=> $b['SeatNumber']);
+        $finalList = array_merge($sortedStudents, $unsortedStudents);
+
+        // Determine the list format
+        $listFormat = count($attendanceRecords) > 0 ? 'Sorted' : 'Unsorted';
         return response()->json([
             'success' => true,
             'Course Name' => $teacherOfferedCourse->offeredCourse->course->name,

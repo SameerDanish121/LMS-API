@@ -40,7 +40,13 @@ class JuniorLecturerHandling extends Model
                     'Type' => $item->type
                 ];
             });
-        return $timetable;
+            $groupedByDay = $timetable->groupBy('day')->map(function ($items, $day) {
+                return [
+                    'day' => $day,
+                    'schedule' => $items->toArray()
+                ];
+            });
+        return $groupedByDay;
     }
     public static function getJuniorLecturerCourseGroupedByActivePrevious($juniorLecturerId)
     {

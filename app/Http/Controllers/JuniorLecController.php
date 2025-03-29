@@ -571,14 +571,14 @@ class JuniorLecController extends Controller
     }
     // {
     //     "attendance_records": [
-    //       {
-    //         "student_id": 1,
-    //         "teacher_offered_course_id": 1,
-    //         "status": "p",
-    //         "date_time": "2025-01-12 09:00:00",
-    //         "isLab": true,
-    //         "venue_id": 2
-    //       },
+    //   {
+    //     "student_id": 1,
+    //     "teacher_offered_course_id": 1,
+    //     "status": "p",
+    //     "date_time": "2025-01-12 09:00:00",
+    //     "isLab": true,
+    //     "venue_id": 2
+    //   },
     //       {
     //         "student_id": 2,
     //         "teacher_offered_course_id": 1,
@@ -612,16 +612,29 @@ class JuniorLecController extends Controller
                 if (!$teacherCourse || !$student) {
                     continue;
                 }
-                attendance::updateOrCreate([
-                    'status' => $attendanceData['status'],
-                    'date_time' => $attendanceData['date_time'],
-                    'isLab' => $attendanceData['isLab'],
-                    'student_id' => $attendanceData['student_id'],
-                    'teacher_offered_course_id' => $attendanceData['teacher_offered_course_id'],
-                    'venue_id' => $attendanceData['venue_id'],
-                ]);
+                // attendance::updateOrCreate([
+                //     'status' => $attendanceData['status'],
+                //     'date_time' => $attendanceData['date_time'],
+                //     'isLab' => $attendanceData['isLab'],
+                //     'student_id' => $attendanceData['student_id'],
+                //     'teacher_offered_course_id' => $attendanceData['teacher_offered_course_id'],
+                //     'venue_id' => $attendanceData['venue_id'],
+                // ]);
+                Attendance::updateOrCreate(
+                    [
+                        'date_time' => $attendanceData['date_time'],
+                        'isLab' => $attendanceData['isLab'],
+                        'student_id' => $attendanceData['student_id'],
+                        'teacher_offered_course_id' => $attendanceData['teacher_offered_course_id'],
+                        'venue_id' => $attendanceData['venue_id'],
+                    ],
+                    [
+                        'status' => $attendanceData['status']
+                    ]
+                );
+
             }
-            return response()->json(['message' => 'Attendance records marked successfully'], 201);
+            return response()->json(['message' => 'Attendance records marked successfully'], 200);
         } catch (Exception $e) {
             return response()->json(['message' => 'Error marking attendance', 'error' => $e->getMessage()], 500);
         }
@@ -1010,13 +1023,14 @@ class JuniorLecController extends Controller
                 continue;
             }
             $attendanceRecord = $attendanceMap->get($student->id);
-
+            $attendanceData = attendance::getAttendanceBySubject($teacherOfferedCourseId, $student->id);
             if ($attendanceRecord) {
                 $sortedStudents[] = [
                     'SeatNumber' => $attendanceRecord->SeatNumber,
                     'name' => $student->name,
                     'RegNo' => $student->RegNo,
                     'image' => $student->image ? asset($student->image) : null,
+                    'Percentage' => $attendanceData['Total']['percentage'],
                 ];
             } else {
                 $unsortedStudents[] = [
