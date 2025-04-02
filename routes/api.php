@@ -24,11 +24,19 @@ use App\Http\Controllers\ExtraKhattaController;
 use App\Http\Controllers\AuthenticationController;
 
 
+
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Testing~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 Route::get('/', function () {
     return response()->json(['status' => 'success'], 200);
 });
 Route::post('/test_fcm', [NotificationController::class, 'TestFirebase']);
+Route::get('/current/session',function(){
+    return (new session())->getCurrentSessionWeek()??0;
+});
+
+
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Authentication~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 Route::get('/Login', [StudentsController::class, 'Login']);
 Route::post('/forgot-password', [AuthenticationController::class, 'sendOTP']);
@@ -38,9 +46,6 @@ Route::post('/verify/login', [AuthenticationController::class, 'verifyLoginOTP']
 Route::post('/store-fcmtoken', [NotificationController::class, 'storeFcmToken']);
 Route::get('/remember', [StudentsController::class, 'RememberMe']);
 Route::post('/student/notification', [NotificationController::class, 'SendNotificationToStudent']);
-
-
-
 Route::prefix('Uploading')->group(function () { 
     Route::post('/uplaod/Result', [DatacellModuleController::class, 'UploadExamAwardList']);
     Route::post('/uplaod/Topic', [DatacellModuleController::class, 'UploadCourseContentTopic']);
@@ -232,7 +237,6 @@ Route::prefix('Admin')->group(function () {
     Route::get('/TeacherJLecList', [AdminController::class, 'getAllTeachersWithJuniorLecturers']);
     Route::get('/history', [AdminController::class, 'getGraderHistory']);
 });
-
 Route::prefix('Datacells')->group(function () {
     Route::get('/temporary-enrollments', [TeachersController::class, 'getTemporaryEnrollmentsRequest']);
     Route::post('/process-temporary-enrollments', [TeachersController::class, 'ProcessTemporaryEnrollments']);
@@ -361,8 +365,4 @@ Route::prefix('Un-usable')->group(function () {
     Route::post('/add-session', [AdminController::class, 'addSingleSession']);
     Route::post('/update-admin-image', [AdminController::class, 'updateAdminImage']);
     Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
-});
-
-Route::get('/current/session',function(){
-    return (new session())->getCurrentSessionWeek()??0;
 });
