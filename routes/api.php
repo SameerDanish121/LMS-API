@@ -1,4 +1,5 @@
 <?php
+use App\Http\Controllers\CourseContentContoller;
 use App\Http\Controllers\DatacellsController;
 use App\Http\Controllers\GraderController;
 use App\Http\Controllers\NotificationController;
@@ -320,19 +321,18 @@ Route::prefix('Teachers')->group(function () {
     Route::post('/re-take', [TeachersController::class, 'ReTakeAttendanceWithStatus']);
     Route::post('/attendance/mark-bulk', [JuniorLecController::class, 'markBulkAttendance']);
     Route::post('/attendance-list', [TeachersController::class, 'SortedAttendanceList']);
-
-
-
-
+    Route::get('/venues', [TeachersController::class, 'getAllVenues']);
+    Route::get('classestoday/{teacher_id}', [TeachersController::class, 'getTodayClassesWithAttendanceStatus']);
+    Route::get('/All-courses/{teacher_id}', [TeachersController::class, 'getAllOfferedCourses']);
+    Route::post('/update-teacher-password', [TeachersController::class, 'updateTeacherPassword']);
+    Route::post('/update-teacher-image', [TeachersController::class, 'updateTeacherImage']);
+    Route::post('/update-teacher-email', [TeachersController::class, 'updateTeacherEmail']);
     Route::post('/copy/previousSemesterCourseContent', [TeachersController::class, 'CopySemester']);
     Route::post('/update/course-content-topic-status', [TeachersController::class, 'updateCourseContentTopicStatus']);
     Route::get('/sections/info', [TeachersController::class, 'getSectionList']);
     Route::get('/section-task-result', [TeachersController::class, 'getSectionTaskResult']);
     Route::get('/get-single-student-task-result', [TeachersController::class, 'getSingleStudentTaskResult']);
     Route::get('/section-attendance-list', [TeachersController::class, 'getAttendanceBySubjectForAllStudents']);
-    Route::get('/venues', [TeachersController::class, 'getAllVenues']);
-    Route::get('classestoday/{teacher_id}', [TeachersController::class, 'getTodayClassesWithAttendanceStatus']);
-    Route::get('/All-courses/{teacher_id}', [TeachersController::class, 'getAllOfferedCourses']);
     Route::get('/task/get', [TeachersController::class, 'YourTaskInfo']);
     Route::get('/tasks/unassigned-to-grader', [TeachersController::class, 'UnAssignedTaskToGrader']);
     Route::post('/tasks/assign-grader', [TeachersController::class, 'assignTaskToGrader']);
@@ -346,12 +346,12 @@ Route::prefix('Teachers')->group(function () {
     Route::post('/submit-number-list', [TeachersController::class, 'SubmitNumberList']);
     Route::get('/get-task-submissions', [TeachersController::class, 'getTaskSubmissionList']);
     Route::post('/add-sequence-attendance', [TeachersController::class, 'addAttendanceSeatingPlan']);
-    Route::post('/update-teacher-password', [TeachersController::class, 'updateTeacherPassword']);
-    Route::post('/update-teacher-image', [TeachersController::class, 'updateTeacherImage']);
+   
     Route::get('/get-exam-result', [TeachersController::class, 'getSectionExamList']);
     Route::post('/uplaod/course-content', [DatacellModuleController::class, 'CreateCourseContent']);
-   
-    
+    Route::get('/get_course_content', [CourseContentContoller::class, 'getTeacherCourseContent']);
+    Route::get('/topic', [CourseContentContoller::class, 'GetTopicsDetails']);
+    Route::post('/update-course-content', [CourseContentContoller::class, 'UpdateTopicStatus']);
 });
 Route::prefix('Un-usable')->group(function () {
     Route::get('/load-file', [TeachersController::class, 'LoadFile']);
@@ -363,3 +363,6 @@ Route::prefix('Un-usable')->group(function () {
     Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
 });
 
+Route::get('/current/session',function(){
+    return (new session())->getCurrentSessionWeek()??0;
+});

@@ -2532,10 +2532,10 @@ class TeachersController extends Controller
     {
         try {
             $request->validate([
-                'teacher_id' => 'required|integer',
-                'newPassword' => 'required|string',
+                'teacher_id' => 'required',
+                'password' => 'required',
             ]);
-            if (user::where('password', $request->newPassword)->exists()) {
+            if (user::where('password', $request->password)->exists()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Password is Already Taken by Another User! Please Try a New One'
@@ -2543,9 +2543,10 @@ class TeachersController extends Controller
             }
             $responseMessage = $this->updateTeacherPasswordHelper(
                 $request->teacher_id,
-                $request->newPassword
+                $request->password
             );
             return response()->json([
+                'status'=>'success',
                 'success' => true,
                 'message' => $responseMessage
             ], 200);
@@ -2588,7 +2589,6 @@ class TeachersController extends Controller
             throw new Exception("User not found for the given user ID");
         }
         $user->update(['password' => $newPassword]);
-
         return "Password updated successfully for Teacher: $teacher->name";
     }
     public function SubmitNumberList(Request $request)
@@ -2641,11 +2641,11 @@ class TeachersController extends Controller
         }
     }
 
-    public function updateTeacherImage(Request $request)
+    public function updateTeacherEmail(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'teacher_id' => 'required',
-            'image' => 'required|image',
+            'email' => 'required',
         ]);
 
         if ($validator->fails()) {
@@ -2655,7 +2655,49 @@ class TeachersController extends Controller
                 'errors' => $validator->errors()
             ], 400);
         }
+        try {
+            if (user::where('email', $request->email)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email is Already Taken by Another User! Please Try a New One'
+                ], 401);
+            }
+            $teacher_id = $request->teacher_id;
+            $email = $request->email;
 
+            $teacher = Teacher::find($teacher_id);
+            $user=user::find($teacher->user_id);
+            if (!$teacher) {
+                throw new Exception("Teacher not found");
+            }
+            $user->update(['email' => $email]);
+            return response()->json([
+                'status'=>'success',
+                'success' => true,
+                'message' => "email updated successfully for Teacher: $user->email"
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+    public function updateTeacherImage(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'teacher_id' => 'required',
+            'image' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 400);
+        }
         try {
             $teacher_id = $request->teacher_id;
             $file = $request->file('image');
@@ -2668,8 +2710,12 @@ class TeachersController extends Controller
             $storedFilePath = FileHandler::storeFile($teacher->user_id, $directory, $file);
             $teacher->update(['image' => $storedFilePath]);
             return response()->json([
+                'status'=>'success',
                 'success' => true,
-                'message' => "Image updated successfully for Teacher: $teacher->name"
+                'message' => "Image updated successfully for Teacher: $teacher->name",
+                'data' => [
+                'image_url' => asset($storedFilePath) // Full URL for frontend
+            ]
             ], 200);
 
         } catch (Exception $e) {

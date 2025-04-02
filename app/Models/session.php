@@ -84,7 +84,7 @@ class session extends Model
         // Return the ID of the session with the least days left
         return $upcomingSession ? $upcomingSession['id'] : 0;
     }
-    public static function getCurrentSessionWeek(): ?int
+    public static function getCurrentSessionWeek()
     {
         try {
             $currentSessionId = (new self)->getCurrentSessionId();
