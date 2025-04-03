@@ -22,10 +22,6 @@ use App\Http\Controllers\TeachersController;
 use App\Http\Controllers\StudentsController;
 use App\Http\Controllers\ExtraKhattaController;
 use App\Http\Controllers\AuthenticationController;
-
-
-
-
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Testing~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 Route::get('/', function () {
     return response()->json(['status' => 'success'], 200);
@@ -34,9 +30,6 @@ Route::post('/test_fcm', [NotificationController::class, 'TestFirebase']);
 Route::get('/current/session',function(){
     return (new session())->getCurrentSessionWeek()??0;
 });
-
-
-
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Authentication~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 Route::get('/Login', [StudentsController::class, 'Login']);
 Route::post('/forgot-password', [AuthenticationController::class, 'sendOTP']);
