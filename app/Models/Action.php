@@ -444,6 +444,7 @@ class Action extends Model
             function ($Question) {
                 return [
                     "ID" => $Question->id,
+                    'Points'=>$Question->points,
                     "Question NO" => $Question->question_no,
                     "Question" => $Question->question_text,
                     "Option 1" => $Question->Options[0]->option_text ?? null,

@@ -349,6 +349,14 @@ Route::prefix('Teachers')->group(function () {
     Route::get('/get_course_content', [CourseContentContoller::class, 'getTeacherCourseContent']);
     Route::get('/topic', [CourseContentContoller::class, 'GetTopicsDetails']);
     Route::post('/update-course-content', [CourseContentContoller::class, 'UpdateTopicStatus']);
+    Route::post('/create/course_content', [CourseContentContoller::class, 'AddSingleCourseContent']);
+    Route::get('/active/courses', [CourseContentContoller::class, 'YourCurrentSessionCourses']);
+
+
+    Route::get('/task/un-assigned', [CourseContentContoller::class, 'getTaskDetails']);
+
+    Route::post('/create/task', [CourseContentContoller::class, 'storeTask']);
+    
 });
 Route::prefix('Un-usable')->group(function () {
     Route::get('/load-file', [TeachersController::class, 'LoadFile']);
