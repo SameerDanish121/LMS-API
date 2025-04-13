@@ -62,6 +62,168 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 class TeachersController extends Controller
 {
+       public function updateTaskDetails(Request $request)
+    {
+        try {
+            // Validate request data
+            $request->validate([
+                'task_id' => 'required|integer|exists:task,id',
+                'points' => 'nullable|integer|min:0',
+                'StartDateTime' => 'nullable|date',
+                'EndDateTime' => 'nullable|date|after_or_equal:StartDateTime',
+            ]);
+
+            // Find the task
+            $task = Task::findOrFail($request->task_id);
+
+            // Update fields if provided
+            if ($request->has('points')) {
+                $task->points = $request->points;
+            }
+            if ($request->has('StartDateTime')) {
+                $task->start_date = $request->StartDateTime;
+            }
+            if ($request->has('EndDateTime')) {
+                $task->due_date = $request->EndDateTime;
+            }
+
+            // Save changes
+            $task->save();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Task details updated successfully',
+                'task' => $task
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function deleteTask(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'task_id' => 'required|exists:task,id',
+            ]);
+
+            $taskId = $request->task_id;
+
+            DB::beginTransaction();
+
+            // Step 1: Delete related records from grader_task
+            DB::table('grader_task')->where('Task_id', $taskId)->delete();
+
+            // Step 2: Delete the task from the task table
+            $deleted = DB::table('task')->where('id', $taskId)->delete();
+
+            if ($deleted) {
+                DB::commit(); // Commit transaction
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Task successfully deleted.',
+                ], 200);
+            } else {
+                DB::rollBack(); // Rollback in case deletion fails
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Task not found or already deleted.',
+                ], 404);
+            }
+        } catch (Exception $e) {
+            DB::rollBack(); // Rollback on exception
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function updateTaskEndDateTime(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'task_id' => 'required|exists:task,id',
+                'EndDateTime' => 'required|date_format:Y-m-d H:i:s|after:now',
+            ]);
+
+            $taskId = $request->task_id;
+            $newEndDateTime = $request->EndDateTime;
+
+            // Update the task
+            $updated = DB::table('task')
+                ->where('id', $taskId)
+                ->update(['due_date' => $newEndDateTime]);
+
+            if ($updated) {
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Task EndDateTime updated successfully.',
+                ], 200);
+            } else {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Task not found or EndDateTime is the same.',
+                ], 404);
+            }
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function workloadOfGrader(Request $request)
+    {
+        try {
+            $teacher_id = $request->teacher_id;
+            $currentSessionId = (new Session())->getCurrentSessionId();
+            $teacherGraders = teacher_grader::where('teacher_id', $teacher_id)->get();
+            $activeGraders = [];
+            foreach ($teacherGraders as $teacherGrader) {
+                $grader = grader::find($teacherGrader->grader_id);
+                if ($grader) {
+                    $totalTasksAssigned = grader_task::where('Grader_id', $grader->id)->count();
+                    $graderDetails = [
+                        'teacher_grader_id' => $teacherGrader->id,
+                        'grader_id' => $grader->id,
+                        'RegNo' => $grader->student->RegNo,
+                        'image' => $grader->student->image ? asset($grader->student->image) : null,
+                        'name' => $grader->student->name,
+                        'section' => (new section())->getNameByID($grader->student->section_id),
+                        'status' => $grader->status,
+                        'feedback' => $teacherGrader->feedback,
+                        'type' => $grader->type,
+                        'session' => (new session())->getSessionNameByID($teacherGrader->session_id),
+                        'total_tasks_assigned' => $totalTasksAssigned, // ✅ Custom Attribute
+                    ];
+
+                    if ($teacherGrader->session_id == $currentSessionId) {
+                        $activeGraders[] = $graderDetails;
+                    }
+                }
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'active_graders' => $activeGraders,
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function getTeacherNotifications(Request $request)
     {
         try {
@@ -138,7 +300,7 @@ class TeachersController extends Controller
                 'teacher_grader_id' => 'required',
                 'feedback' => 'nullable|string|max:255' // Allow null to remove feedback
             ]);
-    
+
             $teacherGrader = teacher_grader::find($request->teacher_grader_id);
             if (!$teacherGrader) {
                 return response()->json([
@@ -146,30 +308,30 @@ class TeachersController extends Controller
                     'message' => 'Teacher grader record not found.',
                 ], 404);
             }
-    
+
             // Update or remove feedback
             $teacherGrader->feedback = $request->feedback ?? null; // If feedback is null, remove it
             $teacherGrader->save();
-    
+
             return response()->json([
                 'success' => true,
                 'message' => $request->feedback ? 'Feedback updated successfully.' : 'Feedback removed successfully.',
                 'data' => $teacherGrader,
             ]);
-    
+
         } catch (ValidationException $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Validation failed',
                 'errors' => $e->errors()
             ], 422);
-    
+
         } catch (ModelNotFoundException $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Invalid username or password'
             ], 404);
-    
+
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -178,7 +340,7 @@ class TeachersController extends Controller
             ], 500);
         }
     }
-    
+
     public function CopySemester(Request $request)
     {
         try {
@@ -305,7 +467,7 @@ class TeachersController extends Controller
             return response()->json(['error' => 'An unexpected error occurred: ' . $e->getMessage()], 500);
         }
     }
-    public function updateCourseContentTopicStatus(Request $request)
+    public function updateCourseContentTopicStatus(Request $request): mixed
     {
         try {
             $validated = $request->validate([
@@ -1129,7 +1291,7 @@ class TeachersController extends Controller
             $customData = $contents->map(function ($item) {
                 return [
                     'Message' => 'The Attendance with Following Info is Contested By Student !',
-                    'Image'=>student::find($item->attendance->student_id)->image ? asset(student::find($item->attendance->student_id)->image) : null,
+                    'Image' => student::find($item->attendance->student_id)->image ? asset(student::find($item->attendance->student_id)->image) : null,
                     'Student Name' => student::find($item->attendance->student_id)->name ?? 'N/A',
                     'Student Reg NO' => student::find($item->attendance->student_id)->RegNo ?? 'N/A',
                     'Date & Time' => $item->attendance->date_time,
@@ -1397,32 +1559,77 @@ class TeachersController extends Controller
                     $Assigned = "No";
                     $message = "No Grader For this Task is Allocated By You";
                 }
-                $taskInfo = [
-                    'task_id' => $task->id,
-                    'Section' => $task->teacherOfferedCourse->section->program . '-' . $task->teacherOfferedCourse->section->semester . $task->teacherOfferedCourse->section->group,
-                    'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
-                    'title' => $task->title,
-                    'type' => $task->type,
-                    ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
-                        ? Action::getMCQS($task->courseContent->id)
-                        : asset($task->courseContent->content),
-                    'created_by' => $task->CreatedBy,
-                    'points' => $task->points,
-                    'start_date' => $task->start_date,
-                    'due_date' => $task->due_date,
-                    'marking_status' => $task->isMarked ? 'Marked' : 'Un-Marked',
-                    'marking_info' => $markingInfo ?? 'Not-Marked',
-                    'Is Allocated To Grader' => $Assigned,
-                    'Grader Info For this Task' => $message
-                ];
-                if ($task->isMarked) {
-                    $completedTasks[] = $taskInfo;
-                } elseif ($startDate > $currentDate) {
-                    $upcomingTasks[] = $taskInfo;
-                } elseif ($startDate <= $currentDate && $dueDate >= $currentDate) {
-                    $ongoingTasks[] = $taskInfo;
-                } elseif ($dueDate < $currentDate && !$task->isMarked) {
-                    $unMarkedTasks[] = $taskInfo;
+                if ($task->isMarked || ($dueDate < $currentDate && $task->courseContent->content == 'MCQS')) {
+                    $completedTasks[] = [
+                        'task_id' => $task->id,
+                        'Section' => $task->teacherOfferedCourse->section->program . '-' . $task->teacherOfferedCourse->section->semester . $task->teacherOfferedCourse->section->group,
+                        'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
+                        'title' => $task->title,
+                        'type' => ($task->courseContent->content == 'MCQS') ? 'MCQS' : $task->type,
+                        ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
+                            ? Action::getMCQS($task->courseContent->id)
+                            : asset($task->courseContent->content),
+                        'points' => $task->points,
+                        'start_date' => $task->start_date,
+                        'due_date' => $task->due_date,
+                        'marking_status' => $task->isMarked ? 'Marked' : 'Un-Marked',
+                        'marking_info' => $markingInfo ?? null,
+                        'Is Allocated To Grader' => $Assigned,
+                        'Grader Info For this Task' => $message
+                    ];
+                } else if ($startDate > $currentDate) {
+                    $upcomingTasks[] = [
+                        'task_id' => $task->id,
+                        'Section' => $task->teacherOfferedCourse->section->program . '-' . $task->teacherOfferedCourse->section->semester . $task->teacherOfferedCourse->section->group,
+                        'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
+                        'title' => $task->title,
+                        'type' => ($task->courseContent->content == 'MCQS') ? 'MCQS' : $task->type,
+                        ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
+                            ? Action::getMCQS($task->courseContent->id)
+                            : asset($task->courseContent->content),
+                        'points' => $task->points,
+                        'start_date' => $task->start_date,
+                        'due_date' => $task->due_date,
+                        'marking_info' => $markingInfo ?? 'Not-Marked',
+                        'Is Allocated To Grader' => $Assigned,
+                        'Grader Info For this Task' => $message
+                    ];
+                    ;
+                } else if ($startDate <= $currentDate && $dueDate >= $currentDate) {
+                    $ongoingTasks[] = [
+                        'task_id' => $task->id,
+                        'Section' => $task->teacherOfferedCourse->section->program . '-' . $task->teacherOfferedCourse->section->semester . $task->teacherOfferedCourse->section->group,
+                        'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
+                        'title' => $task->title,
+                        'type' => ($task->courseContent->content == 'MCQS') ? 'MCQS' : $task->type,
+                        ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
+                            ? Action::getMCQS($task->courseContent->id)
+                            : asset($task->courseContent->content),
+                        'created_by' => $task->CreatedBy,
+                        'points' => $task->points,
+                        'start_date' => $task->start_date,
+                        'due_date' => $task->due_date,
+                        'marking_status' => $task->isMarked ? 'Marked' : 'Un-Marked',
+                        'Is Allocated To Grader' => $Assigned,
+                        'Grader Info For this Task' => $message
+                    ];
+                } else if ($dueDate < $currentDate && !$task->isMarked) {
+                    $unMarkedTasks[] = [
+                        'task_id' => $task->id,
+                        'Section' => $task->teacherOfferedCourse->section->program . '-' . $task->teacherOfferedCourse->section->semester . $task->teacherOfferedCourse->section->group,
+                        'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
+                        'title' => $task->title,
+                        'type' => ($task->courseContent->content == 'MCQS') ? 'MCQS' : $task->type,
+                        ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
+                            ? Action::getMCQS($task->courseContent->id)
+                            : asset($task->courseContent->content),
+                        'points' => $task->points,
+                        'start_date' => $task->start_date,
+                        'due_date' => $task->due_date,
+                        'marking_status' => $task->isMarked ? 'Marked' : 'Un-Marked',
+                        'Is Allocated To Grader' => $Assigned,
+                        'Grader Info For this Task' => $message
+                    ];
                 }
             }
             return [
@@ -1517,19 +1724,31 @@ class TeachersController extends Controller
                 'task_id' => 'required|exists:task,id',
                 'grader_id' => 'required|exists:grader,id',
             ]);
-            $existingAssignment = grader_task::where('Task_id', $request->task_id)
-                ->where('Grader_id', $request->grader_id)
-                ->first();
+
+            // Check if task is already assigned
+            $existingAssignment = grader_task::where('Task_id', $request->task_id)->first();
+
             if ($existingAssignment) {
+                // ✅ Correct way to update without 'id'
+                grader_task::where('Task_id', $request->task_id)
+                    ->update(['Grader_id' => $request->grader_id]);
+
                 return response()->json([
-                    'status' => 'error',
-                    'message' => 'This task is already assigned to the selected grader.',
-                ], 400);
+                    'status' => 'success',
+                    'message' => 'Task assignment updated successfully.',
+                    'data' => [
+                        'task_id' => $request->task_id,
+                        'grader_id' => $request->grader_id,
+                    ],
+                ], 200);
             }
+
+            // If task is not assigned, create a new entry
             $graderTask = grader_task::create([
                 'Task_id' => $request->task_id,
                 'Grader_id' => $request->grader_id,
             ]);
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Task successfully assigned to the grader.',
@@ -1544,6 +1763,7 @@ class TeachersController extends Controller
             ], 500);
         }
     }
+
     public function getAssignedGraders(Request $request)
     {
         try {
@@ -1564,8 +1784,8 @@ class TeachersController extends Controller
                         'section' => (new section())->getNameByID($grader->student->section_id),
                         'status' => $grader->status,
                         'feedback' => $teacherGrader->feedback,
-                        'type'=>$grader->type,
-                        'session'=>(new session())->getSessionNameByID($teacherGrader->session_id),
+                        'type' => $grader->type,
+                        'session' => (new session())->getSessionNameByID($teacherGrader->session_id),
                     ];
                     if ($teacherGrader->session_id == $currentSessionId) {
                         $activeGraders[] = $graderDetails;
@@ -2193,7 +2413,7 @@ class TeachersController extends Controller
                 $course = $offeredCourse->course;
                 $session = $offeredCourse->session;
                 $program = $course->program;
-                $enrollmentsCount=student_offered_courses::where('offered_course_id',$offeredCourse->id)->where('section_id', $assignment->section->id)->count();
+                $enrollmentsCount = student_offered_courses::where('offered_course_id', $offeredCourse->id)->where('section_id', $assignment->section->id)->count();
                 $courseDetails = [
                     'course_name' => $course->name,
                     'course_code' => $course->code,
@@ -2204,9 +2424,9 @@ class TeachersController extends Controller
                     'prerequisite' => $course->pre_req_main ? $course->pre_req_main : 'Main',
                     'section_name' => $assignment->section ? (new section())->getNameByID($assignment->section->id) : 'Unknown',
                     'session_name' => $session ? $session->name . '-' . $session->year : 'Unknown',
-                    'total_enrollments'=>$enrollmentsCount,
+                    'total_enrollments' => $enrollmentsCount,
                     'program_name' => $program ? $program->name : 'N/A',
-                    'offered_course_id'=>$offeredCourse->id,
+                    'offered_course_id' => $offeredCourse->id,
                     'teacher_offered_course_id' => $assignment->id,
                 ];
                 if ($course->lab) {
@@ -2419,7 +2639,7 @@ class TeachersController extends Controller
             'venue_name' => 'nullable',
             'fixed_date' => 'required',
         ]);
-        $fixed_date=$validated['fixed_date'];
+        $fixed_date = $validated['fixed_date'];
         if ($request->has('venue_name')) {
             $type = str_contains(strtolower($validated['venue_name']), 'lab') ? 'Lab' : 'Class';
         } else {
@@ -2469,7 +2689,7 @@ class TeachersController extends Controller
                     'RegNo' => $student->RegNo,
                     'image' => $student->image ? asset($student->image) : null,
                     'percentage' => $attendanceData['Total']['percentage'],
-                    'attedance_status'=>attendance::where('student_id',$student->id)->where('teacher_offered_course_id',$teacherOfferedCourseId)->where('date_time',$fixed_date)->first()->status??null,
+                    'attedance_status' => attendance::where('student_id', $student->id)->where('teacher_offered_course_id', $teacherOfferedCourseId)->where('date_time', $fixed_date)->first()->status ?? null,
                 ];
             } else {
                 $unsortedStudents[] = [
@@ -2479,7 +2699,7 @@ class TeachersController extends Controller
                     'RegNo' => $student->RegNo,
                     'image' => $student->image ? asset($student->image) : null,
                     'percentage' => $attendanceData['Total']['percentage'],
-                    'attedance_status'=>attendance::where('student_id',$student->id)->where('teacher_offered_course_id',$teacherOfferedCourseId)->where('date_time',$fixed_date)->first()->status??null,
+                    'attedance_status' => attendance::where('student_id', $student->id)->where('teacher_offered_course_id', $teacherOfferedCourseId)->where('date_time', $fixed_date)->first()->status ?? null,
                 ];
             }
         }
@@ -2546,7 +2766,7 @@ class TeachersController extends Controller
                 $request->password
             );
             return response()->json([
-                'status'=>'success',
+                'status' => 'success',
                 'success' => true,
                 'message' => $responseMessage
             ], 200);
@@ -2666,13 +2886,13 @@ class TeachersController extends Controller
             $email = $request->email;
 
             $teacher = Teacher::find($teacher_id);
-            $user=user::find($teacher->user_id);
+            $user = user::find($teacher->user_id);
             if (!$teacher) {
                 throw new Exception("Teacher not found");
             }
             $user->update(['email' => $email]);
             return response()->json([
-                'status'=>'success',
+                'status' => 'success',
                 'success' => true,
                 'message' => "email updated successfully for Teacher: $user->email"
             ], 200);
@@ -2704,18 +2924,25 @@ class TeachersController extends Controller
 
             $teacher = Teacher::find($teacher_id);
             if (!$teacher) {
-                throw new Exception("Teacher not found");
+               $teacher=juniorLecturer::find($teacher_id);
+               if (!$teacher) {
+                    throw new Exception("Teacher not found");
+                }else{
+                    $directory = 'Images/JuniorLecturer';
+                }
+            }else{
+                $directory = 'Images/Teacher';
             }
-            $directory = 'Images/Teacher';
+           
             $storedFilePath = FileHandler::storeFile($teacher->user_id, $directory, $file);
             $teacher->update(['image' => $storedFilePath]);
             return response()->json([
-                'status'=>'success',
+                'status' => 'success',
                 'success' => true,
                 'message' => "Image updated successfully for Teacher: $teacher->name",
                 'data' => [
-                'image_url' => asset($storedFilePath) // Full URL for frontend
-            ]
+                    'image_url' => asset($storedFilePath) // Full URL for frontend
+                ]
             ], 200);
 
         } catch (Exception $e) {

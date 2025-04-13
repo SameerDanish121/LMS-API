@@ -2,11 +2,15 @@
 
 namespace App\Models;
 
+use Exception;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Request;
 
 class task extends Model
 {
-    protected $table = 'task';    protected $primaryKey = 'id';
+    protected $table = 'task';
+    protected $primaryKey = 'id';
     public $incrementing = true;
     protected $keyType = 'int';
     public $timestamps = false;
@@ -59,12 +63,14 @@ class task extends Model
 
             if ($task) {
                 $task->isMarked = true;
-                return $task->save(); 
+                return $task->save();
             }
             return false;
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             // Handle any errors and return false
             return false;
         }
     }
+  
+
 }

@@ -29,15 +29,15 @@ class JuniorLecturerHandling extends Model
             ->get()
             ->map(function ($item) {
                 return [
-                    'coursename' => $item->course->name ?? 'N/A',
-                    'description' => $item->course->description ?? 'N/A',
+                    'day' => $item->dayslot->day,
+                    'coursename' => $item->course->name,
+                    'description' => $item->course->description,
+                    'teachername' => $item->teacher->name ?? 'N/A',
+                    'juniorlecturername' => $item->juniorLecturer->name ?? 'N/A',
                     'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
-                    'Teacher' => $item->teacher ? $item->teacher->name : 'N/A',
-                    'venue' => $item->venue->venue ?? 'N/A',
-                    'day' => $item->dayslot->day ?? 'N/A',
+                    'venue' => $item->venue->venue,
                     'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
                     'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
-                    'Type' => $item->type
                 ];
             });
             $groupedByDay = $timetable->groupBy('day')->map(function ($items, $day) {
@@ -46,7 +46,14 @@ class JuniorLecturerHandling extends Model
                     'schedule' => $items->toArray()
                 ];
             });
-        return $groupedByDay;
+            $groupedByDay = $timetable->groupBy('day')->map(function ($items, $day) {
+                return [
+                    'day' => $day,
+                    'schedule' => $items->toArray()
+                ];
+            });
+    
+            return $groupedByDay->values()->toArray();
     }
     public static function getJuniorLecturerCourseGroupedByActivePrevious($juniorLecturerId)
     {
@@ -63,7 +70,6 @@ class JuniorLecturerHandling extends Model
                     'teacherOfferedCourse.offeredCourse.course.program',
                 ])
                 ->get();
-    
             $activeCourses = [];
             $previousCourses = [];
             foreach ($assignments as $assignment) {

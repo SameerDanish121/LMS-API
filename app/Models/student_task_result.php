@@ -30,24 +30,24 @@ class student_task_result extends Model
     {
         $student = Student::where('RegNo', $student_RegNo)->first();
         if ($student) {
-          $result = self::where('Task_id', $task_id)
+            $result = self::where('Task_id', $task_id)
                 ->where('Student_id', $student->id)
                 ->first();
+    
             if ($result) {
-                self::where('Task_id', $task_id)
-                ->where('Student_id', $student->id)
-                ->update([
-                    'ObtainedMarks'=>$obtainedMarks
-                ]);
+                $result->update(['ObtainedMarks' => $obtainedMarks]);
             } else {
-                self::create([
+                $result = self::create([
                     'ObtainedMarks' => $obtainedMarks,
                     'Task_id' => $task_id,
                     'Student_id' => $student->id
                 ]);
             }
-
-            return $result ?: self::where('Task_id', $task_id)->where('Student_id', $student->id)->first();
+    
+            return $result;
         }
+    
+        return null; // Return null if student not found
     }
+    
 }

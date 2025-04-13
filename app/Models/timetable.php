@@ -127,7 +127,7 @@ class timetable extends Model
         ])
 
             ->whereHas('dayslot', function ($query) use ($today) {
-                $query->where('day', $today);
+                $query->where('day', 'Tuesday');
             })
             ->where('teacher_id', $teacher_id)
             ->where('session_id', (new session())->getCurrentSessionId())
@@ -148,7 +148,7 @@ class timetable extends Model
                 $time = Carbon::createFromFormat('H:i:s', $item['start_time']);
                 return $time->hour < 7 ? $time->hour + 12 : $time->hour;
             })
-            ->values(); ;
+            ->values();
         return $timetable;
     }
     public static function getFullTimetableBySectionId($section_id = null)
@@ -290,6 +290,7 @@ class timetable extends Model
             'venue:id,venue',
             'dayslot:id,day,start_time,end_time',
             'juniorLecturer:id,name',
+            'section'
         ])
             ->where('session_id', $currentSessionId)
             ->whereHas('dayslot', function ($query) use ($day) {
@@ -305,14 +306,19 @@ class timetable extends Model
                     'coursename' => $item->course->name,
                     'description' => $item->course->description,
                     'teachername' => $item->teacher->name ?? 'N/A',
+                    'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
                     'juniorlecturer' => $item->course->lab ? ($item->juniorLecturer->name ?? 'N/A') : null,
                     'venue' => $item->venue->venue,
                     'day' => $item->dayslot->day,
                     'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
                     'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
                 ];
-            });
-
+            })->sortBy(function ($item) {
+                // Convert start_time to a sortable format
+                $time = Carbon::createFromFormat('H:i:s', $item['start_time']);
+                return $time->hour < 7 ? $time->hour + 12 : $time->hour;
+            })
+            ->values();
         return $timetable;
     }
     public static function getFullTimetableOfEnrollmentsByStudentId($student_id)

@@ -1,71 +1,839 @@
 <?php
 
 namespace App\Http\Controllers;
-use App\Models\Action;
-use Illuminate\Support\Facades\Validator;
-use App\Models\Attendance_Sheet_Sequence;
-use App\Models\contested_attendance;
-use App\Models\coursecontent;
-use App\Models\coursecontent_topic;
-use App\Models\dayslot;
-use App\Models\exam;
-use App\Models\excluded_days;
-use App\Models\FileHandler;
-use App\Models\grader;
-use App\Models\juniorlecturer;
-use App\Models\notification;
-use App\Models\program;
-use App\Models\question;
-use App\Models\quiz_questions;
-use App\Models\role;
-use App\Models\student_exam_result;
-
-use App\Models\attendance;
-use App\Models\Course;
-
-use App\Models\JuniorLecturerHandling;
-use App\Models\offered_courses;
-use App\Models\section;
-use App\Models\session;
-use App\Models\student;
-use App\Models\student_task_result;
-use App\Models\task;
-use App\Models\teacher_offered_courses;
-use App\Models\temp_enroll;
-use App\Models\timetable;
-use Illuminate\Http\Request;
+use App\Models\datacell;
+use App\Models\grader_task;
+use DateTime;
 use Exception;
+use App\Models;
 use Carbon\Carbon;
-use App\Models\StudentManagement;
-use App\Models\t_coursecontent_topic_status;
-use App\Models\teacher;
-use App\Models\teacher_grader;
-use App\Models\teacher_juniorlecturer;
+use App\Models\exam;
+use App\Models\role;
+use App\Models\task;
+use App\Models\User;
+use App\Models\admin;
 use App\Models\topic;
 use App\Models\venue;
+use App\Models\Action;
+use App\Models\Course;
+use App\Models\grader;
+use App\Models\dayslot;
+use App\Models\program;
+use App\Models\section;
+use App\Models\session;
+
+use App\Models\student;
+use App\Models\teacher;
+
+use App\Models\question;
+use App\Models\timetable;
+use Laravel\Pail\Options;
+use App\Models\attendance;
+use App\Models\FileHandler;
+use App\Models\temp_enroll;
+use App\Models\notification;
+use Illuminate\Http\Request;
+use App\Models\coursecontent;
+use App\Models\excluded_days;
+use App\Models\sessionresult;
+use App\Models\juniorlecturer;
+use App\Models\quiz_questions;
+use App\Models\teacher_grader;
+use App\Models\offered_courses;
+use App\Models\StudentManagement;
+use Illuminate\Support\Facades\DB;
+use App\Models\coursecontent_topic;
+use App\Models\student_exam_result;
+use App\Models\student_task_result;
+
+use App\Models\contested_attendance;
+use App\Models\JuniorLecturerHandling;
+use App\Models\teacher_juniorlecturer;
 
 use GrahamCampbell\ResultType\Success;
-use Laravel\Pail\Options;
-use PhpOffice\PhpSpreadsheet\IOFactory;
-
-use App\Models\sessionresult;
 
 use App\Models\student_offered_courses;
 
 use App\Models\student_task_submission;
 
-use App\Models\User;
-use DateTime;
-use App\Models;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Validation\ValidationException;
-
-use Illuminate\Support\Facades\DB;
+use App\Models\teacher_offered_courses;
 use function PHPUnit\Framework\isEmpty;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use App\Models\Attendance_Sheet_Sequence;
+use Illuminate\Support\Facades\Validator;
+
+use App\Models\t_coursecontent_topic_status;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 
 class JuniorLecController extends Controller
 {
+    public function YourCurrentSessionCourses(Request $request)
+    {
+        try {
+            $teacher_id = $request->teacher_id;
+            $ActiveCourses = self::getActiveCoursesForJunior($teacher_id);
+            $uniqueCourses = collect($ActiveCourses)->unique('offered_course_id')->values()->all();
+            $courses = [];
+            foreach ($uniqueCourses as $course) {
+                $courseId = $course['offered_course_id'];
+                $coursename = $course['course_name'];
+                $courselab = $course['course_lab'];
+                $AllSection = collect($ActiveCourses)->where('offered_course_id', $courseId)->toArray();
+                $courses[] = [
+                    'offered_course_id' => $courseId,
+                    'course_name' => $coursename,
+                    'course_of_lab' => $courselab,
+                    'sections' => $AllSection
+
+                ];
+            }
+            return response()->json([
+                'status' => 'success',
+                'courses' => $courses,
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function storeTask(Request $request)
+    {
+        try {
+            $validatedData = $request->validate([
+                'coursecontent_id' => 'required|exists:coursecontent,id',
+                'points' => 'required|numeric|min:0',
+                'start_date' => 'required|date_format:Y-m-d H:i:s',
+                'due_date' => 'required|date_format:Y-m-d H:i:s|after:start_date',
+                'teacher_offered_course_id' => 'required|exists:teacher_offered_courses,id'
+            ]);
+    
+            $teacher_offered_course_id = $validatedData['teacher_offered_course_id'];
+            $points = $validatedData['points'];
+            $startDate = $validatedData['start_date'];
+            $dueDate = $validatedData['due_date'];
+            $coursecontent_id = $validatedData['coursecontent_id'];
+    
+            // Fetch course content type and title
+            $course_content = CourseContent::findOrFail($coursecontent_id);
+            $type = $course_content->type;
+            $title = $course_content->title;
+    
+            // Generate unique task title
+            $taskNo = Action::getTaskCount($teacher_offered_course_id, $type);
+            $taskNo = ($taskNo > 0 && $taskNo < 10) ? "0" . $taskNo : $taskNo;
+            $filename = $title . '-' . $type . $taskNo;
+            
+            $taskData = [
+                'title' => $filename,
+                'type' => $type,
+                'CreatedBy' => 'Junior Lecturer',
+                'points' => $points,
+                'start_date' => $startDate,
+                'due_date' => $dueDate,
+                'coursecontent_id' => $coursecontent_id,
+                'teacher_offered_course_id' => $teacher_offered_course_id
+            ];
+    
+            // Check if a task with the same teacher_offered_course_id & coursecontent_id exists
+            $task = Task::where('teacher_offered_course_id', $teacher_offered_course_id)
+                ->where('coursecontent_id', $coursecontent_id)
+                ->first();
+    
+            if ($task) {
+                $task->update($taskData);
+                $response = ['status' => 'Task Already Allocated! Updated Successfully', 'task' => $task];
+            } else {
+                $task = Task::create($taskData);
+                $response = ['status' => 'Task Allocated Successfully', 'task' => $task];
+            }
+    
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Task processed successfully.',
+                'data' => $response
+            ], 200);
+    
+        } catch (ValidationException $e) {
+            // Convert errors array to a single string message
+            $errorMessage = implode(' ', array_map(function ($error) {
+                return implode(' ', $error);
+            }, $e->errors()));
+    
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed.',
+                'error' => $errorMessage, // Single string error
+            ], 422);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+    public static function getActiveCoursesForJunior($teacher_id)
+    {
+        try {
+
+            $currentSessionId = (new session())->getCurrentSessionId();
+            $assignments = teacher_offered_courses::where('teacher_id', $teacher_id)
+                ->with(['offeredCourse.course', 'section'])
+                ->get();
+                $assignments = teacher_offered_courses::whereHas('teacherJuniorLecturer', function ($query) use ($teacher_id) {
+                    $query->where('juniorlecturer_id', $teacher_id);
+                })
+                ->with([
+                    'offeredCourse.course',
+                    'offeredCourse.session',
+                    'section',
+                    'teacher',
+                    'offeredCourse.course.program'
+                ])
+                ->get();
+            $activeCourses = [];
+            foreach ($assignments as $assignment) {
+                $offeredCourse = $assignment->offeredCourse;
+                if (!$offeredCourse) {
+                    continue;
+                }
+                $sessionId = $offeredCourse->session_id;
+                if ($sessionId == $currentSessionId) {
+                    $activeCourses[] = [
+                        'course_name' => $offeredCourse->course->name,
+                        'offered_course_id' => $offeredCourse->id,
+                        'teacher_offered_course_id' => $assignment->id,
+                        'course_lab' => $offeredCourse->course->lab == 1 ? 'Yes' : 'No',
+                        'section_name' => $assignment->section->getNameByID($assignment->section_id),
+                        'course_id' => $offeredCourse->course->id,
+                    ];
+                }
+            }
+            return $activeCourses;
+        } catch (Exception $ex) {
+            return [
+            ];
+        }
+    }
+    public static function getCourseContentWithTopics($offered_course_id)
+    {
+        $courseContents = coursecontent::where('offered_course_id', $offered_course_id)->get();
+        $result = [];
+        foreach ($courseContents as $courseContent) {
+            $week = (int) $courseContent->week;
+            if (!isset($result[$week])) {
+                $result[$week] = [];
+            }
+            if ($courseContent->type === 'Notes') {
+                $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
+                $topics = [];
+
+                foreach ($courseContentTopics as $courseContentTopic) {
+                    $topic = topic::find($courseContentTopic->topic_id);
+                    if ($topic) {
+                        $topics[] = [
+                            'topic_id' => $topic->id,
+                            'topic_name' => $topic->title,
+                        ];
+                    }
+                }
+
+                $result[$week][] = [
+                    'course_content_id' => $courseContent->id,
+                    'title' => $courseContent->title,
+                    'type' => $courseContent->type,
+                    'week' => $courseContent->week,
+                    'File' => $courseContent->content ? asset($courseContent->content) : null,
+                    'topics' => $topics,
+                ];
+            } else {
+                $result[$week][] = [
+                    'course_content_id' => $courseContent->id,
+                    'title' => $courseContent->title,
+                    'type' => $courseContent->type,
+                    'week' => $courseContent->week,
+                    $courseContent->type == 'MCQS' ? 'MCQS' : 'File' => $courseContent->content == 'MCQS'
+                        ? Action::getMCQS($courseContent->id)
+                        : ($courseContent->content ? asset($courseContent->content) : null)
+                ];
+            }
+        }
+        ksort($result);
+        return $result;
+    }
+    public function getTeacherCourseContent(Request $request)
+    {
+        try {
+            $teacher_id = $request->teacher_id;
+            $ActiveCourses = self::getActiveCoursesForJunior($teacher_id);
+            $uniqueCourses = collect($ActiveCourses)->unique('offered_course_id')->values()->all();
+            $courseContents = [];
+            foreach ($uniqueCourses as $course) {
+                $courseId = $course['offered_course_id'];
+                $coursename = $course['course_name'];
+                $AllSection = collect($ActiveCourses)->where('offered_course_id', $courseId)->toArray();
+                $courseContent = self::getCourseContentWithTopics($courseId);
+                $courseContents[] = [
+                    'offered_course_id' => $courseId,
+                    'sections' => $AllSection,
+                    'course_name' => $coursename,
+                    'course_content' => $courseContent,
+                ];
+            }
+            $courseContents = collect($courseContents)->groupBy('offered_course_id')->toArray();
+            return response()->json([
+                'status' => true,
+                'course_contents' => $courseContents,
+            ], 200);
+        } catch (Exception $ex) {
+            return response()->json(['error' => 'An error occurred while fetching course content.'], 500);
+        }
+    }
+    public function getTaskDetails(Request $request)
+    {
+        try {
+            $teacher_id = $request->teacher_id;
+            $ActiveCourses = self::getActiveCoursesForJunior($teacher_id);
+            $uniqueCourses = collect($ActiveCourses)->unique('offered_course_id')->values()->all();
+            $courseContents = [];
+            foreach ($uniqueCourses as $course) {
+                $courseId = $course['offered_course_id'];
+                $coursename = $course['course_name'];
+                $course_lab=$course['course_lab'];
+                $AllSection = collect($ActiveCourses)->where('offered_course_id', $courseId)->toArray();
+                $AllTeacherOfferedCourseIds = collect($AllSection)->pluck('teacher_offered_course_id')->toArray();
+                $courseContents[] = [
+                    'offered_course_id' => $courseId,
+                    'course_name' => $coursename,
+                    'course_lab'=>$course_lab,
+                    'sections' => $AllSection,
+                    'task_details' => self::TaskDetailsOfASubject($courseId,$AllTeacherOfferedCourseIds)
+                ];
+            }
+            $courseContents = collect($courseContents)->groupBy('offered_course_id')->toArray();
+            return response()->json([
+                'status' => true,
+                'data' => $courseContents,
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+
+    }
+    public static function TaskDetailsOfASubject($offered_course_id, $All_teacher_offered_course_ids)
+    {
+        $details = [];
+        try {
+            $task_all = coursecontent::where('offered_course_id', $offered_course_id)
+                ->whereIn('type', ['Assignment', 'LabTask', 'Quiz'])
+                ->get();
+            $task_with_data = $task_all->map(function ($task) use ($All_teacher_offered_course_ids) {
+                if ($task->content == null) {
+                    $type = $task->type;
+                    $content = null;
+                } elseif ($task->content == 'MCQS') {
+                    $type = 'Quiz ( MCQS )';
+                    $content = Action::getMCQS($task->id);
+                } else {
+                    $type = $task->type;
+                    $content = asset($task->content);
+                }
+    
+                $unassigned_to = [];
+                $assigned_to=[];
+                foreach ($All_teacher_offered_course_ids as $teacher_offered_course_id) {
+                  
+                    $section=(new section())->getNameByID(  teacher_offered_courses::find($teacher_offered_course_id)->section_id);
+                    if(!(task::where('coursecontent_id',$task->id)->where('teacher_offered_course_id',$teacher_offered_course_id)->exists() )){
+                        $unassigned_to[]=['teacher_offered_course_id'=> $teacher_offered_course_id,
+                          'section_name'=>$section];
+                    }else{
+                    $assigned_to[]=['teacher_offered_course_id'=> $teacher_offered_course_id,
+                          'section_name'=>$section];
+                    }
+                }
+                return [
+                    'id' => $task->id,
+                    'type' => $type,
+                    'title' => $task->title,
+                    'week'=>$task->week,
+                    'content' => $content,
+                    'un_assigned_to' => $unassigned_to,
+                    'assigned_to'=>$assigned_to
+                ];
+            });
+            $data=collect($task_with_data)->groupBy('week')->toArray();
+             ksort($data);
+            return $data;
+        } catch (ValidationException $e) {
+            return [];
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+    private static function getMarkingInfo($taskId)
+    {
+        $marks = student_task_result::where('Task_id', $taskId)
+            ->join('student', 'student.id', '=', 'student_task_result.Student_id')
+            ->select('student_task_result.ObtainedMarks as obtained_marks', 'student.name as student_name')
+            ->orderBy('obtained_marks', 'desc')
+            ->get();
+        if ($marks->isEmpty()) {
+            return null;
+        }
+        $topMark = $marks->first();
+        $worstMark = $marks->last();
+        $averageMarks = $marks->avg('obtained_marks');
+
+        return [
+            'top' => [
+                'student_name' => $topMark->student_name,
+                'obtained_marks' => $topMark->obtained_marks,
+                'title' => 'Good',
+            ],
+            'average' => [
+                'student_name' => $topMark->student_name,
+                'obtained_marks' => round($averageMarks, 2),  // Average marks rounded to 2 decimals
+                'title' => 'Average',
+            ],
+            'worst' => [
+                'student_name' => $worstMark->student_name,
+                'obtained_marks' => $worstMark->obtained_marks,
+                'title' => 'Worst',
+            ],
+        ];
+    }
+    public static function categorizeTasksForJunior(int $teacher_id)
+    {
+        try {
+            $activeCourses = self::getActiveCoursesForJunior($teacher_id);
+            $teacherOfferedCourseIds = collect($activeCourses)->pluck('teacher_offered_course_id');
+            $tasks = task::with(['courseContent', 'teacherOfferedCourse.section', 'teacherOfferedCourse.offeredCourse.course'])->whereIn('teacher_offered_course_id', $teacherOfferedCourseIds)
+                ->where('CreatedBy', 'Junior Lecturer')
+                ->get();
+            $completedTasks = [];
+            $upcomingTasks = [];
+            $ongoingTasks = [];
+            $unMarkedTasks = [];
+            foreach ($tasks as $task) {
+                $currentDate = Carbon::now();
+                $startDate = Carbon::parse($task->start_date);
+                $dueDate = Carbon::parse($task->due_date);
+                $markingInfo = null;
+                if ($task->isMarked) {
+                    $markingInfo = self::getMarkingInfo($task->id);
+                }
+                $graderTask = grader_task::where('task_id', $task->id)->with(['grader.student'])->first();
+                if ($graderTask) {
+                    $Assigned = "Yes";
+                    $message = "You Assigned This Task to Grader {$graderTask->grader->student->name}/({$graderTask->grader->student->RegNo}) For Evaluation !";
+                } else {
+                    $Assigned = "No";
+                    $message = "No Grader For this Task is Allocated By You";
+                }
+                if ($task->isMarked || ($dueDate < $currentDate && $task->courseContent->content == 'MCQS')) {
+                    $completedTasks[] = [
+                        'task_id' => $task->id,
+                        'Section' => $task->teacherOfferedCourse->section->program . '-' . $task->teacherOfferedCourse->section->semester . $task->teacherOfferedCourse->section->group,
+                        'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
+                        'title' => $task->title,
+                        'type' => ($task->courseContent->content == 'MCQS') ? 'MCQS' : $task->type,
+                        ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
+                            ? Action::getMCQS($task->courseContent->id)
+                            : asset($task->courseContent->content),
+                        'points' => $task->points,
+                        'start_date' => $task->start_date,
+                        'due_date' => $task->due_date,
+                        'marking_status' => $task->isMarked ? 'Marked' : 'Un-Marked',
+                        'marking_info' => $markingInfo ?? null,
+                        'Is Allocated To Grader' => $Assigned,
+                        'Grader Info For this Task' => $message
+                    ];
+                } else if ($startDate > $currentDate) {
+                    $upcomingTasks[] = [
+                        'task_id' => $task->id,
+                        'Section' => $task->teacherOfferedCourse->section->program . '-' . $task->teacherOfferedCourse->section->semester . $task->teacherOfferedCourse->section->group,
+                        'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
+                        'title' => $task->title,
+                        'type' => ($task->courseContent->content == 'MCQS') ? 'MCQS' : $task->type,
+                        ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
+                            ? Action::getMCQS($task->courseContent->id)
+                            : asset($task->courseContent->content),
+                        'points' => $task->points,
+                        'start_date' => $task->start_date,
+                        'due_date' => $task->due_date,
+                        'marking_info' => $markingInfo ?? 'Not-Marked',
+                        'Is Allocated To Grader' => $Assigned,
+                        'Grader Info For this Task' => $message
+                    ];
+                    ;
+                } else if ($startDate <= $currentDate && $dueDate >= $currentDate) {
+                    $ongoingTasks[] = [
+                        'task_id' => $task->id,
+                        'Section' => $task->teacherOfferedCourse->section->program . '-' . $task->teacherOfferedCourse->section->semester . $task->teacherOfferedCourse->section->group,
+                        'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
+                        'title' => $task->title,
+                        'type' => ($task->courseContent->content == 'MCQS') ? 'MCQS' : $task->type,
+                        ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
+                            ? Action::getMCQS($task->courseContent->id)
+                            : asset($task->courseContent->content),
+                        'created_by' => $task->CreatedBy,
+                        'points' => $task->points,
+                        'start_date' => $task->start_date,
+                        'due_date' => $task->due_date,
+                        'marking_status' => $task->isMarked ? 'Marked' : 'Un-Marked',
+                        'Is Allocated To Grader' => $Assigned,
+                        'Grader Info For this Task' => $message
+                    ];
+                } else if ($dueDate < $currentDate && !$task->isMarked) {
+                    $unMarkedTasks[] = [
+                        'task_id' => $task->id,
+                        'Section' => $task->teacherOfferedCourse->section->program . '-' . $task->teacherOfferedCourse->section->semester . $task->teacherOfferedCourse->section->group,
+                        'Course Name' => $task->teacherOfferedCourse->offeredCourse->course->name,
+                        'title' => $task->title,
+                        'type' => ($task->courseContent->content == 'MCQS') ? 'MCQS' : $task->type,
+                        ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File' => ($task->courseContent->content == 'MCQS')
+                            ? Action::getMCQS($task->courseContent->id)
+                            : asset($task->courseContent->content),
+                        'points' => $task->points,
+                        'start_date' => $task->start_date,
+                        'due_date' => $task->due_date,
+                        'marking_status' => $task->isMarked ? 'Marked' : 'Un-Marked',
+                        'Is Allocated To Grader' => $Assigned,
+                        'Grader Info For this Task' => $message
+                    ];
+                }
+            }
+            return [
+                'completed_tasks' => $completedTasks,
+                'upcoming_tasks' => $upcomingTasks,
+                'ongoing_tasks' => $ongoingTasks,
+                'unmarked_tasks' => $unMarkedTasks,
+            ];
+        } catch (Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'An unexpected error occurred while categorizing tasks.',
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+    public function YourTaskInfo(Request $request)
+    {
+        try {
+            $teacher_id = $request->teacher_id;
+            $task = self::categorizeTasksForJunior($teacher_id);
+            return response()->json([
+                'status' => 'success',
+                'Tasks' => $task,
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function TodayClass(Request $request)
+    {
+        try {
+            $teacherId = $request->teacher_id;
+            $todayDay = Carbon::now()->format('l');
+            if (excluded_days::checkHoliday()) {
+                return response()->json(['message' => excluded_days::checkHolidayReason()], 404);
+            }
+            if (excluded_days::checkReschedule()) {
+                $todayDay = excluded_days::checkRescheduleDay();
+            }
+            $currentSession = (new session())->getCurrentSessionId();
+            if ($currentSession == 0) {
+                return response()->json(['error' => 'No current session found'], 404);
+            }
+            $timetable = timetable::with([
+                'course:name,id,description',
+                'teacher:name,id',
+                'venue:venue,id',
+                'dayslot:day,start_time,end_time,id',
+                'juniorLecturer:name',
+                'section'
+            ])->whereHas('dayslot', function ($query) use ($todayDay) {
+                $query->where('day', $todayDay);
+            })
+                ->where('junior_lecturer_id', $teacherId)
+                ->whereNull('teacher_id')
+                ->where('session_id', (new session())->getCurrentSessionId())
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        // 'day' => $item->dayslot->day,
+                        'coursename' => $item->course->name,
+                        'description' => $item->course->description,
+                        'course_id' => $item->course->id,
+                        'section_id' => $item->section->id,
+                        'teachername' => $item->teacher->name ?? 'N/A',
+                        'juniorlecturername' => $item->juniorLecturer->name ?? 'N/A',
+                        'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
+                        'venue' => $item->venue->venue,
+                        'venue_id' => $item->venue->id,
+                        'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('H:i') : null,
+                        'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('H:i') : null,
+                    ];
+                });
+            $filteredTimetable = $timetable->map(function ($item) {
+                $sectionid = $item['section_id'];
+                $courseid = $item['course_id'];
+                $offeredCourseId = offered_courses::where('course_id', $courseid)
+                    ->where('session_id', (new session())->getCurrentSessionId())
+                    ->first();
+                if (!$offeredCourseId) {
+                    return null; // Skip if no offered_course found
+                }
+
+                $teacherOfferedCourse = teacher_offered_courses::where('section_id', $sectionid)
+                    ->where('offered_course_id', $offeredCourseId->id)
+                    ->first();
+
+                if (!$teacherOfferedCourse) {
+                    return null; // Skip if no teacher_offered_course found
+                }
+
+                $formattedDateTime = $item['start_time'];
+                $startDateTime = Carbon::createFromFormat('Y-m-d H:i', Carbon::now()->toDateString() . ' ' . $formattedDateTime)->format('Y-m-d H:i:s');
+
+                $attendanceMarked = Attendance::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                    ->where('date_time', $startDateTime)
+                    ->exists();
+
+                $status = $attendanceMarked ? 'Marked' : 'Unmarked';
+
+                return [
+                    "FormattedData" => $item['description'] . '_( ' . $item['section'] . ' )_' . $item['venue'] . '_(' . $item['start_time'] . '-' . $item['end_time'] . ')',
+                    "teacher_offered_course_id" => $teacherOfferedCourse->id,
+                    "attendance_status" => $status,
+                    "fixed_date" => $startDateTime,
+                    'coursename' => $item['coursename'],
+                    'description' => $item['description'],
+                    'course_id' => $item['course_id'],
+                    'section_id' => $item['section_id'],
+                    'teachername' => $item['teachername'],
+                    'juniorlecturername' => $item['juniorlecturername'],
+                    'section' => $item['section'],
+                    'venue' => $item['venue'],
+                    'venue_id' => $item['venue_id'],
+                    'start_time' => $item['start_time'],
+                    'end_time' => $item['end_time'],
+
+                ];
+            })->filter(); // To remove any nulls if courses or teacher_offered_courses are missing
+
+            return response()->json($filteredTimetable->values());
+
+
+        } catch (Exception $e) {
+            return response()->json(['error' => 'An unexpected error occurred', 'message' => $e->getMessage()], 500);
+        }
+    }
+    public function updateTeacherEmail(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'teacher_id' => 'required',
+            'email' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+        try {
+            if (user::where('email', $request->email)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email is Already Taken by Another User! Please Try a New One'
+                ], 401);
+            }
+            $teacher_id = $request->teacher_id;
+            $email = $request->email;
+
+            $teacher = juniorlecturer::find($teacher_id);
+            $user = user::find($teacher->user_id);
+            if (!$teacher) {
+                throw new Exception("Teacher not found");
+            }
+            $user->update(['email' => $email]);
+            return response()->json([
+                'status' => 'success',
+                'success' => true,
+                'message' => "email updated successfully for Teacher: $user->email"
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+    public function updateTeacherPassword(Request $request)
+    {
+        try {
+            $request->validate([
+                'teacher_id' => 'required',
+                'password' => 'required',
+            ]);
+            if (user::where('password', $request->password)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Password is Already Taken by Another User! Please Try a New One'
+                ], 401);
+            }
+            $responseMessage = $this->updateTeacherPasswordHelper(
+                $request->teacher_id,
+                $request->password
+            );
+            return response()->json([
+                'status' => 'success',
+                'success' => true,
+                'message' => $responseMessage
+            ], 200);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Teacher not found'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function updateTeacherPasswordHelper($teacher_id, $newPassword)
+    {
+        $teacher = juniorlecturer::find($teacher_id);
+        if (!$teacher) {
+            throw new Exception("Teacher not found");
+        }
+
+        $user_id = $teacher->user_id;
+        if (!$user_id) {
+            throw new Exception("User ID not found for the teacher");
+        }
+
+        $user = user::where('id', $user_id)->first();
+        if (!$user) {
+            throw new Exception("User not found for the given user ID");
+        }
+        $user->update(['password' => $newPassword]);
+        return "Password updated successfully for Teacher: $teacher->name";
+    }
+    public function getTeacherNotifications(Request $request)
+    {
+        try {
+            $teacherId = $request->teacher_id;
+            if (!$teacherId) {
+                return response()->json(['status' => false, 'message' => 'teacher_id is required'], 400);
+            }
+            $teacher = juniorlecturer::find($teacherId);
+            if (!$teacher) {
+                return response()->json(['status' => false, 'message' => 'Teacher not found'], 404);
+            }
+            $userId = $teacher->user_id;
+            $broadcastNotifications = notification::where('Brodcast', true)
+                ->where(function ($query) {
+                    $query->where('reciever', 'JuniorLecturer')
+                        ->orWhereNull('reciever');
+                });
+            $directNotifications = notification::where('TL_receiver_id', $userId);
+            $notifications = $broadcastNotifications->get()->merge($directNotifications->get());
+            $sortedNotifications = $notifications->sortByDesc('notification_date')->values();
+            $finalResponse = $sortedNotifications->map(function ($note) {
+                $senderName = 'System';
+                $image = null;
+                if ($note->sender === 'Admin') {
+                    $Admin = admin::where('user_id', $note->TL_sender_id)->first();
+                    if ($Admin) {
+                        $senderName = $Admin->name ?? 'N/A';
+                        $image = $Admin->image ? asset($Admin->image) : null;
+                    }
+
+                } else if ($note->sender === 'DataCell') {
+                    $Datacell =datacell::where('user_id', $note->TL_sender_id)->first();
+                    if ($Datacell) {
+                        $senderName = $Datacell->name ?? 'N/A';
+                        $image = $Datacell->image ? asset($Datacell->image) : null;
+                    }
+                }
+                if (!empty($note->url)) {
+                    if (str_contains($note->url, 'https://') || str_contains($note->url, 'http://')) {
+                        $type = 'link';
+                        $imageOrLink = $note->url;
+                    } else {
+                        $type = 'image';
+                        $imageOrLink = asset($note->url);
+                    }
+                }
+
+                return [
+                    'id' => $note->id,
+                    'title' => $note->title,
+                    'description' => $note->description,
+                    'url' => $note->url,
+                    'notification_date' => $note->notification_date,
+                    'sender' => $note->sender,
+                    'sender_name' => $senderName,
+                    'sender_image' => $image,
+                    'media_type' => $type ?? null,
+                    'media' => $imageOrLink ?? null
+
+                ];
+            });
+
+            return response()->json(['status' => true, 'data' => $finalResponse], 200);
+
+        } catch (Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
     public function juniorTodayClassesWithStatus($juniorLecturerId)
     {
         $currentDay = Carbon::now()->format('l');
@@ -166,11 +934,87 @@ class JuniorLecController extends Controller
             ], 500);
         }
     }
+    public static function getTeacherCourseGroupedByActivePrevious($teacherId)
+    {
+        try {
+            $currentSessionId = (new session())->getCurrentSessionId();
+
+            // Fetch data with necessary relationships
+            $assignments = teacher_offered_courses::whereHas('teacherJuniorLecturer', function ($query) use ($teacherId) {
+                $query->where('juniorlecturer_id', $teacherId);
+            })
+            ->with([
+                'offeredCourse.course',
+                'offeredCourse.session',
+                'section',
+                'teacher',
+                'offeredCourse.course.program'
+            ])
+            ->get();
+
+            $activeCourses = [];
+            $previousCourses = [];
+            foreach ($assignments as $assignment) {
+                $offeredCourse = $assignment->offeredCourse;
+                if (!$offeredCourse || !$offeredCourse->course) {
+                    continue;
+                }
+                $course = $offeredCourse->course;
+                $session = $offeredCourse->session;
+                $program = $course->program;
+                $enrollmentsCount = student_offered_courses::where('offered_course_id', $offeredCourse->id)->where('section_id', $assignment->section->id)->count();
+                $courseDetails = [
+                    'course_name' => $course->name,
+                    'course_code' => $course->code,
+                    'credit_hours' => $course->credit_hours,
+                    'course_type' => $course->type,
+                    'description' => $course->description,
+                    'lab' => $course->lab ? 'Yes' : 'No',
+                    'prerequisite' => $course->pre_req_main ? $course->pre_req_main : 'Main',
+                    'section_name' => $assignment->section ? (new section())->getNameByID($assignment->section->id) : 'Unknown',
+                    'session_name' => $session ? $session->name . '-' . $session->year : 'Unknown',
+                    'total_enrollments' => $enrollmentsCount,
+                    'program_name' => $program ? $program->name : 'N/A',
+                    'offered_course_id' => $offeredCourse->id,
+                    'teacher_offered_course_id' => $assignment->id,
+                ];
+                if ($course->lab) {
+                    $teacherJuniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $assignment->id)
+                        ->with('juniorLecturer')
+                        ->first();
+                    if ($teacherJuniorLecturer && $teacherJuniorLecturer->juniorLecturer) {
+                        $courseDetails['junior_name'] = $teacherJuniorLecturer->juniorLecturer->name ?? 'N/A';
+                        $courseDetails['junior_image'] = $teacherJuniorLecturer->juniorLecturer->image ? asset($teacherJuniorLecturer->juniorLecturer->image) : null;
+                    } else {
+                        $courseDetails['junior_name'] = 'N/A';
+                        $courseDetails['junior_image'] = null;
+                    }
+                }  
+
+                if ($offeredCourse->session_id == $currentSessionId) {
+                    $activeCourses[] = $courseDetails;
+                } else {
+                    $previousCourses[] = $courseDetails;
+                }
+            }
+
+            return [
+                'active_courses' => $activeCourses,
+                'previous_courses' => collect($previousCourses)->groupBy('session_name'),
+            ];
+        } catch (Exception $ex) {
+            return [
+                'active_courses' => [],
+                'previous_courses' => [],
+            ];
+        }
+    }
+    
     public function YourCourses(Request $request)
     {
         try {
-            $jl_id = $request->jl_id;
-            $course = JuniorLecturerHandling::getJuniorLecturerCourseGroupedByActivePrevious($jl_id);
+            $jl_id = $request->teacher_id;
+            $course = self::getTeacherCourseGroupedByActivePrevious($jl_id);
             return response()->json([
                 'status' => 'success',
                 'data' => $course
@@ -183,6 +1027,7 @@ class JuniorLecController extends Controller
             ], 500);
         }
     }
+
     public function YourNotification(Request $request)
     {
         try {
@@ -397,120 +1242,120 @@ class JuniorLecController extends Controller
             ], 500);
         }
     }
-    public function storeTask(Request $request)
-    {
-        try {
-            $validatedData = $request->validate([
-                'title' => 'required',
-                'type' => 'required|in:Quiz,Assignment,LabTask',
-                'coursecontent_id' => 'required',
-                'points' => 'required|numeric|min:0',
-                'start_date' => 'required|date',
-                'due_date' => 'required|date|after:start_date',
-                'course_name' => 'required|string|max:255',
-                'sectioninfo' => 'required|string'
-            ]);
-            $courseName = $validatedData['course_name'];
-            $sectionInfo = $validatedData['sectioninfo'];
-            $points = $validatedData['points'];
-            $startDate = $validatedData['start_date'];
-            $dueDate = $validatedData['due_date'];
-            $coursecontent_id = $validatedData['coursecontent_id'];
-            $sections = explode(',', $sectionInfo);
-            $course = Course::where('name', $courseName)->first();
-            if (!$course) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "Course '{$courseName}' not found.",
-                ], 404);
-            }
-            $course_content = coursecontent::find($coursecontent_id);
-            if (!$course_content) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "No Task is Found with given Cradentails ",
-                ], 404);
-            }
-            $type = $course_content->type;
-            $insertedTasks = [];
-            foreach ($sections as $sectionName) {
-                $sectionName = trim($sectionName);
-                $section = section::addNewSection($sectionName);
-                if (!$section) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => "Section '{$sectionName}' not found.",
-                    ], 404);
-                }
+    // public function storeTask(Request $request)
+    // {
+    //     try {
+    //         $validatedData = $request->validate([
+    //             'title' => 'required',
+    //             'type' => 'required|in:Quiz,Assignment,LabTask',
+    //             'coursecontent_id' => 'required',
+    //             'points' => 'required|numeric|min:0',
+    //             'start_date' => 'required|date',
+    //             'due_date' => 'required|date|after:start_date',
+    //             'course_name' => 'required|string|max:255',
+    //             'sectioninfo' => 'required|string'
+    //         ]);
+    //         $courseName = $validatedData['course_name'];
+    //         $sectionInfo = $validatedData['sectioninfo'];
+    //         $points = $validatedData['points'];
+    //         $startDate = $validatedData['start_date'];
+    //         $dueDate = $validatedData['due_date'];
+    //         $coursecontent_id = $validatedData['coursecontent_id'];
+    //         $sections = explode(',', $sectionInfo);
+    //         $course = Course::where('name', $courseName)->first();
+    //         if (!$course) {
+    //             return response()->json([
+    //                 'status' => 'error',
+    //                 'message' => "Course '{$courseName}' not found.",
+    //             ], 404);
+    //         }
+    //         $course_content = coursecontent::find($coursecontent_id);
+    //         if (!$course_content) {
+    //             return response()->json([
+    //                 'status' => 'error',
+    //                 'message' => "No Task is Found with given Cradentails ",
+    //             ], 404);
+    //         }
+    //         $type = $course_content->type;
+    //         $insertedTasks = [];
+    //         foreach ($sections as $sectionName) {
+    //             $sectionName = trim($sectionName);
+    //             $section = section::addNewSection($sectionName);
+    //             if (!$section) {
+    //                 return response()->json([
+    //                     'status' => 'error',
+    //                     'message' => "Section '{$sectionName}' not found.",
+    //                 ], 404);
+    //             }
 
-                $sectionId = $section;
+    //             $sectionId = $section;
 
-                $courseId = $course->id;
+    //             $courseId = $course->id;
 
-                $currrentSession = (new session())->getCurrentSessionId();
+    //             $currrentSession = (new session())->getCurrentSessionId();
 
-                $offered_course_id = offered_courses::where('session_id', $currrentSession)
-                    ->where('course_id', $course->id)->value('id');
+    //             $offered_course_id = offered_courses::where('session_id', $currrentSession)
+    //                 ->where('course_id', $course->id)->value('id');
 
-                $teacherOfferedCourse = teacher_offered_courses::where('section_id', $sectionId)
-                    ->where('offered_course_id', $offered_course_id)
-                    ->first();
+    //             $teacherOfferedCourse = teacher_offered_courses::where('section_id', $sectionId)
+    //                 ->where('offered_course_id', $offered_course_id)
+    //                 ->first();
 
-                if (!$teacherOfferedCourse) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => "Teacher-offered course not found for section '{$sectionName}' and course '{$courseName}'.",
-                    ], 404);
-                }
-                $taskNo = Action::getTaskCount($teacherOfferedCourse->id, $type);
-                if ($taskNo > 0 && $taskNo < 10) {
-                    $taskNo = "0" . $taskNo;
-                }
+    //             if (!$teacherOfferedCourse) {
+    //                 return response()->json([
+    //                     'status' => 'error',
+    //                     'message' => "Teacher-offered course not found for section '{$sectionName}' and course '{$courseName}'.",
+    //                 ], 404);
+    //             }
+    //             $taskNo = Action::getTaskCount($teacherOfferedCourse->id, $type);
+    //             if ($taskNo > 0 && $taskNo < 10) {
+    //                 $taskNo = "0" . $taskNo;
+    //             }
 
-                $filename = $course->description . $course_content->title . '-' . $type . $taskNo . '-' . $sectionName;
-                $title = $filename;
-                $teacherOfferedCourseId = $teacherOfferedCourse->id;
-                $taskData = [
-                    'title' => $title,
-                    'type' => $type,
-                    'CreatedBy' => 'Junior Lecturer',
-                    'points' => $points,
-                    'start_date' => $startDate,
-                    'due_date' => $dueDate,
-                    'coursecontent_id' => $coursecontent_id,
-                    'teacher_offered_course_id' => $teacherOfferedCourseId,
-                    'isMarked' => false,
-                ];
-                $task = task::where('teacher_offered_course_id', $teacherOfferedCourse)
-                    ->where('coursecontent_id', $coursecontent_id)->first();
-                if ($task) {
-                    $task->update($taskData);
-                    $insertedTasks[] = ['status' => 'Task is Already Allocated ! Just Updated the informations', 'task' => $task];
-                } else {
-                    $task = Task::create($taskData);
-                    $insertedTasks[] = ['status' => 'Task Allocated Successfully', 'task' => $task];
-                }
+    //             $filename = $course->description . $course_content->title . '-' . $type . $taskNo . '-' . $sectionName;
+    //             $title = $filename;
+    //             $teacherOfferedCourseId = $teacherOfferedCourse->id;
+    //             $taskData = [
+    //                 'title' => $title,
+    //                 'type' => $type,
+    //                 'CreatedBy' => 'Junior Lecturer',
+    //                 'points' => $points,
+    //                 'start_date' => $startDate,
+    //                 'due_date' => $dueDate,
+    //                 'coursecontent_id' => $coursecontent_id,
+    //                 'teacher_offered_course_id' => $teacherOfferedCourseId,
+    //                 'isMarked' => false,
+    //             ];
+    //             $task = task::where('teacher_offered_course_id', $teacherOfferedCourse)
+    //                 ->where('coursecontent_id', $coursecontent_id)->first();
+    //             if ($task) {
+    //                 $task->update($taskData);
+    //                 $insertedTasks[] = ['status' => 'Task is Already Allocated ! Just Updated the informations', 'task' => $task];
+    //             } else {
+    //                 $task = Task::create($taskData);
+    //                 $insertedTasks[] = ['status' => 'Task Allocated Successfully', 'task' => $task];
+    //             }
 
-            }
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Tasks inserted successfully.',
-                'tasks' => $insertedTasks,
-            ], 200);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validation failed.',
-                'errors' => $e->errors(),
-            ], 422);
-        } catch (Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred.',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
-    }
+    //         }
+    //         return response()->json([
+    //             'status' => 'success',
+    //             'message' => 'Tasks inserted successfully.',
+    //             'tasks' => $insertedTasks,
+    //         ], 200);
+    //     } catch (ValidationException $e) {
+    //         return response()->json([
+    //             'status' => 'error',
+    //             'message' => 'Validation failed.',
+    //             'errors' => $e->errors(),
+    //         ], 422);
+    //     } catch (Exception $e) {
+    //         return response()->json([
+    //             'status' => 'error',
+    //             'message' => 'An unexpected error occurred.',
+    //             'error' => $e->getMessage(),
+    //         ], 500);
+    //     }
+    // }
     public function getLabAttendanceList(Request $request)
     {
         try {
@@ -691,6 +1536,7 @@ class JuniorLecController extends Controller
                     'attendance_id' => $item->attendance->id ?? null,
                     'teacher_offered_course' => $item->attendance->teacherOfferedCourse->id ?? null,
                 ];
+            
             });
             return response()->json([
                 'success' => 'Fetched Successfully!',

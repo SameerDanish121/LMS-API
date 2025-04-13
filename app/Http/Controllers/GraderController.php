@@ -78,38 +78,105 @@ class GraderController extends Controller
     //       }
     //     ]
     //   }
-
     public function SubmitNumberList(Request $request)
     {
         try {
             $submissions = $request->submissions;
             $task_id = $request->task_id;
             $Logs = [];
+    
             foreach ($submissions as $submission) {
-                $student_RegNo = $submission['regNo'];
-                $obtainedMarks = $submission['obtainedMarks'];
-                $result = student_task_result::storeOrUpdateResult($task_id, $student_RegNo, $obtainedMarks);
-                if (!$result) {
-                    $Logs[] = ["Message" => "Error in Uploading the Number of $student_RegNo", "Data" => $submission];
-                } else {
-                    $Logs[] = ["Message" => "successfully Uploaded the Number of $student_RegNo", "Data" => $submission];
+                try {
+                    $student_id = $submission['student_id'];
+                    $obtainedMarks = $submission['obtainedMarks'];
+    
+                    $result = self::storeOrUpdateResult($task_id, $student_id, $obtainedMarks);
+                    if (!$result) {
+                        $Logs[] = ["Message" => "Error in uploading marks for Student ID: $student_id", "Data" => $submission];
+                    } else {
+                        $Logs[] = ["Message" => "Successfully uploaded marks for Student ID: $student_id", "Data" => $submission];
+                    }
+                    //$Logs[]=$result;
+                } catch (Exception $ex) {
+                    $Logs[] = ["Message" => "Exception occurred for Student ID: $student_id", "Error" => $ex->getMessage(), "Data" => $submission];
                 }
             }
+    
             if ($task_id) {
                 task::ChangeStatusOfTask($task_id);
             }
+    
             return response()->json([
-                'message' => 'All submissions processed successfully!',
+                'message' => 'Submissions processed with individual error handling!',
                 'data' => $Logs
             ], 200);
+    
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'An unexpected error occurred',
+                'message' => 'An unexpected error occurred while processing submissions',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
+    
+    public static function storeOrUpdateResult($task_id, $student_id, $obtainedMarks)
+    {
+        try {
+            $result = student_task_result::where('Task_id', $task_id)
+                ->where('Student_id', $student_id)
+                ->first();
+    
+            if ($result) {
+                DB::table('student_task_result')
+                ->where('Task_id', $task_id)
+                ->where('Student_id', $student_id)
+                ->update(['ObtainedMarks' => $obtainedMarks]);
+            } else {
+                    DB::table('student_task_result')->insert([
+                    'ObtainedMarks' => $obtainedMarks,
+                    'Task_id' => $task_id,
+                    'Student_id' => $student_id
+                ]);
+            }
+    
+            return true;
+        } catch (Exception $ex) {
+            return null; 
+        }
+    }
+    
+    // public function SubmitNumberList(Request $request)
+    // {
+    //     try {
+    //         $submissions = $request->submissions;
+    //         $task_id = $request->task_id;
+    //         $Logs = [];
+    //         foreach ($submissions as $submission) {
+    //             $student_RegNo = $submission['regNo'];
+    //             $obtainedMarks = $submission['obtainedMarks'];
+    //             $result = student_task_result::storeOrUpdateResult($task_id, $student_RegNo, $obtainedMarks);
+    //             if (!$result) {
+    //                 $Logs[] = ["Message" => "Error in Uploading the Number of $student_RegNo", "Data" => $submission];
+    //             } else {
+    //                 $Logs[] = ["Message" => "successfully Uploaded the Number of $student_RegNo", "Data" => $submission];
+    //             }
+    //         }
+    //         if ($task_id) {
+    //             task::ChangeStatusOfTask($task_id);
+    //         }
+    //         return response()->json([
+    //             'message' => 'All submissions processed successfully!',
+    //             'data' => $Logs
+    //         ], 200);
+    //     } catch (Exception $e) {
+    //         return response()->json([
+    //             'status' => 'error',
+    //             'message' => 'An unexpected error occurred',
+    //             'error' => $e->getMessage(),
+    //         ], 500);
+    //     }
+    // }
     //task_id;
     public function ListOfStudentForTask(Request $request)
     {
@@ -125,7 +192,7 @@ class GraderController extends Controller
                     ->join('student_offered_courses', 'student.id', '=', 'student_offered_courses.student_id')
                     ->join('offered_courses', 'student_offered_courses.offered_course_id', '=', 'offered_courses.id')
                     ->where('student_offered_courses.section_id', $section)
-                    ->where('offered_courses.session_id', (new session())->getCurrentSessionId())
+                    ->where('offered_courses.session_id', (new session())->getCurrentSessionId())->distinct()
                     ->get();
                 $submissions = student_task_submission::select(
                     'student_task_submission.Student_id',
@@ -137,25 +204,23 @@ class GraderController extends Controller
                     ->whereIn('student_task_submission.Student_id', $students->pluck('id')) // Extract IDs from $students collection
                     ->where('student_task_submission.Task_id', $task_id)
                     ->get();
-                $result = $students->map(function ($student) use ($submissions) {
+                    $results = student_task_result::select(
+                        'Student_id',
+                        'ObtainedMarks'
+                    )
+                        ->whereIn('Student_id', $students->pluck('id'))
+                        ->where('Task_id', $task_id)
+                        ->get();
+                $result = $students->map(function ($student) use ($submissions,$results) {
                     $submission = $submissions->firstWhere('Student_id', $student->id);
-                    if ($submission) {
-                        if ($submission->Answer) {
-
-                            $submission->Answer = asset($submission->Answer);
-                        } else {
-                            $submission->Answer = null;
-                        }
-                        return $submission;
-                    } else {
-                        return (object) [
-                            'Student_id' => $student->id,
-                            'name' => $student->name,
-                            'RegNo' => $student->RegNo,
-                            'Answer' => null,
-                        ];
-                    }
-
+                    $resultData = $results->firstWhere('Student_id', $student->id);
+                    return (object) [
+                        'Student_id' => $student->id,
+                        'name' => $student->name,
+                        'RegNo' => $student->RegNo,
+                        'Answer' => $submission ? asset($submission->Answer) : null,
+                        'ObtainedMarks' => $resultData ? $resultData->ObtainedMarks : null
+                    ];
 
                 });
                 return response()->json(

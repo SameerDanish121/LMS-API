@@ -358,12 +358,13 @@ class StudentsController extends Controller
                     "Current Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?: 'N/A',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
                     "Attendance" => (new attendance())->getAttendanceByID($student_id),
-                    "Image" => $student->image ? asset($student->image) : null
+                    "Image" => $student->image ? asset($student->image) : null,
+                     "Current_Week"=>(new session())->getCurrentSessionWeek()??0,
+                     "Task_Info"=>[]
                 ];
                 if ($rescheduled) {
                     $studentInfo['Notice'] = $Notice;
                 }
-
                 return response()->json([
                     'Type' => $role,
                     'StudentInfo' => $studentInfo,
@@ -488,10 +489,11 @@ class StudentsController extends Controller
                     "Date Of Birth" => $jl->date_of_birth,
                     "Username" => $jl->user->username,
                     "Password" => $jl->user->password,
+                    "email"=> $teacher->user->email??null,
                     "week"=>(new session())->getCurrentSessionWeek()??0,
                     "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
-                    "image" => asset($jl->image),
+                    "image" => $jl->image?asset($jl->image):null,
                 ];
                 if ($rescheduled) {
                     $Teacher['Notice !'] = $Notice;
@@ -634,17 +636,17 @@ class StudentsController extends Controller
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
                     "Attendance" => (new attendance())->getAttendanceByID($student_id),
                     "Image" => $student->image ? asset($student->image) : null,
-                    "week"=>(new session())->getCurrentSessionWeek()??0
+                     "Current_Week"=>(new session())->getCurrentSessionWeek()??0,
+                     "Task_Info"=>[]
                 ];
                 if ($rescheduled) {
                     $studentInfo['Notice'] = $Notice;
                 }
-
                 return response()->json([
                     'Type' => $role,
                     'StudentInfo' => $studentInfo,
                 ], 200);
-            } else if ($role == 'Teacher') {
+            }else if ($role == 'Teacher') {
                 $teacher = teacher::where('user_id', $user->id)
                     ->with(['user'])
                     ->first();
@@ -700,9 +702,10 @@ class StudentsController extends Controller
                     "Date Of Birth" => $jl->date_of_birth,
                     "Username" => $jl->user->username,
                     "Password" => $jl->user->password,
+                    "email"=> $teacher->user->email??null,
                     "Session" => (new session())->getSessionNameByID((new session())->getCurrentSessionId()) ?? 'No Session is Active',
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
-                    "image" => asset($jl->image),
+                    "image" =>$jl->image?asset($jl->image):null,
                     "week"=>(new session())->getCurrentSessionWeek()??0
                 ];
                 if ($rescheduled) {

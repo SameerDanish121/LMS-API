@@ -738,6 +738,11 @@ class CourseContentContoller extends Controller
             ], 500);
         }
     }
+    public function getTaskforTeacher(Request $request){
+        $teacher_id=$request->teacher_id;
+        $courses=self::getActiveCoursesForTeacher($teacher_id);
+        return $courses;
+    }
     
 }
 
