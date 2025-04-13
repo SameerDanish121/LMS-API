@@ -356,6 +356,7 @@ class timetable extends Model
             'venue:id,venue',
             'dayslot:id,day,start_time,end_time',
             'juniorLecturer:id,name',
+            'section'
         ])
             ->where('session_id', $currentSessionId)
             ->get()
@@ -364,28 +365,67 @@ class timetable extends Model
                 return isset($courseSectionMapping[$item->course_id]) &&
                     $courseSectionMapping[$item->course_id] === $item->section_id;
             })
-            ->groupBy(function ($item) {
-                return $item->dayslot->day; // Group by day
-            })
-            ->map(function ($items, $day) {
-                return [
-                    'day' => $day,
-                    'schedule' => $items->map(function ($item) {
+            ->map(function ($item) {
+               
                         return [
+                            'day' => $item->dayslot->day,
                             'coursename' => $item->course->name,
                             'description' => $item->course->description,
                             'teachername' => $item->teacher->name ?? 'N/A',
-                            'juniorlecturer' => $item->course->lab ? ($item->juniorLecturer->name ?? 'N/A') : null,
+                            'juniorlecturername' => $item->course->lab ? ($item->juniorLecturer->name ?? 'N/A') : null,
                             'venue' => $item->venue->venue,
-                            'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
-                            'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
+                            'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
+                            'start_time' => $item->dayslot->start_time ? $item->dayslot->start_time: null,
+                            'end_time' => $item->dayslot->end_time ?$item->dayslot->end_time: null,
                         ];
-                    }),
-                ];
             })
             ->values();
-
-        return $timetable;
+            $groupedByDay = $timetable->groupBy('day')->map(function ($items, $day) {
+                return [
+                    'day' => $day,
+                    'schedule' => $items->toArray()
+                ];
+            });
+    
+            return $groupedByDay->values()->toArray();
     }
+    // public static function getFullTimetableForStudent($student_id = null)
+    // {
+    //     if (!$student_id) {
+    //         return [];
+    //     }
 
+    //     $timetable = timetable::with([
+    //         'course:name,id,description',
+    //         'teacher:name,id',
+    //         'venue:venue,id',
+    //         'dayslot:day,start_time,end_time,id',
+    //         'juniorLecturer:name',
+    //         'section'
+    //     ])
+    //         ->where('teacher_id', $teacher_id)
+    //         ->where('session_id', (new session())->getCurrentSessionId())
+    //         ->get()
+    //         ->map(function ($item) {
+    //             return [
+    //                 'day' => $item->dayslot->day,
+    //                 'coursename' => $item->course->name,
+    //                 'description' => $item->course->description,
+    //                 'teachername' => $item->teacher->name ?? 'N/A',
+    //                 'juniorlecturername' => $item->juniorLecturer->name ?? 'N/A',
+    //                 'section' => (new section())->getNameByID($item->section->id) ?? 'N/A',
+    //                 'venue' => $item->venue->venue,
+    //                 'start_time' => $item->dayslot->start_time ? Carbon::parse($item->dayslot->start_time)->format('g:i A') : null,
+    //                 'end_time' => $item->dayslot->end_time ? Carbon::parse($item->dayslot->end_time)->format('g:i A') : null,
+    //             ];
+    //         });
+    //     $groupedByDay = $timetable->groupBy('day')->map(function ($items, $day) {
+    //         return [
+    //             'day' => $day,
+    //             'schedule' => $items->toArray()
+    //         ];
+    //     });
+
+    //     return $groupedByDay->values()->toArray();
+    // }
 }

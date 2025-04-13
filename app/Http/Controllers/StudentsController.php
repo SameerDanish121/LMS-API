@@ -310,6 +310,9 @@ class StudentsController extends Controller
             return response()->json(['message' => 'Failed to send notification.', 'error' => $e->getMessage()], 500);
         }
     }
+    public static function getOngoingTask($student_id){
+        return [];
+    }
     public function Login(Request $request)
     {
         try {
@@ -359,8 +362,8 @@ class StudentsController extends Controller
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
                     "Attendance" => (new attendance())->getAttendanceByID($student_id),
                     "Image" => $student->image ? asset($student->image) : null,
-                     "Current_Week"=>(new session())->getCurrentSessionWeek()??0,
-                     "Task_Info"=>[]
+                    "Current_Week"=>(new session())->getCurrentSessionWeek()??0,
+                    "Task_Info"=>self::getOngoingTask($student_id),
                 ];
                 if ($rescheduled) {
                     $studentInfo['Notice'] = $Notice;
@@ -636,8 +639,8 @@ class StudentsController extends Controller
                     $attribute => excluded_days::checkHoliday() ? excluded_days::checkHolidayReason() : $timetable,
                     "Attendance" => (new attendance())->getAttendanceByID($student_id),
                     "Image" => $student->image ? asset($student->image) : null,
-                     "Current_Week"=>(new session())->getCurrentSessionWeek()??0,
-                     "Task_Info"=>[]
+                    "Current_Week"=>(new session())->getCurrentSessionWeek()??0,
+                    "Task_Info"=>self::getOngoingTask($student_id),
                 ];
                 if ($rescheduled) {
                     $studentInfo['Notice'] = $Notice;
