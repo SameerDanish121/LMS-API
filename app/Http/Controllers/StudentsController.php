@@ -956,46 +956,132 @@ class StudentsController extends Controller
             ], 500);
         }
     }
+
     public function Notification(Request $request)
     {
         try {
-            $section_id = $request->section_id;
             $student_id = $request->student_id;
             $student = student::find($student_id);
-            $Notification = notification::with(['senderUser:id,username'])
-                ->where('Student_Section', $section_id)
-                ->orWhere(
-                    'TL_receiver_id',
-                    $student->user_id
-                )
-                ->where('reciever', 'Student')
-                ->orWhere('Brodcast', 1)
-                ->select('title', 'description', 'url', 'notification_date', 'sender', 'TL_sender_id')
-                ->get();
-            $Notification = $Notification->map(function ($item) {
-                if ($item->sender == 'Teacher') {
-                    $teacherName = teacher::where('user_id', $item->senderUser->id)->first()->name;
-                } else if ($item->sender == 'JuniorLecturer') {
-                    $teacherName = juniorlecturer::where('user_id', $item->senderUser->id)->first()->name;
-                } else if ($item->sender == 'DataCell') {
-                    $teacherName = datacell::where('user_id', $item->senderUser->id)->first()->name;
-                } else if ($item->sender == 'Admin') {
-                    $teacherName = admin::where('user_id', $item->senderUser->id)->first()->name;
+    
+            if (!$student) {
+                return response()->json(['status' => 'error', 'message' => 'Student not found.'], 404);
+            }
+    
+            $user_id = $student->user_id;
+    
+            // Create section list (1st from student model, rest from current enrollments)
+            $sectionList = [$student->section_id];
+    
+            $currentSessionId = (new session())->getCurrentSessionId();
+            if ($currentSessionId) {
+                $enrollments = student_offered_courses::with(['offeredCourse:id,course_id'])
+                    ->where('student_id', $student_id)
+                    ->whereHas('offeredCourse', function ($query) use ($currentSessionId) {
+                        $query->where('session_id', $currentSessionId);
+                    })
+                    ->get();
+    
+                $additionalSections = $enrollments->pluck('section_id')->unique()->toArray();
+                $sectionList = array_unique(array_merge($sectionList, $additionalSections));
+            }
+    
+            // Scenario 1: Broadcast to All (receiver is null)
+            $broadcastAll = notification::where('Brodcast', 1)
+                ->whereNull('reciever');
+    
+            // Scenario 2: Broadcast to Students
+            $broadcastToStudents = notification::where('Brodcast', 1)
+                ->where('reciever', 'Student');
+    
+            // Scenario 3: Direct to user
+            $directToUser = notification::where('TL_receiver_id', $user_id);
+    
+            // Scenario 4: Section-based
+            $sectionNotifications = notification::whereIn('Student_Section', $sectionList);
+    
+            // Merge all queries
+            $notifications = $broadcastAll->get()
+                ->merge($broadcastToStudents->get())
+                ->merge($directToUser->get())
+                ->merge($sectionNotifications->get());
+    
+            // Remove duplicates and sort by date
+            $sortedNotifications = $notifications->unique('id')->sortByDesc('notification_date')->values();
+    
+            // Map and enhance each notification
+            $finalResponse = $sortedNotifications->map(function ($note) {
+                $senderName = 'System';
+                $image = null;
+                $type = null;
+                $imageOrLink = null;
+    
+                if ($note->sender === 'Admin') {
+                    $admin = admin::where('user_id', $note->TL_sender_id)->first();
+                    if ($admin) {
+                        $senderName = $admin->name ?? 'N/A';
+                        $image = $admin->image ? asset($admin->image) : null;
+                    }
+                } else if ($note->sender === 'DataCell') {
+                    $datacell = datacell::where('user_id', $note->TL_sender_id)->first();
+                    if ($datacell) {
+                        $senderName = $datacell->name ?? 'N/A';
+                        $image = $datacell->image ? asset($datacell->image) : null;
+                    }
+                }else if($note->sender==='JuniorLecturer'){
+                    $datacell = juniorlecturer::where('user_id', $note->TL_sender_id)->first();
+                    if ($datacell) {
+                        $senderName = $datacell->name ?? 'N/A';
+                        $image = $datacell->image ? asset($datacell->image) : null;
+                    }
+                }else if($note->sender==='Teacher'){
+                    $datacell = Teacher::where('user_id', $note->TL_sender_id)->first();
+                    if ($datacell) {
+                        $senderName = $datacell->name ?? 'N/A';
+                        $image = $datacell->image ? asset($datacell->image) : null;
+                    }
+                }else if($note->sender=='Director'){
+                    $datacell = Director::where('user_id', $note->TL_sender_id)->first();
+                    if ($datacell) {
+                        $senderName = $datacell->name ?? 'N/A';
+                        $image = $datacell->image ? asset($datacell->image) : null;
+                    }
+                }else if($note->sender=='HOD'){
+                    $datacell = Hod::where('user_id', $note->TL_sender_id)->first();
+                    if ($datacell) {
+                        $senderName = $datacell->name ?? 'N/A';
+                        $image = $datacell->image ? asset($datacell->image) : null;
+                    }
                 }
+    
+                if (!empty($note->url)) {
+                    if (str_contains($note->url, 'https://') || str_contains($note->url, 'http://')) {
+                        $type = 'link';
+                        $imageOrLink = $note->url;
+                    } else {
+                        $type = 'image';
+                        $imageOrLink = asset($note->url);
+                    }
+                }
+    
                 return [
-                    'sender' => $item->sender,
-                    'Sender Name' => $teacherName ?? 'N/A',
-                    'title' => $item->title,
-                    'description' => $item->description,
-                    'url' => $item->url,
-                    'notification_date' => $item->notification_date,
-                    'TL_sender_id' => $item->senderUser->username ?? 'N/A',
+                    'id' => $note->id,
+                    'title' => $note->title,
+                    'description' => $note->description,
+                    'url' => $note->url,
+                    'notification_date' => $note->notification_date,
+                    'sender' => $note->sender,
+                    'sender_name' => $senderName,
+                    'sender_image' => $image,
+                    'media_type' => $type,
+                    'media' => $imageOrLink
                 ];
             });
+    
             return response()->json([
                 'status' => 'success',
-                'data' => $Notification
+                'data' => $finalResponse
             ], 200);
+    
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -1004,6 +1090,7 @@ class StudentsController extends Controller
             ], 500);
         }
     }
+    
     public function getAttendance(Request $request)
     {
         try {

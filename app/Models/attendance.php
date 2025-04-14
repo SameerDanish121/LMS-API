@@ -154,15 +154,53 @@ class attendance extends Model
                         ->count('date_time');
                     $percentage = $total_Classes > 0 ? ($totalPresent / $total_Classes) * 100 : 0;
                     $oc=offered_courses::with(['course'])->find($offeredCourse);
+
+
+
+                    $pendingRequests = contested_attendance::with(['attendance.venue', 'attendance.teacherOfferedCourse'])
+                   
+                    ->whereHas('attendance', function ($query) use ($studentId) {
+                        $query->where('student_id',$studentId);
+                    })
+                    ->where('Status', 'Pending')
+                    ->where('isResolved', 0)
+                    ->whereHas('attendance', function ($query) use ($teacherOfferedCourse) {
+                        $query->where('teacher_offered_course_id',$teacherOfferedCourse->id);
+                    })
+                    ->get()
+                    ->sortByDesc(fn($item) => $item->attendance->date_time)
+                    ->values();
+                    $formatted = $pendingRequests->map(function ($item) {
+                        $attendance = $item->attendance;
+                    
+                        return [
+                            'id'=>$item->id,
+                            'date_time' => $attendance->date_time,
+                            'venue' => $attendance->venue->venue ?? 'N/A',
+                            'type' => $attendance->isLab == 1 ? 'Junior Lecturer' : 'Lecturer',
+                        ];
+                    });
+                    $record=[
+                        'total_requests_pending' => $formatted->count(),
+                        'requests' => $formatted,
+                    ];
                     $attendanceData[] = [
+                        'teacher_offered_course_id' => $teacherOfferedCourse->id,
                         'course_name' => $oc->course->name,
+                        'course_code'=> $oc->course->code,
+                        'course_lab'=> $oc->course->lab==1?'Lab':'Theory',
+                        'Updated_at'=> self::where('teacher_offered_course_id', $teacherOfferedCourse->id)
+                        ->orderBy('date_time', 'desc')
+                        ->value('date_time')?? 'N/A',
                         'section_name'=>(new section())->getNameByID($teacherOfferedCourse->section->id),
                         'teacher_name' => $teacherOfferedCourse->teacher->name ?? 'N/A',
+                        'junior_lec_name'=>teacher_juniorlecturer::where('teacher_offered_course_id',$teacherOfferedCourse->id)->first('juniorlecturer_id')?juniorlecturer::find(teacher_juniorlecturer::where('teacher_offered_course_id',$teacherOfferedCourse->id)->first()->juniorlecturer_id)->name : 'N/A',
                         'Total_classes_conducted'=>$total_Classes,
                         'total_present' => $totalPresent ?? '0',
                         'total_absent' => $totalAbsent ?? '0',
                         'Percentage' => $percentage,
-                        'teacher_offered_course_id' => $teacherOfferedCourse->id,
+                        'pending_requests_count' => $record['total_requests_pending'],
+                        'pending_requests' => $record['requests'],
                     ];
             }
         } catch (Exception $ex) {

@@ -249,11 +249,18 @@ Route::prefix('Datacells')->group(function () {
     Route::post('/update-or-create-junior-lecturer', [ExtraKhattaController::class, 'updateOrCreateTeacherJuniorLecturer']);
 });
 Route::prefix('Students')->group(function () {
+    Route::get('/Notification', [StudentsController::class, 'Notification']);
+    Route::get('/FullTimetable', [StudentsController::class, 'FullTimetable']);
+    Route::get('/attendance', [StudentsController::class, 'getAttendance']);
+
+
+
+    
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);
     Route::get('/TranscriptPDF', [StudentsController::class, 'getTranscriptPdf']);
-    Route::get('/FullTimetable', [StudentsController::class, 'FullTimetable']);
-    Route::get('/Notification', [StudentsController::class, 'Notification']);
-    Route::get('/attendance', [StudentsController::class, 'getAttendance']);
+    
+  
+   
     Route::get('/attendancePerSubject', [StudentsController::class, 'AttendancePerSubject']);
     Route::get('/get/notification', [StudentsController::class, 'Notifications']);
     Route::post('/update-password', [StudentsController::class, 'updatePassword']);
