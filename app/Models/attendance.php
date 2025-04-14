@@ -35,10 +35,11 @@ class attendance extends Model
         if (!$teacher_offered_course_id || !$student_id) {
             return [];
         }
-        $attendanceRecords = attendance::where('teacher_offered_course_id', $teacher_offered_course_id)
+        $teacher_offered_course = teacher_offered_courses::with(['offeredCourse.course'])->find($teacher_offered_course_id);
+        $attendanceRecords = self::where('teacher_offered_course_id', $teacher_offered_course_id)
             ->where('student_id', $student_id)
             ->with(['venue'])
-            ->orderBy('date_time')
+            ->orderBy('date_time', 'desc')
             ->get();
 
         $distinctCount = self::where('teacher_offered_course_id', $teacher_offered_course_id)
@@ -73,9 +74,6 @@ class attendance extends Model
 
         foreach ($attendanceRecords as $attendance) {
             $status = ($attendance->status == 'p') ? 'Present' : 'Absent';
-            $dateTime = Carbon::parse($attendance->date_time);
-            $date = $dateTime->format('Y-m-d');
-            $time = $dateTime->format('H:i:s');
             $groupKey = ($attendance->isLab == 0) ? 'Class' : 'Lab';
             $groupedAttendance[$groupKey]['total_classes']++;
             if ($attendance->status == 'p') {
@@ -86,9 +84,9 @@ class attendance extends Model
             $groupedAttendance[$groupKey]['records'][] = [
                 'id' => $attendance->id,
                 'status' => $status,
-                'date' => $date,
-                'time' => $time,
+                'date_time' => $attendance->date_time,
                 'venue' => $attendance->venue->venue,
+                'contested'=>contested_attendance::where('Attendance_id',$attendance->id)->where('Status','Pending')->where('isResolved',0)->exists(),
             ];
             $totalClasses++;
             if ($attendance->status == 'p') {
@@ -99,27 +97,25 @@ class attendance extends Model
         }
 
         $groupedAttendance['Lab']['total_classes'] = $distinctCountLab;
+        $groupedAttendance['Lab']['total_absent'] = $distinctCountLab - $groupedAttendance['Lab']['total_present'];
+        $groupedAttendance['Class']['total_absent'] = $distinctCountClass - $groupedAttendance['Class']['total_present'];
         $groupedAttendance['Class']['total_classes'] = $distinctCountClass;
 
         foreach (['Class', 'Lab'] as $group) {
             if ($groupedAttendance[$group]['total_classes'] > 0) {
-                $groupedAttendance[$group]['percentage'] = ($groupedAttendance[$group]['total_present'] / $groupedAttendance[$group]['total_classes']) * 100;
+                $groupedAttendance[$group]['percentage'] = round(($groupedAttendance[$group]['total_present'] / $groupedAttendance[$group]['total_classes']) * 100,1);
             } else {
                 $groupedAttendance[$group]['percentage'] = 0;
             }
         }
 
-        $combinedPercentage = ($distinctCount > 0) ? ($totalPresent / $distinctCount) * 100 : 0;
         $result = [
-            'Total' => [
-                'total_classes' => $distinctCount,
-                'total_present' => $totalPresent,
-                'total_absent' => $totalAbsent,
-                'percentage' => $combinedPercentage
-            ],
+            'isLab'=> $teacher_offered_course->offeredCourse->course->lab==1?'Lab':'Theory',
             'Class' => $groupedAttendance['Class'],
-            'Lab' => $groupedAttendance['Lab'],
         ];
+        if($teacher_offered_course->offeredCourse->course->lab==1){
+            $result['Lab'] = $groupedAttendance['Lab'];
+        }
         return $result;
     }
     public function getAttendanceByID($studentId = null)
@@ -147,11 +143,11 @@ class attendance extends Model
                         ->where('teacher_offered_course_id', $teacherOfferedCourse->id)
                         ->get();
                     $totalPresent = $attendanceRecords->where('status', 'p')->count(); 
-                    $totalAbsent = $attendanceRecords->where('status', 'a')->count();
-                    $total_Classes = $totalPresent + $totalAbsent;
+                    
                     $total_Classes = self::where('teacher_offered_course_id', $teacherOfferedCourse->id)
                         ->distinct('date_time')
                         ->count('date_time');
+                    $totalAbsent =$total_Classes - $totalPresent;
                     $percentage = $total_Classes > 0 ? ($totalPresent / $total_Classes) * 100 : 0;
                     $oc=offered_courses::with(['course'])->find($offeredCourse);
 
@@ -198,7 +194,7 @@ class attendance extends Model
                         'Total_classes_conducted'=>$total_Classes,
                         'total_present' => $totalPresent ?? '0',
                         'total_absent' => $totalAbsent ?? '0',
-                        'Percentage' => $percentage,
+                        'Percentage' =>round( $percentage,1),
                         'pending_requests_count' => $record['total_requests_pending'],
                         'pending_requests' => $record['requests'],
                     ];
