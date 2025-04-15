@@ -127,10 +127,10 @@ class timetable extends Model
         ])
 
             ->whereHas('dayslot', function ($query) use ($today) {
-                $query->where('day', 'Tuesday');
+                $query->where('day', $today);
             })
             ->where('teacher_id', $teacher_id)
-            ->where('session_id', (new session())->getCurrentSessionId())
+            ->where('session_id', (new session())->getCurrentSessionId()) 
             ->get()
             ->map(function ($item) {
                 return [
@@ -302,6 +302,7 @@ class timetable extends Model
                     $courseSectionMapping[$item->course_id] === $item->section_id;
             })
             ->map(function ($item) {
+                
                 return [
                     'coursename' => $item->course->name,
                     'description' => $item->course->description,

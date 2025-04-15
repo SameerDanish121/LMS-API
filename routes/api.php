@@ -254,16 +254,14 @@ Route::prefix('Students')->group(function () {
     Route::get('/attendance', [StudentsController::class, 'getAttendance']);
     Route::delete('/contested-attendance/{id}/withdraw', [StudentsController::class, 'withdrawRequest']);
     Route::get('/attendancePerSubject', [StudentsController::class, 'AttendancePerSubject']);
-   
-   
+    Route::get('/get/notification', [StudentsController::class, 'Notifications']);
+    Route::post('/update-password', [StudentsController::class, 'updatePassword']);
+    Route::post('/update-student-image', [StudentsController::class, 'updateStudentImage']);
 
 
 
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);
     Route::get('/TranscriptPDF', [StudentsController::class, 'getTranscriptPdf']);
-    Route::get('/get/notification', [StudentsController::class, 'Notifications']);
-    Route::post('/update-password', [StudentsController::class, 'updatePassword']);
-    Route::post('/update-student-image', action: [StudentsController::class, 'updateStudentImage']);
     Route::get('/current-enrollments', [StudentsController::class, 'StudentCurrentEnrollmentsName']);
     Route::get('/all-enrollments', [StudentsController::class, 'StudentAllEnrollmentsName']);
     Route::post('/contest-attendance', [StudentsController::class, 'ContestAttendance']);

@@ -2562,6 +2562,7 @@ class TeachersController extends Controller
         } else {
             $type = 'Class';
         }
+      
         $teacherOfferedCourseId = $validated['teacher_offered_course_id'];
         $teacherOfferedCourse = teacher_offered_courses::with(['section', 'offeredCourse.course', 'offeredCourse.session'])
             ->find($teacherOfferedCourseId);
@@ -2571,12 +2572,14 @@ class TeachersController extends Controller
                 'error' => 'Teacher offered course not found.',
             ], 404);
         }
+       
         $offeredCourseId = $teacherOfferedCourse->offered_course_id;
         $sectionId = $teacherOfferedCourse->section_id;
         $studentCourses = student_offered_courses::where('offered_course_id', $offeredCourseId)
             ->where('section_id', $sectionId)
             ->with('student')
             ->get();
+           
         if ($studentCourses->isEmpty()) {
             return response()->json([
                 'error' => 'No students found for the given teacher offered course.',
@@ -2587,10 +2590,11 @@ class TeachersController extends Controller
             ->with('student')
             ->orderBy('SeatNumber')
             ->get();
-
+            
         $attendanceMap = $attendanceRecords->keyBy('student_id');
         $sortedStudents = [];
         $unsortedStudents = [];
+      
         foreach ($studentCourses as $studentCourse) {
             $student = $studentCourse->student;
             if (!$student) {

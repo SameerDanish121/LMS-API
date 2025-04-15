@@ -108,10 +108,16 @@ class attendance extends Model
                 $groupedAttendance[$group]['percentage'] = 0;
             }
         }
-
+        $combinedPercentage = ($distinctCount > 0) ? ($totalPresent / $distinctCount) * 100 : 0;
         $result = [
             'isLab'=> $teacher_offered_course->offeredCourse->course->lab==1?'Lab':'Theory',
             'Class' => $groupedAttendance['Class'],
+            'Total' => [
+                'total_classes' => $distinctCount,
+                'total_present' => $totalPresent,
+                'total_absent' => $totalAbsent,
+                'percentage' => $combinedPercentage
+            ],
         ];
         if($teacher_offered_course->offeredCourse->course->lab==1){
             $result['Lab'] = $groupedAttendance['Lab'];
