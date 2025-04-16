@@ -259,7 +259,6 @@ class GraderController extends Controller
                     $task = $graderTask->task;
                     $markingInfo = null;
                     $taskdetails = task::with(['teacherOfferedCourse.section', 'teacherOfferedCourse.offeredCourse.course'])->find($task->id);
-
                     if ($task->isMarked) {
                         $markingInfo = $this->getMarkingInfo($task->id);
                         $Teacher = teacher::find($taskdetails->teacherOfferedCourse->teacher_id);
@@ -405,7 +404,7 @@ class GraderController extends Controller
                         'type' => $first->type,
                         'Grader Allocations' => $group->map(function ($item) {
                             return [
-                                'Session is ? ' => $item->session_id === (new session())->getCurrentSessionId() ? ' Current Session' : ' Previous Session',
+                                'Session is ? ' => $item->session_id === (new session())->getCurrentSessionId() ? 'Current Session' : 'Previous Session',
                                 'teacher_name' => $item->teacher_name,
                                 'session_name' => $item->session,
                                 'teacher_image' => $item->teacher_image?asset($item->teacher_image):null,

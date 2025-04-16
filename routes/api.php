@@ -248,6 +248,7 @@ Route::prefix('Datacells')->group(function () {
     Route::post('/assign-junior-lecturer', [ExtraKhattaController::class, 'assignJuniorLecturer']);
     Route::post('/update-or-create-junior-lecturer', [ExtraKhattaController::class, 'updateOrCreateTeacherJuniorLecturer']);
 });
+
 Route::prefix('Students')->group(function () {
     Route::get('/Notification', [StudentsController::class, 'Notification']);
     Route::get('/FullTimetable', [StudentsController::class, 'FullTimetable']);
@@ -258,6 +259,11 @@ Route::prefix('Students')->group(function () {
     Route::post('/update-password', [StudentsController::class, 'updatePassword']);
     Route::post('/update-student-image', [StudentsController::class, 'updateStudentImage']);
 
+
+    
+    Route::get('/task/details', [StudentsController::class, 'getTaskDetails']);
+    Route::post('/submit-task-file', [StudentsController::class, 'submitFileAnswer']);
+    Route::post('/submit-quiz', [StudentsController::class, 'submitQuizAnswer']);
 
 
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);
@@ -270,7 +276,7 @@ Route::prefix('Students')->group(function () {
     Route::get('/TranscriptSessionDropDown', [StudentsController::class, 'TranscriptSessionDropDown']);
     Route::get('/subject/task-result', [StudentsController::class, 'GetSubjectTaskResult']);
     Route::get('/subject/task-considered', [StudentsController::class, 'getTaskConsiderations']);
-    Route::get('/task/details', [StudentsController::class, 'getTaskDetails']);
+   
     Route::get('/course-content', [StudentsController::class, 'GetFullCourseContentOfSubject']);
     Route::get('/course-content/week', [StudentsController::class, 'GetFullCourseContentOfSubjectByWeek']);
     Route::post('/submitTask', [StudentsController::class, 'submitAnswer']);
@@ -279,6 +285,8 @@ Route::prefix('Students')->group(function () {
 Route::prefix('Grader')->group(function () {
     Route::get('/GraderInfo', [GraderController::class, 'GraderOf']);
     Route::get('/YourTask', [GraderController::class, 'GraderTask']);
+
+    
     Route::get('/ListOfStudent', [GraderController::class, 'ListOfStudentForTask']);
     Route::post('/SubmitTaskResult', [GraderController::class, 'SubmitNumber']);
     Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);

@@ -1138,6 +1138,128 @@ class StudentsController extends Controller
         $solidMarks = ($totalMarks / $totalQuizMarks) * $points;
         return (int) $solidMarks;
     }
+    
+    public function submitQuizAnswer(Request $request)
+    {
+        $request->validate([
+            'student_id' => 'required|exists:student,id',
+            'task_id' => 'required|exists:task,id',
+            'Answer' => 'required|array'
+        ]);
+    
+        $studentId = $request->student_id;
+        $taskId = $request->task_id;
+        $answers = $request->Answer;
+    
+        try {
+            if (student_task_result::where('Student_id', $studentId)->where('Task_id', $taskId)->exists()) {
+                return response()->json(['error' => 'You have already submitted this quiz.'], 409);
+            }
+            $task = Task::with(['teacherOfferedCourse', 'courseContent'])->findOrFail($taskId);
+            $obtainedMarks = self::calculateQuizMarks($answers, $task->courseContent->id, $task->points);
+    
+            // Store result
+            student_task_result::updateOrInsert(
+                ['Task_id' => $taskId, 'Student_id' => $studentId],
+                ['ObtainedMarks' => $obtainedMarks ?? 0]
+            );
+    
+            // Section-wide task stats
+            $teacherCourse = teacher_offered_courses::findOrFail($task->teacher_offered_course_id);
+            $sectionId = $teacherCourse->section_id;
+            $offeredCourseId = $teacherCourse->offered_course_id;
+    
+            $studentCount = student_offered_courses::where('section_id', $sectionId)
+                ->where('offered_course_id', $offeredCourseId)
+                ->count();
+    
+            $submissionCount = student_task_result::where('Task_id', $taskId)->count();
+    
+            if ($studentCount === $submissionCount) {
+                Task::ChangeStatusOfTask($taskId);
+            }
+    
+            return response()->json([
+                'message' => 'Your MCQ quiz has been submitted!',
+                'Obtained Marks' => $obtainedMarks,
+                'Total Marks of Task' => $task->points,
+                'Quiz Data' => Action::getMCQS($task->courseContent->id),
+                'Your Submissions' => $answers
+            ], 200);
+    
+        } catch (Exception $e) {
+            return response()->json([
+                'error' => 'An error occurred during quiz submission.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+public function submitFileAnswer(Request $request)
+{
+    $request->validate([
+        'student_id' => 'required|exists:student,id',
+        'task_id' => 'required|exists:task,id',
+        'Answer' => 'required|file|max:10240' // max 10MB, adjust if needed
+    ]);
+
+    $studentId = $request->student_id;
+    $taskId = $request->task_id;
+
+    try {
+        // Check if submission already exists
+        if (student_task_submission::where('Student_id', $studentId)->where('Task_id', $taskId)->exists()) {
+            return response()->json(['error' => 'Submission already exists.'], 409);
+        }
+
+        // Retrieve necessary data
+        $student = Student::findOrFail($studentId);
+        $task = Task::with(['teacherOfferedCourse', 'courseContent'])->findOrFail($taskId);
+
+        // Block MCQ content type
+        if (strtoupper($task->courseContent->content) === 'MCQS') {
+            return response()->json(['error' => 'MCQ submissions are not allowed through this endpoint.'], 403);
+        }
+
+        $sessionId = (new session())->getCurrentSessionId();
+        $sessionData = session::findOrFail($sessionId);
+
+        $teacherOffered = teacher_offered_courses::findOrFail($task->teacher_offered_course_id);
+        $section = Section::findOrFail($teacherOffered->section_id);
+        $offeredCourse = offered_courses::with('course')->findOrFail($teacherOffered->offered_course_id);
+
+        // Build file path
+        $fileName = "({$student->RegNo})-{$task->title}";
+        $directoryPath = "{$sessionData->name}-{$sessionData->year}/{$section->program}-{$section->semester}{$section->group}/{$offeredCourse->course->description}/Task";
+
+        // Store file
+        if ($request->hasFile('Answer') && $request->file('Answer')->isValid()) {
+            $filePath = FileHandler::storeFile($fileName, $directoryPath, $request->file('Answer'));
+
+            // Save record
+            student_task_submission::create([
+                'Answer' => $filePath,
+                'DateTime' => now(),
+                'Student_id' => $studentId,
+                'Task_id' => $taskId,
+            ]);
+
+            return response()->json([
+                'message' => 'Your submission has been successfully added!',
+                'Total Marks of Task' => $task->points,
+                'Your Submission File' => asset($filePath)
+            ], 200);
+        }
+
+        return response()->json(['error' => 'Invalid or missing file.'], 400);
+    } catch (Exception $e) {
+        return response()->json([
+            'error' => 'An error occurred during submission.',
+            'details' => $e->getMessage()
+        ], 500);
+    }
+}
+
     public function submitAnswer(Request $request)
     {
         $request->validate([
