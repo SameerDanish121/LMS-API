@@ -352,7 +352,7 @@ class GraderController extends Controller
             ], 500);
         }
     }
-    private function getMarkingInfo($taskId): array|null
+    private function getMarkingInfo($taskId)
     {
         $marks = student_task_result::where('Task_id', $taskId)
             ->join('student', 'student.id', '=', 'student_task_result.Student_id')

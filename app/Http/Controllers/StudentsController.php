@@ -810,10 +810,10 @@ class StudentsController extends Controller
             if (!$student) {
                 return response()->json(['status' => 'error', 'message' => 'Student not found'], 404);
             }
-
+            $currentSessionId=(new session())->getCurrentSessionId();
             $sessionResults = sessionresult::with([
                 'session:id,name,year,start_date',
-            ])
+            ])->where('session_id','!=',$currentSessionId)
                 ->where('student_id', $studentId)
                 ->get()
                 ->sortByDesc(function ($sessionResult) {
@@ -876,12 +876,14 @@ class StudentsController extends Controller
     }
     public function Transcript(Request $request)
     {
+        $currentSessionId=(new session())->getCurrentSessionId();
+        
         try {
             $studentId = $request->student_id;
             $sessionResults = sessionresult::with([
-                'session:id,name,year',
+                'session:id,name,year,start_date',
                 'student:id,name',
-            ])
+            ])->where('session_id','!=',$currentSessionId)
                 ->where('student_id', $studentId)
                 ->get()
                 ->map(function ($sessionResult) {
@@ -899,15 +901,21 @@ class StudentsController extends Controller
                                 'course_code' => $subject->offeredCourse->course->code,
                                 'credit_hours' => $subject->offeredCourse->course->credit_hours,
                                 'grade' => $subject->grade ?? 'Pending',
+                                'overall'=>subjectresult::where('student_offered_course_id',$subject->id)->first()?? 'N/A',
                             ];
                         });
                     return [
+                        'session_start' => $sessionResult->session->start_date,
                         'total_credit_points' => $sessionResult->ObtainedCreditPoints,
                         'GPA' => $sessionResult->GPA,
                         'session_name' => $sessionResult->session->name . '-' . $sessionResult->session->year,
                         'subjects' => $subjects,
+                        
                     ];
-                });
+                })->sortByDesc(function ($item) {
+                    return strtotime($item['session_start']);
+                })
+                ->values();
             return response()->json($sessionResults);
         } catch (Exception $e) {
             return response()->json([

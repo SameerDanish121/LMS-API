@@ -262,14 +262,15 @@ Route::prefix('Students')->group(function () {
     Route::post('/submit-task-file', [StudentsController::class, 'submitFileAnswer']);
     Route::post('/submit-quiz', [StudentsController::class, 'submitQuizAnswer']);
     Route::post('/contest-attendance', [StudentsController::class, 'ContestAttendance']);
-
-
     Route::get('/getAllEnrollments', [StudentsController::class, 'getActiveEnrollments']);
     Route::get('/getPreviousEnrollments', [StudentsController::class, 'getYourPreviousEnrollments']);
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);
     Route::get('/TranscriptPDF', [StudentsController::class, 'getTranscriptPdf']);
-  
     Route::get('/TranscriptSessionDropDown', [StudentsController::class, 'TranscriptSessionDropDown']);
+
+
+
+   
     Route::get('/subject/task-result', [StudentsController::class, 'GetSubjectTaskResult']);
     Route::get('/subject/task-considered', [StudentsController::class, 'getTaskConsiderations']);
     Route::get('/current-enrollments', [StudentsController::class, 'StudentCurrentEnrollmentsName']);
@@ -279,15 +280,7 @@ Route::prefix('Students')->group(function () {
     Route::post('/submitTask', [StudentsController::class, 'submitAnswer']);
     Route::post('/exam-result', [StudentsController::class, 'getStudentExamResult']);
 });
-Route::prefix('Grader')->group(function () {
-    Route::get('/GraderInfo', [GraderController::class, 'GraderOf']);
-    Route::get('/YourTask', [GraderController::class, 'GraderTask']);
 
-    
-    Route::get('/ListOfStudent', [GraderController::class, 'ListOfStudentForTask']);
-    Route::post('/SubmitTaskResult', [GraderController::class, 'SubmitNumber']);
-    Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);
-});
 Route::prefix('JuniorLec')->group(function () {
     Route::get('classestoday/{juniorLecturerId}', [JuniorLecController::class, 'juniorTodayClassesWithStatus']);
     
@@ -403,4 +396,24 @@ Route::prefix('Un-usable')->group(function () {
     Route::post('/add-session', [AdminController::class, 'addSingleSession']);
     Route::post('/update-admin-image', [AdminController::class, 'updateAdminImage']);
     Route::post('/EnrollStudent', [DatacellsController::class, 'NewEnrollment']);
+});
+
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////FINISHED/////////////////////////////////////////////////////
+
+Route::prefix('Grader')->group(function () {
+    Route::get('/GraderInfo', [GraderController::class, 'GraderOf']);
+    Route::get('/YourTask', [GraderController::class, 'GraderTask']);
+    Route::get('/ListOfStudent', [GraderController::class, 'ListOfStudentForTask']);
+    Route::post('/SubmitTaskResult', [GraderController::class, 'SubmitNumber']);
+    Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);
 });
