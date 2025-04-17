@@ -697,31 +697,36 @@ class StudentManagement extends Model
                 if ($teacherOfferedCourse) {
                     $teacher = teacher::find($teacherOfferedCourse->teacher_id);
                     $teacherName = $teacher ? $teacher->name : null;
-                    $juniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
-                    if ($juniorLecturer) {
-                        $juniorLecturerName = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('name');
-                    }
+                  
                 }
                 $course = Course::where('id', $offeredCourse->course_id)->first();
-                if(!$course->lab){
-                  $juniorLecturerName="Non-Lab";
-                }
                 $courseDetails = [
                     'course_name' => $course->name,
                     'course_code' => $course->code,
                     'credit_hours' => $course->credit_hours,
                     'Type' => $course->type,
+                    'Is'=>$course->lab==1?'Lab':'Theory',
                     'Short Form' => $course->description,
                     'Pre-Requisite/Main' => $course->pre_req_main == null
                         ? 'Main' : Course::where('id', $course->pre_req_main)->value('name'),
                     'section' => (new section())->getNameByID($enrolledCourse->section_id),
                     'program' => $course->program
                         ? program::where('id', $course->program_id)->value('name')
-                        : 'N/A',
-                    'teacher_name' => ($teacher && $teacher->name) ? $teacher->name : 'N/A',  // Check if teacher exists and has a name
-                    'junior_lecturer_name' => ($juniorLecturerName) ? $juniorLecturerName : 'N/A',  // Check if junior lecturer exists and has a name
+                        : 'General',
+                    'teacher_name' => ($teacher && $teacher->name) ? $teacher->name : 'N/A',  // Check if teacher exists and has a name  // Check if junior lecturer exists and has a name
+                    'teacher_image'=>($teacher && $teacher->image)?asset($teacher->image):null,
                     'offered_course_id' => $offeredCourse->id,
+                    'teacher_offered_course_id'=>($teacherOfferedCourse)?$teacherOfferedCourse->id:null,
                 ];
+                if($course->lab==1){
+                    $juniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
+                    if ($juniorLecturer) {
+                        $juniorLecturerName = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('name');
+                        $jlImage = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('image');
+                    }
+                    $courseDetails['junior_lecturer_name'] =($juniorLecturerName) ? $juniorLecturerName : 'N/A';
+                    $courseDetails['junior_image']=$jlImage?asset($jlImage):null;
+                }
 
                 $courses[] = $courseDetails;
             }
@@ -750,20 +755,13 @@ class StudentManagement extends Model
                 $teacherName = null;
                 $juniorLecturerName = null;
                 if ($teacherOfferedCourse) {
-
                     $teacher = teacher::find($teacherOfferedCourse->teacher_id);
                     $teacherName = $teacher ? $teacher->name : null;
 
-                    $juniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
-                    if ($juniorLecturer) {
-                        $juniorLecturerName = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('name');
-                    }
+                    
                 }
 
                 $course = Course::where('id', $offeredCourse->course_id)->first();
-                if(!$course->lab){
-                  $juniorLecturerName="Non-Lab";
-                }
                 $subjectResult = subjectresult::where('student_offered_course_id', $enrolledCourse->id)->first();
                 if ($subjectResult) {
                     $result = $enrolledCourse->grade == 'F' ? 'Failed' : $subjectResult;
@@ -776,6 +774,7 @@ class StudentManagement extends Model
                     'credit_hours' => $course->credit_hours,
                     'Type' => $course->type,
                     'Short Form' => $course->description,
+                    'Is'=>$course->lab==1?'Lab':'Theory',
                     'Pre-Requisite/Main' => $course->pre_req_main == null
                         ? 'Main' : Course::where('id', $course->pre_req_main)->value('name'),
                     'section' => (new section())->getNameByID($enrolledCourse->section_id),
@@ -783,14 +782,35 @@ class StudentManagement extends Model
                     'session_start'=>$session->start_date,
                     'program' => $course->program
                         ? program::where('id', $course->program_id)->value('name')
-                        : 'N/A',
+                        : 'General',
                     'teacher_name' => $teacherName ? $teacherName : 'N/A',
-                    'junior_lecturer_name' => ($juniorLecturerName) ? $juniorLecturerName : 'N/A',
+            
                     'offered_course_id' => $offeredCourse->id,
+                    'teacher_offered_course_id'=>($teacherOfferedCourse)?$teacherOfferedCourse->id:null,
+                    'teacher_image'=>($teacher && $teacher->image)?asset($teacher->image):null,
                     'result Info' => $result,
                     'grade' => $enrolledCourse->grade ?: 'N/A',
                 ];
-
+                if($course->lab==1){
+                    if($teacherOfferedCourse){
+                        $juniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
+                        if ($juniorLecturer) {
+                            $juniorLecturerName = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('name');
+                            $jlImage = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('image');
+                        }
+                        $courseDetails['junior_image']=$jlImage?asset($jlImage):null;
+                    }
+                   
+                }
+                if($enrolledCourse->grade == 'F' || $enrolledCourse->grade == 'D'){
+                   if($currentSessionId!=0){
+                      if(offered_courses::where('course_id',$course->id)->where('session_id',$currentSessionId)->exists()){
+                         $session=session::find($currentSessionId);
+                         $type=$session->name;
+                         $courseDetails['can_re_enroll']='Yes';
+                      }
+                   }
+                }
                 $courses[] = $courseDetails;
             }
         }

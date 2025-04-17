@@ -258,25 +258,22 @@ Route::prefix('Students')->group(function () {
     Route::get('/get/notification', [StudentsController::class, 'Notifications']);
     Route::post('/update-password', [StudentsController::class, 'updatePassword']);
     Route::post('/update-student-image', [StudentsController::class, 'updateStudentImage']);
-
-
-    
     Route::get('/task/details', [StudentsController::class, 'getTaskDetails']);
     Route::post('/submit-task-file', [StudentsController::class, 'submitFileAnswer']);
     Route::post('/submit-quiz', [StudentsController::class, 'submitQuizAnswer']);
+    Route::post('/contest-attendance', [StudentsController::class, 'ContestAttendance']);
 
 
+    Route::get('/getAllEnrollments', [StudentsController::class, 'getActiveEnrollments']);
+    Route::get('/getPreviousEnrollments', [StudentsController::class, 'getYourPreviousEnrollments']);
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);
     Route::get('/TranscriptPDF', [StudentsController::class, 'getTranscriptPdf']);
-    Route::get('/current-enrollments', [StudentsController::class, 'StudentCurrentEnrollmentsName']);
-    Route::get('/all-enrollments', [StudentsController::class, 'StudentAllEnrollmentsName']);
-    Route::post('/contest-attendance', [StudentsController::class, 'ContestAttendance']);
-    Route::get('/getActiveEnrollments', [StudentsController::class, 'getActiveEnrollments']);
-    Route::get('/getPreviousEnrollments', [StudentsController::class, 'getYourPreviousEnrollments']);
+  
     Route::get('/TranscriptSessionDropDown', [StudentsController::class, 'TranscriptSessionDropDown']);
     Route::get('/subject/task-result', [StudentsController::class, 'GetSubjectTaskResult']);
     Route::get('/subject/task-considered', [StudentsController::class, 'getTaskConsiderations']);
-   
+    Route::get('/current-enrollments', [StudentsController::class, 'StudentCurrentEnrollmentsName']);
+    Route::get('/all-enrollments', [StudentsController::class, 'StudentAllEnrollmentsName']);
     Route::get('/course-content', [StudentsController::class, 'GetFullCourseContentOfSubject']);
     Route::get('/course-content/week', [StudentsController::class, 'GetFullCourseContentOfSubjectByWeek']);
     Route::post('/submitTask', [StudentsController::class, 'submitAnswer']);

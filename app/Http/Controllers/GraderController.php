@@ -259,6 +259,7 @@ class GraderController extends Controller
                     $task = $graderTask->task;
                     $markingInfo = null;
                     $taskdetails = task::with(['teacherOfferedCourse.section', 'teacherOfferedCourse.offeredCourse.course'])->find($task->id);
+
                     if ($task->isMarked) {
                         $markingInfo = $this->getMarkingInfo($task->id);
                         $Teacher = teacher::find($taskdetails->teacherOfferedCourse->teacher_id);
@@ -296,31 +297,53 @@ class GraderController extends Controller
                         ];
                     }
                 });
-            $currentDate = now();
-            $markedTasks = $assignedTasks->filter(function ($task) {
-                return $task['marking_status'] === 'Marked';
-            });
-            $upcomingTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
-                return $task['start_date'] > $currentDate;
-            });
 
-            $ongoingTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
-                return $task['start_date'] <= $currentDate && $task['due_date'] >= $currentDate;
-            });
+                $currentDate = now();
 
-            $unmarkedTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
-                return !$task['marking_status'] === 'Marked' && $task['due_date'] < $currentDate;
-            });
-            return response()->json(
-                [
-                    'message' => 'Fetched Successfully',
-                    'MarkedTask' => $markedTasks->values(),
-                    'UpcomingTask' => $upcomingTasks->values(),
-                    'OngoingTask' => $ongoingTasks->values(),
-                    'UnMarkedTask' => $unmarkedTasks->values(),
-                ],
-                200
-            );
+                $preAssignedTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
+                    return $task['start_date'] > $currentDate || 
+                           ($task['start_date'] <= $currentDate && $task['due_date'] >= $currentDate);
+                });
+                
+                $completedTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
+                    return $task['marking_status'] === 'Marked' || 
+                           ($task['marking_status'] !== 'Marked' && $task['due_date'] < $currentDate);
+                });
+                
+                return response()->json(
+                    [
+                        'message' => 'Fetched Successfully',
+                        'PreAssignedTasks' => $preAssignedTasks->values(),
+                        'CompletedTasks' => $completedTasks->values(),
+                    ],
+                    200
+                );
+                
+            // $currentDate = now();
+            // $markedTasks = $assignedTasks->filter(function ($task) {
+            //     return $task['marking_status'] === 'Marked';
+            // });
+            // $upcomingTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
+            //     return $task['start_date'] > $currentDate;
+            // });
+
+            // $ongoingTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
+            //     return $task['start_date'] <= $currentDate && $task['due_date'] >= $currentDate;
+            // });
+
+            // $unmarkedTasks = $assignedTasks->filter(function ($task) use ($currentDate) {
+            //     return !$task['marking_status'] === 'Marked' && $task['due_date'] < $currentDate;
+            // });
+            // return response()->json(
+            //     [
+            //         'message' => 'Fetched Successfully',
+            //         'MarkedTask' => $markedTasks->values(),
+            //         'UpcomingTask' => $upcomingTasks->values(),
+            //         'OngoingTask' => $ongoingTasks->values(),
+            //         'UnMarkedTask' => $unmarkedTasks->values(),
+            //     ],
+            //     200
+            // );
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -341,7 +364,12 @@ class GraderController extends Controller
         }
         $topMark = $marks->first();
         $worstMark = $marks->last();
-        $averageMarks = $marks->avg('obtained_marks');
+        $midPoint = ($topMark->obtained_marks + $worstMark->obtained_marks) / 2;
+
+    // Find student with marks closest to the midpoint
+    $averageMark = $marks->sortBy(function ($item) use ($midPoint) {
+        return abs($item->obtained_marks - $midPoint);
+    })->first();
 
         return [
             'top' => [
@@ -350,9 +378,9 @@ class GraderController extends Controller
                 'title' => 'Good',
             ],
             'average' => [
-                'student_name' => $topMark->student_name,
-                'obtained_marks' => round($averageMarks, 2),
-                'title' => 'Average',
+                'student_name' => $averageMark->student_name,
+            'obtained_marks' => $averageMark->obtained_marks,
+            'title' => 'Average',
             ],
             'worst' => [
                 'student_name' => $worstMark->student_name,
