@@ -3,12 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\contested_attendance;
+use App\Models\coursecontent;
+use App\Models\coursecontent_topic;
 use App\Models\Director;
 use App\Models\exam;
 use App\Models\grader;
 use App\Models\Hod;
 use App\Models\student_exam_result;
+use App\Models\t_coursecontent_topic_status;
 use App\Models\task_consideration;
+use App\Models\topic;
 use Illuminate\Http\Request;
 use App\Models\Action;
 use App\Models\admin;
@@ -810,10 +814,10 @@ class StudentsController extends Controller
             if (!$student) {
                 return response()->json(['status' => 'error', 'message' => 'Student not found'], 404);
             }
-            $currentSessionId=(new session())->getCurrentSessionId();
+            $currentSessionId = (new session())->getCurrentSessionId();
             $sessionResults = sessionresult::with([
                 'session:id,name,year,start_date',
-            ])->where('session_id','!=',$currentSessionId)
+            ])->where('session_id', '!=', $currentSessionId)
                 ->where('student_id', $studentId)
                 ->get()
                 ->sortByDesc(function ($sessionResult) {
@@ -876,14 +880,14 @@ class StudentsController extends Controller
     }
     public function Transcript(Request $request)
     {
-        $currentSessionId=(new session())->getCurrentSessionId();
-        
+        $currentSessionId = (new session())->getCurrentSessionId();
+
         try {
             $studentId = $request->student_id;
             $sessionResults = sessionresult::with([
                 'session:id,name,year,start_date',
                 'student:id,name',
-            ])->where('session_id','!=',$currentSessionId)
+            ])->where('session_id', '!=', $currentSessionId)
                 ->where('student_id', $studentId)
                 ->get()
                 ->map(function ($sessionResult) {
@@ -901,7 +905,7 @@ class StudentsController extends Controller
                                 'course_code' => $subject->offeredCourse->course->code,
                                 'credit_hours' => $subject->offeredCourse->course->credit_hours,
                                 'grade' => $subject->grade ?? 'Pending',
-                                'overall'=>subjectresult::where('student_offered_course_id',$subject->id)->first()?? 'N/A',
+                                'overall' => subjectresult::where('student_offered_course_id', $subject->id)->first() ?? 'N/A',
                             ];
                         });
                     return [
@@ -910,7 +914,7 @@ class StudentsController extends Controller
                         'GPA' => $sessionResult->GPA,
                         'session_name' => $sessionResult->session->name . '-' . $sessionResult->session->year,
                         'subjects' => $subjects,
-                        
+
                     ];
                 })->sortByDesc(function ($item) {
                     return strtotime($item['session_start']);
@@ -1146,7 +1150,7 @@ class StudentsController extends Controller
         $solidMarks = ($totalMarks / $totalQuizMarks) * $points;
         return (int) $solidMarks;
     }
-    
+
     public function submitQuizAnswer(Request $request)
     {
         $request->validate([
@@ -1154,39 +1158,39 @@ class StudentsController extends Controller
             'task_id' => 'required|exists:task,id',
             'Answer' => 'required|array'
         ]);
-    
+
         $studentId = $request->student_id;
         $taskId = $request->task_id;
         $answers = $request->Answer;
-    
+
         try {
             if (student_task_result::where('Student_id', $studentId)->where('Task_id', $taskId)->exists()) {
                 return response()->json(['error' => 'You have already submitted this quiz.'], 409);
             }
             $task = Task::with(['teacherOfferedCourse', 'courseContent'])->findOrFail($taskId);
             $obtainedMarks = self::calculateQuizMarks($answers, $task->courseContent->id, $task->points);
-    
+
             // Store result
             student_task_result::updateOrInsert(
                 ['Task_id' => $taskId, 'Student_id' => $studentId],
                 ['ObtainedMarks' => $obtainedMarks ?? 0]
             );
-    
+
             // Section-wide task stats
             $teacherCourse = teacher_offered_courses::findOrFail($task->teacher_offered_course_id);
             $sectionId = $teacherCourse->section_id;
             $offeredCourseId = $teacherCourse->offered_course_id;
-    
+
             $studentCount = student_offered_courses::where('section_id', $sectionId)
                 ->where('offered_course_id', $offeredCourseId)
                 ->count();
-    
+
             $submissionCount = student_task_result::where('Task_id', $taskId)->count();
-    
+
             if ($studentCount === $submissionCount) {
                 Task::ChangeStatusOfTask($taskId);
             }
-    
+
             return response()->json([
                 'message' => 'Your MCQ quiz has been submitted!',
                 'Obtained Marks' => $obtainedMarks,
@@ -1194,7 +1198,7 @@ class StudentsController extends Controller
                 'Quiz Data' => Action::getMCQS($task->courseContent->id),
                 'Your Submissions' => $answers
             ], 200);
-    
+
         } catch (Exception $e) {
             return response()->json([
                 'error' => 'An error occurred during quiz submission.',
@@ -1202,54 +1206,54 @@ class StudentsController extends Controller
             ], 500);
         }
     }
-    
-public function submitFileAnswer(Request $request)
-{
-    $request->validate([
-        'student_id' => 'required|exists:student,id',
-        'task_id' => 'required|exists:task,id',
-        'Answer' => 'required|file|max:10240' 
-    ]);
-    $studentId = $request->student_id;
-    $taskId = $request->task_id;
-    try {
-        if (student_task_submission::where('Student_id', $studentId)->where('Task_id', $taskId)->exists()) {
-            return response()->json(['error' => 'Submission already exists.'], 409);
-        }
-        $student = Student::findOrFail($studentId);
-        $task = Task::with(['teacherOfferedCourse', 'courseContent'])->findOrFail($taskId);
-        if (strtoupper($task->courseContent->content) === 'MCQS') {
-            return response()->json(['error' => 'MCQ submissions are not allowed through this endpoint.'], 403);
-        }
-        $sessionId = (new session())->getCurrentSessionId();
-        $sessionData = session::findOrFail($sessionId);
-        $teacherOffered = teacher_offered_courses::findOrFail($task->teacher_offered_course_id);
-        $section = Section::findOrFail($teacherOffered->section_id);
-        $offeredCourse = offered_courses::with('course')->findOrFail($teacherOffered->offered_course_id);
-        $fileName = "({$student->RegNo})-{$task->title}";
-        $directoryPath = "{$sessionData->name}-{$sessionData->year}/{$section->program}-{$section->semester}{$section->group}/{$offeredCourse->course->description}/Task";
-        if ($request->hasFile('Answer') && $request->file('Answer')->isValid()) {
-            $filePath = FileHandler::storeFile($fileName, $directoryPath, $request->file('Answer'));
-            student_task_submission::create([
-                'Answer' => $filePath,
-                'DateTime' => now(),
-                'Student_id' => $studentId,
-                'Task_id' => $taskId,
-            ]);
+
+    public function submitFileAnswer(Request $request)
+    {
+        $request->validate([
+            'student_id' => 'required|exists:student,id',
+            'task_id' => 'required|exists:task,id',
+            'Answer' => 'required|file|max:10240'
+        ]);
+        $studentId = $request->student_id;
+        $taskId = $request->task_id;
+        try {
+            if (student_task_submission::where('Student_id', $studentId)->where('Task_id', $taskId)->exists()) {
+                return response()->json(['error' => 'Submission already exists.'], 409);
+            }
+            $student = Student::findOrFail($studentId);
+            $task = Task::with(['teacherOfferedCourse', 'courseContent'])->findOrFail($taskId);
+            if (strtoupper($task->courseContent->content) === 'MCQS') {
+                return response()->json(['error' => 'MCQ submissions are not allowed through this endpoint.'], 403);
+            }
+            $sessionId = (new session())->getCurrentSessionId();
+            $sessionData = session::findOrFail($sessionId);
+            $teacherOffered = teacher_offered_courses::findOrFail($task->teacher_offered_course_id);
+            $section = Section::findOrFail($teacherOffered->section_id);
+            $offeredCourse = offered_courses::with('course')->findOrFail($teacherOffered->offered_course_id);
+            $fileName = "({$student->RegNo})-{$task->title}";
+            $directoryPath = "{$sessionData->name}-{$sessionData->year}/{$section->program}-{$section->semester}{$section->group}/{$offeredCourse->course->description}/Task";
+            if ($request->hasFile('Answer') && $request->file('Answer')->isValid()) {
+                $filePath = FileHandler::storeFile($fileName, $directoryPath, $request->file('Answer'));
+                student_task_submission::create([
+                    'Answer' => $filePath,
+                    'DateTime' => now(),
+                    'Student_id' => $studentId,
+                    'Task_id' => $taskId,
+                ]);
+                return response()->json([
+                    'message' => 'Your submission has been successfully added!',
+                    'Total Marks of Task' => $task->points,
+                    'Your Submission File' => asset($filePath)
+                ], 200);
+            }
+            return response()->json(['error' => 'Invalid or missing file.'], 400);
+        } catch (Exception $e) {
             return response()->json([
-                'message' => 'Your submission has been successfully added!',
-                'Total Marks of Task' => $task->points,
-                'Your Submission File' => asset($filePath)
-            ], 200);
+                'error' => 'An error occurred during submission.',
+                'details' => $e->getMessage()
+            ], 500);
         }
-        return response()->json(['error' => 'Invalid or missing file.'], 400);
-    } catch (Exception $e) {
-        return response()->json([
-            'error' => 'An error occurred during submission.',
-            'details' => $e->getMessage()
-        ], 500);
     }
-}
 
     public function submitAnswer(Request $request)
     {
@@ -1615,7 +1619,185 @@ public function submitFileAnswer(Request $request)
             ], 500);
         }
     }
+    public static function getCourseContentWithTopicsForPrevious($offered_course_id,$teacher_offered_course_id=null)
+    {
+        $courseContents = coursecontent::where('offered_course_id', $offered_course_id)->get();
+        $result = [];
+        foreach ($courseContents as $courseContent) {
+            $week = (int) $courseContent->week;
+            if (!isset($result[$week])) {
+                $result[$week] = [];
+            }
+            if ($courseContent->type === 'Notes') {
+                $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
+                $topics = [];
 
+                foreach ($courseContentTopics as $courseContentTopic) {
+                    $topic = topic::find($courseContentTopic->topic_id);
+                    if ($topic) {
+                        $Status='Un-Covered';
+                        if($teacher_offered_course_id){
+                            $tStatus=t_coursecontent_topic_status::where('coursecontent_id',$courseContent->id)->
+                            where('topic_id',$topic->id)
+                            ->where('teacher_offered_courses_id',$teacher_offered_course_id)
+                            ->first();
+                            $Status=($tStatus)?($tStatus->Status==1?'Covered':'Un-Covered'):'Un-Covered';
+                        }
+                        $topics[] = [
+                            'topic_name' => $topic->title,
+                            'status'=>$Status
+                        ];
+                    }
+                }
+
+                $result[$week][] = [
+                    'course_content_id' => $courseContent->id,
+                    'title' => $courseContent->title,
+                    'type' => $courseContent->type,
+                    'week' => $courseContent->week,
+                    'File' => $courseContent->content ? asset($courseContent->content) : null,
+                    'topics' => $topics,
+                ];
+            } else {
+                $result[$week][] = [
+                    'course_content_id' => $courseContent->id,
+                    'title' => $courseContent->title,
+                    'type' => $courseContent->content == 'MCQS' ? 'MCQS':$courseContent->type,
+                    'week' => $courseContent->week,
+                    $courseContent->content == 'MCQS' ? 'MCQS' : 'File' => $courseContent->content == 'MCQS'
+                        ? Action::getMCQS($courseContent->id)
+                        : ($courseContent->content ? asset($courseContent->content) : null)
+                ];
+            }
+        }
+        ksort($result);
+        return $result;
+    } public static function getCourseContentWithTopicsForActive($offered_course_id,$teacher_offered_course_id=null)
+    {
+        $courseContents = coursecontent::where('offered_course_id', $offered_course_id)->get();
+        $result = [];
+        foreach ($courseContents as $courseContent) {
+            $week = (int) $courseContent->week;
+            if (!isset($result[$week])) {
+                $result[$week] = [];
+            }
+            if ($courseContent->type === 'Notes') {
+                $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
+                $topics = [];
+
+                foreach ($courseContentTopics as $courseContentTopic) {
+                    $topic = topic::find($courseContentTopic->topic_id);
+                    if ($topic) {
+                        $Status='Un-Covered';
+                        if($teacher_offered_course_id){
+                            $tStatus=t_coursecontent_topic_status::where('coursecontent_id',$courseContent->id)->
+                            where('topic_id',$topic->id)
+                            ->where('teacher_offered_courses_id',$teacher_offered_course_id)
+                            ->first();
+                            $Status=($tStatus)?($tStatus->Status==1?'Covered':'Un-Covered'):'Un-Covered';
+                        }
+                        $topics[] = [
+                            'topic_name' => $topic->title,
+                            'status'=>$Status
+                        ];
+                    }
+                }
+
+                $result[$week][] = [
+                    'course_content_id' => $courseContent->id,
+                    'title' => $courseContent->title,
+                    'type' => $courseContent->type,
+                    'week' => $courseContent->week,
+                    'File' => $courseContent->content ? asset($courseContent->content) : null,
+                    'topics' => $topics,
+                ];
+            } else {
+                if($teacher_offered_course_id){
+                    if(task::where('coursecontent_id',$courseContent->id)->where('teacher_offered_course_id',$teacher_offered_course_id)->where('due_date','<', Carbon::now())->exists()){
+                        $result[$week][] = [
+                            'course_content_id' => $courseContent->id,
+                            'title' => $courseContent->title,
+                            'type' => $courseContent->content == 'MCQS' ? 'MCQS':$courseContent->type,
+                            'week' => $courseContent->week,
+                            $courseContent->content == 'MCQS' ? 'MCQS' : 'File' => $courseContent->content == 'MCQS'
+                                ? Action::getMCQS($courseContent->id)
+                                : ($courseContent->content ? asset($courseContent->content) : null)
+                        ];
+                    }
+                }
+            }
+        }
+        ksort($result);
+        return $result;
+    }
+    public function GetFullCourseContentOfStudentByActivePrevious(Request $request) {
+        try {
+            $request->validate([
+                'student_id' => 'required',
+            ]);
+            $student_id=$request->student_id;
+            $enrollments=StudentManagement::getAllEnrollmentCoursesName($student_id);
+            $ActiveCourseContent=[];
+            $PreviousCourseContent=[];
+            $CurrentSessionId=(new session())->getCurrentSessionId();
+            foreach($enrollments as $enroll){
+                $Is='Previous';
+                if($CurrentSessionId!=0){
+                      if($enroll['session_id']==$CurrentSessionId){
+                        $Is= 'Current';
+                      }
+                }
+                $teacher_name='N/A';
+                $teacher_name=teacher_offered_courses::with('teacher')->where('id',$enroll['teacher_offered_course_id'])->first()->teacher->name??'N/A';
+                $data=[
+                    'course_name'=>$enroll['course_name'],
+                    'session'=>$enroll['Session'],
+                    'Section'=>$enroll['Section'],
+                    'teacher_name'=>$teacher_name,
+                   
+                ];
+
+
+
+
+
+                if($Is== 'Current'){
+                    $data['course_content']=self::getCourseContentWithTopicsForActive($enroll['offered_course_id'],$enroll['teacher_offered_course_id']);
+                  $ActiveCourseContent[]=$data;
+                }else{
+                    $data['course_content']=self::getCourseContentWithTopicsForPrevious($enroll['offered_course_id'],$enroll['teacher_offered_course_id']);
+                    $PreviousCourseContent[]=$data;
+                }
+            }
+            return response()->json([
+                'success' => 'success',
+                'data' => [
+                    'Active'=>$ActiveCourseContent,
+                    'Previous'=>$PreviousCourseContent
+                ]
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 400);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid username or password'
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+       
+    }
     public function GetFullCourseContentOfSubject(Request $request)
     {
         try {
@@ -1731,11 +1913,11 @@ public function submitFileAnswer(Request $request)
             ]);
             $id = $request->student_id;
             $currentCourses = StudentManagement::getYourEnrollments($id);
-            $previousCourses=StudentManagement::getYourPreviousEnrollments($id);
+            $previousCourses = StudentManagement::getYourPreviousEnrollments($id);
             return response()->json([
                 'success' => 'Fetcehd Successfully !',
-                 'CurrentCourses'=>$currentCourses,
-                 'PreviousCourses'=>$previousCourses
+                'CurrentCourses' => $currentCourses,
+                'PreviousCourses' => $previousCourses
             ], 200);
         } catch (ValidationException $e) {
             return response()->json([
@@ -2059,87 +2241,90 @@ public function submitFileAnswer(Request $request)
 
         return $response;
     }
+    public static function getStudentAllExamResult($student_id)
+    {
 
+    }
     public function getStudentExamResult(Request $request)
     {
         $validated = $request->validate([
-            'teacher_offered_course_id' => 'required|integer',
-            'student_id' => 'required|integer',
+            'student_id' => 'required',
         ]);
+        $courses = StudentManagement::getAllEnrollmentCoursesName($request->student_id);
         if (!student::find($validated['student_id'])) {
             return 'No Student Found  !';
         }
-        $teacherOfferedCourse = teacher_offered_courses::with(['offeredCourse'])->find($validated['teacher_offered_course_id']);
-        if (!$teacherOfferedCourse) {
-            return 'The Teacher Allocation Found Esist !';
-        }
-        $offeredCourseId = $teacherOfferedCourse->offeredCourse->id;
         $studentId = $validated['student_id'];
-        $exams = exam::where('offered_course_id', $offeredCourseId)->with(['questions'])->get();
+        $Data = [];
+        foreach ($courses as $course) {
+            $offeredCourseId = $course['offered_course_id'];
+            $exams = exam::where('offered_course_id', $offeredCourseId)->with(['questions'])->get();
+            $results = [];
+            $totalObtainedMarks = 0;
+            $totalMarks = 0;
+            $solidMarks = 0;
+            foreach ($exams as $exam) {
+                $examData = [
+                    'exam_id' => $exam->id,
+                    'exam_type' => $exam->type,
+                    'exam_question_paper' => $exam->QuestionPaper ? asset($exam->QuestionPaper) : null,
+                    'total_marks' => $exam->total_marks,
+                    'solid_marks' => $exam->Solid_marks,
+                    'obtained_marks' => 0,
+                    'solid_marks_equivalent' => 0,
+                    'status' => 'Declared',
+                    'questions' => [],
 
-        if ($exams->isEmpty()) {
-            return response()->json([
-                'message' => 'No exams found for the given offered course.',
-            ], 404);
-        }
-        $results = [];
-        $totalObtainedMarks = 0;
-        $totalMarks = 0;
-        $solidMarks = 0;
-        foreach ($exams as $exam) {
-            $examData = [
-                'exam_id' => $exam->id,
-                'exam_type' => $exam->type,
-                'total_marks' => $exam->total_marks,
-                'solid_marks' => $exam->Solid_marks,
-                'obtained_marks' => 0,
-                'solid_marks_equivalent' => 0,
-                'status' => 'Declared',
-                'questions' => [],
-
-            ];
-            $examTotalObtained = 0;
-            foreach ($exam->questions as $question) {
-                $result = student_exam_result::where('question_id', $question->id)
-                    ->where('student_id', $studentId)
-                    ->where('exam_id', $exam->id)
-                    ->first();
-
-                $questionData = [
-                    'question_id' => $question->id,
-                    'q_no' => $question->q_no,
-                    'marks' => $question->marks,
-                    'obtained_marks' => $result ? $result->obtained_marks : null,
                 ];
+                $examTotalObtained = 0;
+                foreach ($exam->questions as $question) {
+                    $result = student_exam_result::where('question_id', $question->id)
+                        ->where('student_id', $studentId)
+                        ->where('exam_id', $exam->id)
+                        ->first();
 
-                $examData['questions'][] = $questionData;
+                    $questionData = [
+                        'question_id' => $question->id,
+                        'q_no' => $question->q_no,
+                        'marks' => $question->marks,
+                        'obtained_marks' => $result ? $result->obtained_marks : null,
+                    ];
 
-                if ($result) {
-                    $examTotalObtained += $result->obtained_marks;
+                    $examData['questions'][] = $questionData;
+
+                    if ($result) {
+                        $examTotalObtained += $result->obtained_marks;
+                    }
                 }
-            }
-            $examData['obtained_marks'] = $examTotalObtained;
-            $examData['solid_marks_equivalent'] = $exam->Solid_marks > 0
-                ? ($examTotalObtained / $exam->total_marks) * $exam->Solid_marks
-                : 0;
-            $totalObtainedMarks += $examTotalObtained;
-            $totalMarks += $exam->total_marks;
-            $solidMarks += $exam->Solid_marks;
+                $examData['obtained_marks'] = $examTotalObtained;
+                $examData['solid_marks_equivalent'] = $exam->Solid_marks > 0
+                    ? ($examTotalObtained / $exam->total_marks) * $exam->Solid_marks
+                    : 0;
+                $totalObtainedMarks += $examTotalObtained;
+                $totalMarks += $exam->total_marks;
+                $solidMarks += $exam->Solid_marks;
 
-            $results[$exam->type][] = $examData;
+                $results[$exam->type][] = $examData;
+            }
+            $Data[] = [
+                'course_name' => $course['course_name'],
+                'session' => $course['Session'],
+                'section' => $course['Section'],
+                'total_marks' => $totalMarks,
+                'solid_marks' => $solidMarks,
+                'obtained_marks' => $totalObtainedMarks,
+                'solid_marks_equivalent' => $solidMarks > 0
+                    ? ($totalObtainedMarks / $totalMarks) * $solidMarks
+                    : 0,
+                'exam_results' => $results,
+            ];
+
+
         }
-        $student = student::find($studentId);
         return response()->json([
-            'Student Name' => $student->name,
-            'Registration Number' => $student->RegNo,
-            'total_marks' => $totalMarks,
-            'solid_marks' => $solidMarks,
-            'obtained_marks' => $totalObtainedMarks,
-            'solid_marks_equivalent' => $solidMarks > 0
-                ? ($totalObtainedMarks / $totalMarks) * $solidMarks
-                : 0,
-            'exam_results' => $results,
-        ]);
+            'status' => 'success',
+            'data' => $Data
+        ], 200);
     }
 
 }

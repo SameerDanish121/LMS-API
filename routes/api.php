@@ -267,20 +267,20 @@ Route::prefix('Students')->group(function () {
     Route::get('/Transcript', [StudentsController::class, 'Transcript']);
     Route::get('/TranscriptPDF', [StudentsController::class, 'getTranscriptPdf']);
     Route::get('/TranscriptSessionDropDown', [StudentsController::class, 'TranscriptSessionDropDown']);
-
-
-
-   
-    Route::get('/subject/task-result', [StudentsController::class, 'GetSubjectTaskResult']);
-    Route::get('/subject/task-considered', [StudentsController::class, 'getTaskConsiderations']);
+    Route::post('/submitTask', [StudentsController::class, 'submitAnswer']);
     Route::get('/current-enrollments', [StudentsController::class, 'StudentCurrentEnrollmentsName']);
     Route::get('/all-enrollments', [StudentsController::class, 'StudentAllEnrollmentsName']);
-    Route::get('/course-content', [StudentsController::class, 'GetFullCourseContentOfSubject']);
-    Route::get('/course-content/week', [StudentsController::class, 'GetFullCourseContentOfSubjectByWeek']);
-    Route::post('/submitTask', [StudentsController::class, 'submitAnswer']);
+    Route::get('/subject/task-result', [StudentsController::class, 'GetSubjectTaskResult']);
     Route::post('/exam-result', [StudentsController::class, 'getStudentExamResult']);
-});
+    Route::get('/course-content/week', [StudentsController::class, 'GetFullCourseContentOfSubjectByWeek']);
+    Route::get('/course-content', [StudentsController::class, 'GetFullCourseContentOfSubject']);
+    Route::get('/getStudentCourseContent',[StudentsController::class,'GetFullCourseContentOfStudentByActivePrevious']);
+   
+    Route::get('/subject/task-considered', [StudentsController::class, 'getTaskConsiderations']);
+ 
+   
 
+});
 Route::prefix('JuniorLec')->group(function () {
     Route::get('classestoday/{juniorLecturerId}', [JuniorLecController::class, 'juniorTodayClassesWithStatus']);
     

@@ -96,6 +96,7 @@ class CourseContentContoller extends Controller
             return [];
         }
     }
+    
     public function getTeacherCourseContent(Request $request)
     {
         try {

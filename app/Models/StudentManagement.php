@@ -159,7 +159,7 @@ class StudentManagement extends Model
     {
         $currentSessionId = (new session())->getCurrentSessionId();
         if ($currentSessionId == 0) {
-           return [];
+            return [];
         }
         $offeredCourses = offered_courses::where('session_id', $currentSessionId)->get();
         $courses = [];
@@ -171,11 +171,11 @@ class StudentManagement extends Model
                 })
                 ->first();
             if ($enrolledCourse) {
-                $teacher_offered_course=teacher_offered_courses::where('offered_course_id',$offeredCourse->id)->where('section_id',$enrolledCourse->section_id)->first();
-                if($teacher_offered_course){
-                    $teacher_offered_course_id=$teacher_offered_course->id??null;
-                }else{
-                    $teacher_offered_course_id=null;
+                $teacher_offered_course = teacher_offered_courses::where('offered_course_id', $offeredCourse->id)->where('section_id', $enrolledCourse->section_id)->first();
+                if ($teacher_offered_course) {
+                    $teacher_offered_course_id = $teacher_offered_course->id ?? null;
+                } else {
+                    $teacher_offered_course_id = null;
                 }
                 $courseName = $offeredCourse->course->name;
                 $courses[] = [
@@ -184,10 +184,11 @@ class StudentManagement extends Model
                     'Section' => (new section())->getNameByID($enrolledCourse->section_id),
                     'offered_course_id' => $offeredCourse->id,
                     'section_id' => $enrolledCourse->section_id,
-                    'teacher_offered_course_id'=> $teacher_offered_course_id,
+                    'teacher_offered_course_id' => $teacher_offered_course_id,
                 ];
             }
         }
+
         return $courses;
     }
     public static function getAllEnrollmentCoursesName($student_id)
@@ -200,6 +201,9 @@ class StudentManagement extends Model
             $offeredCourse = $enrollment->offeredCourse;
             $session = $offeredCourse->session;
             $section = $enrollment->section->id;
+            $teacher_offered_course = teacher_offered_courses::
+                where('section_id', $section)
+                ->where('offered_course_id', $offeredCourse->id)->first();
             if ($session) {
                 $courses[] = [
                     'course_name' => $offeredCourse->course->name,
@@ -208,23 +212,21 @@ class StudentManagement extends Model
                     'offered_course_id' => $offeredCourse->id,
                     'section_id' => $section,
                     'session_start_date' => $session->start_date,
+                    'session_id'=>$session->id,
+                    'teacher_offered_course_id' => ($teacher_offered_course) ? $teacher_offered_course->id : null
                 ];
             }
         }
-        usort($courses, function ($a, $b) {
-            $dateA = Carbon::parse($a['session_start_date']);
-            $dateB = Carbon::parse($b['session_start_date']);
-            if ($dateA->isToday() || $dateA->isPast()) {
-                return -1;
-            }
-            if ($dateB->isToday() || $dateB->isPast()) {
-                return 1;
-            }
-            return $dateB->greaterThan($dateA) ? 1 : -1;
-        });
+        $courses = collect($courses)
+            ->filter(function ($course) {
+                return $course['session_start_date'] ?? '0000-00-00';
+            })
+            ->sortByDesc('session_start_date') // sort by session start date (desc)
+            ->values();
         return $courses;
     }
-    public static function getAllTask($student_id){
+    public static function getAllTask($student_id)
+    {
         $enrolledCourses = self::getActiveEnrollmentCoursesName($student_id);
         $tasksGrouped = [
             'Active_Tasks' => [],
@@ -244,9 +246,9 @@ class StudentManagement extends Model
                     $currentDate = now();
                     $taskDetails = [
                         'task_id' => $task->id,
-                        'course_name'=>$enrollment['course_name'],
+                        'course_name' => $enrollment['course_name'],
                         'title' => $task->title,
-                        'type' =>($task->courseContent->content == 'MCQS')?'MCQS':$task->type,
+                        'type' => ($task->courseContent->content == 'MCQS') ? 'MCQS' : $task->type,
                         'points' => $task->points,
                         'start_date' => $task->start_date,
                         'due_date' => $task->due_date,
@@ -256,79 +258,79 @@ class StudentManagement extends Model
                         $taskDetails['creator_type'] = 'Teacher';
                         $taskDetails['creator_name'] = $teacher->name ?? 'Unknown';
                     } else if ($task->CreatedBy === 'Junior Lecturer') {
-                        $teacher_junior=teacher_juniorlecturer::where('teacher_offered_course_id',$teacherOfferedCourse->id)->first();
-                        if($teacher_junior){
+                        $teacher_junior = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
+                        if ($teacher_junior) {
                             $juniorLecturer = juniorlecturer::where('id', $teacher_junior->juniorlecturer_id)->first();
                             $taskDetails['creator_type'] = 'Junior Lecturer';
                             $taskDetails['creator_name'] = $juniorLecturer->name ?? 'Unknown';
                         }
-                       
+
                     }
                     $type = ($task->courseContent->content == 'MCQS') ? 'MCQS' : 'File';
-                    $taskDetails[$type]=$task->courseContent->content=='MCQS'?Action::getMCQS($task->courseContent->id):($task->courseContent->content?asset($task->courseContent->content):null);
+                    $taskDetails[$type] = $task->courseContent->content == 'MCQS' ? Action::getMCQS($task->courseContent->id) : ($task->courseContent->content ? asset($task->courseContent->content) : null);
                     if ($task->start_date > $currentDate) {
                         $tasksGrouped['Upcoming_Tasks'][] = $taskDetails;
-                    } else if ($task->start_date <=$currentDate && $task->due_date >=$currentDate) {
+                    } else if ($task->start_date <= $currentDate && $task->due_date >= $currentDate) {
                         $studentTaskResult = student_task_result::where('Task_id', $task->id)
                             ->where('Student_id', $student_id)
                             ->first();
                         if ($studentTaskResult && $task->courseContent->content == 'MCQS') {
                             $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
                             $taskDetails['IsAttempted'] = 'Yes';
-                            $taskDetails['Submission_Date_Time']=now();
-                            $taskDetails['Your_Submission']='sameer danish';
-                        } else{
-                            
+                            $taskDetails['Submission_Date_Time'] = now();
+                            $taskDetails['Your_Submission'] = 'sameer danish';
+                        } else {
+
                             $studentSubmission = student_task_submission::where('task_id', $task->id)->where('student_id', $student_id)->first();
-                            if($studentSubmission){
+                            if ($studentSubmission) {
                                 $taskDetails['Submission_Date_Time'] = $studentSubmission->DateTime ?? 'N/A';
-                                $taskDetails['Your_Submission'] =$studentSubmission->Answer?asset($studentSubmission->Answer):null;
+                                $taskDetails['Your_Submission'] = $studentSubmission->Answer ? asset($studentSubmission->Answer) : null;
                                 $taskDetails['IsAttempted'] = 'Yes';
-                            }else{
+                            } else {
                                 $taskDetails['IsAttempted'] = 'No';
                             }
                         }
                         $tasksGrouped['Active_Tasks'][] = $taskDetails;
-                    }else{
-                            $studentTaskResult = student_task_result::where('Task_id', $task->id)
-                                ->where('Student_id', $student_id)
-                                ->first();
-                            if ($studentTaskResult && $task->courseContent->content == 'MCQS') {
-                                $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
+                    } else {
+                        $studentTaskResult = student_task_result::where('Task_id', $task->id)
+                            ->where('Student_id', $student_id)
+                            ->first();
+                        if ($studentTaskResult && $task->courseContent->content == 'MCQS') {
+                            $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
+                            $taskDetails['IsAttempted'] = 'Yes';
+                            $taskDetails['IsMarked'] = 'Yes';
+                        } else if ($studentTaskResult) {
+                            $taskDetails['IsMarked'] = 'Yes';
+                            $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
+                            $studentSubmission = student_task_submission::where('task_id', $task->id)->where('student_id', $student_id)->first();
+                            if ($studentSubmission) {
+                                $taskDetails['Submission_Date_Time'] = $studentSubmission->DateTime ?? 'N/A';
+                                $taskDetails['Your_Submission'] = $studentSubmission->Answer ? asset($studentSubmission->Answer) : null;
                                 $taskDetails['IsAttempted'] = 'Yes';
-                                $taskDetails['IsMarked'] = 'Yes';
-                            } else if ($studentTaskResult) {
-                                $taskDetails['IsMarked'] = 'Yes';
-                                $taskDetails['obtained_points'] = $studentTaskResult->ObtainedMarks ?? null;
-                                $studentSubmission = student_task_submission::where('task_id', $task->id)->where('student_id', $student_id)->first();
-                                if($studentSubmission){
-                                    $taskDetails['Submission_Date_Time'] = $studentSubmission->DateTime ?? 'N/A';
-                                    $taskDetails['Your_Submission'] =$studentSubmission->Answer?asset($studentSubmission->Answer) : null;
-                                    $taskDetails['IsAttempted'] = 'Yes';
-                                }else{
-                                    $taskDetails['Submission_Date_Time']='N/A';
-                                    $taskDetails['Your_Submission'] ='N/A';
-                                    $taskDetails['IsAttempted'] = 'No';
-                                }
-                            }else{
-                                $taskDetails['IsMarked'] = 'No';
-                                $studentSubmission = student_task_submission::where('task_id', $task->id)->where('student_id', $student_id)->first();
-                                if($studentSubmission){
-                                    $taskDetails['Submission_Date_Time'] = $studentSubmission->DateTime ?? 'N/A';
-                                    $taskDetails['Your_Submission'] =$studentSubmission->Answer?asset($studentSubmission->Answer) : null;
-                                    $taskDetails['IsAttempted'] = 'Yes';
-                                }else{
-                                    $taskDetails['Submission_Date_Time']='N/A';
-                                    $taskDetails['Your_Submission'] ='N/A';
-                                    $taskDetails['IsAttempted'] = 'No';
-                                }
+                            } else {
+                                $taskDetails['Submission_Date_Time'] = 'N/A';
+                                $taskDetails['Your_Submission'] = 'N/A';
+                                $taskDetails['IsAttempted'] = 'No';
                             }
+                        } else {
+                            $taskDetails['IsMarked'] = 'No';
+                            $studentSubmission = student_task_submission::where('task_id', $task->id)->where('student_id', $student_id)->first();
+                            if ($studentSubmission) {
+                                $taskDetails['Submission_Date_Time'] = $studentSubmission->DateTime ?? 'N/A';
+                                $taskDetails['Your_Submission'] = $studentSubmission->Answer ? asset($studentSubmission->Answer) : null;
+                                $taskDetails['IsAttempted'] = 'Yes';
+                            } else {
+                                $taskDetails['Submission_Date_Time'] = 'N/A';
+                                $taskDetails['Your_Submission'] = 'N/A';
+                                $taskDetails['IsAttempted'] = 'No';
+                            }
+                        }
                         $tasksGrouped['Completed_Tasks'][] = $taskDetails;
                     }
                 }
             }
         }
-    
+
         return $tasksGrouped;
     }
     public static function getAllTasks($student_id)
@@ -385,7 +387,7 @@ class StudentManagement extends Model
                             $studentSubmission = student_task_submission::where('task_id', $task->id)->where('student_id', $student_id)->first();
                             $taskDetails[$type] = asset($task->courseContent->content);
                             $taskDetails['Submission Date Time'] = $studentSubmission->DateTime ?? 'N/A';
-                            $taskDetails['Your Submission'] = $studentSubmission->Answer?asset($studentSubmission->Answer):null;
+                            $taskDetails['Your Submission'] = $studentSubmission->Answer ? asset($studentSubmission->Answer) : null;
                             $task['Is Attempted'] = 'Yes';
                             $taskDetails['Is Marked'] = 'Yes';
                         }
@@ -586,7 +588,7 @@ class StudentManagement extends Model
             }
         }
 
-        ksort($result); 
+        ksort($result);
         return $result;
     }
     public static function getCourseContentForSpecificWeekWithTopicsAndStatus($section_id, $offered_course_id, $week)
@@ -594,39 +596,39 @@ class StudentManagement extends Model
         $teacherOfferedCourse = teacher_offered_courses::where('offered_course_id', $offered_course_id)
             ->where('section_id', $section_id)
             ->first();
-    
+
         if (!$teacherOfferedCourse) {
             return [
                 'error' => 'No teacher offered course found for the given section and offered course.'
             ];
         }
-    
+
         $teacher_offered_course_id = $teacherOfferedCourse->id;
         $courseContents = coursecontent::where('offered_course_id', $offered_course_id)
             ->where('week', $week) // Filter by week
             ->get();
-    
+
         $result = [];
-    
+
         foreach ($courseContents as $courseContent) {
             if ($courseContent->type === 'Notes') {
                 $courseContentTopics = coursecontent_topic::where('coursecontent_id', $courseContent->id)->get();
                 $topics = [];
-    
+
                 foreach ($courseContentTopics as $courseContentTopic) {
                     $topic = topic::find($courseContentTopic->topic_id);
-    
+
                     if ($topic) {
                         $status = t_coursecontent_topic_status::where('coursecontent_id', $courseContent->id)
                             ->where('topic_id', $topic->id)
                             ->where('teacher_offered_courses_id', $teacher_offered_course_id)
                             ->first();
-    
+
                         $stat = 'Not-Covered';
                         if ($status) {
                             $stat = $status->Status == 1 ? 'Covered' : 'Not-Covered';
                         }
-    
+
                         $topics[] = [
                             'topic_id' => $topic->id,
                             'topic_name' => $topic->title,
@@ -634,7 +636,7 @@ class StudentManagement extends Model
                         ];
                     }
                 }
-    
+
                 $result[] = [
                     'course_content_id' => $courseContent->id,
                     'title' => $courseContent->title,
@@ -649,16 +651,16 @@ class StudentManagement extends Model
                     'title' => $courseContent->title,
                     'type' => $courseContent->type,
                     'week' => $courseContent->week,
-                    $courseContent->type == 'MCQS' ? 'MCQS' : 'File' => $courseContent->type == 'MCQS' 
-                        ? Action::getMCQS($courseContent->id) 
+                    $courseContent->type == 'MCQS' ? 'MCQS' : 'File' => $courseContent->type == 'MCQS'
+                        ? Action::getMCQS($courseContent->id)
                         : asset($courseContent->content),
                 ];
             }
         }
-    
+
         return $result;
     }
-    
+
     public static function createContestedAttendance($attendanceId)
     {
         $existingRecord = contested_attendance::where('Attendance_id', $attendanceId)->first();
@@ -697,7 +699,7 @@ class StudentManagement extends Model
                 if ($teacherOfferedCourse) {
                     $teacher = teacher::find($teacherOfferedCourse->teacher_id);
                     $teacherName = $teacher ? $teacher->name : null;
-                  
+
                 }
                 $course = Course::where('id', $offeredCourse->course_id)->first();
                 $courseDetails = [
@@ -705,7 +707,7 @@ class StudentManagement extends Model
                     'course_code' => $course->code,
                     'credit_hours' => $course->credit_hours,
                     'Type' => $course->type,
-                    'Is'=>$course->lab==1?'Lab':'Theory',
+                    'Is' => $course->lab == 1 ? 'Lab' : 'Theory',
                     'Short Form' => $course->description,
                     'Pre-Requisite/Main' => $course->pre_req_main == null
                         ? 'Main' : Course::where('id', $course->pre_req_main)->value('name'),
@@ -714,18 +716,18 @@ class StudentManagement extends Model
                         ? program::where('id', $course->program_id)->value('name')
                         : 'General',
                     'teacher_name' => ($teacher && $teacher->name) ? $teacher->name : 'N/A',  // Check if teacher exists and has a name  // Check if junior lecturer exists and has a name
-                    'teacher_image'=>($teacher && $teacher->image)?asset($teacher->image):null,
+                    'teacher_image' => ($teacher && $teacher->image) ? asset($teacher->image) : null,
                     'offered_course_id' => $offeredCourse->id,
-                    'teacher_offered_course_id'=>($teacherOfferedCourse)?$teacherOfferedCourse->id:null,
+                    'teacher_offered_course_id' => ($teacherOfferedCourse) ? $teacherOfferedCourse->id : null,
                 ];
-                if($course->lab==1){
+                if ($course->lab == 1) {
                     $juniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
                     if ($juniorLecturer) {
                         $juniorLecturerName = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('name');
                         $jlImage = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('image');
                     }
-                    $courseDetails['junior_lecturer_name'] =($juniorLecturerName) ? $juniorLecturerName : 'N/A';
-                    $courseDetails['junior_image']=$jlImage?asset($jlImage):null;
+                    $courseDetails['junior_lecturer_name'] = ($juniorLecturerName) ? $juniorLecturerName : 'N/A';
+                    $courseDetails['junior_image'] = $jlImage ? asset($jlImage) : null;
                 }
 
                 $courses[] = $courseDetails;
@@ -747,8 +749,8 @@ class StudentManagement extends Model
                 })
                 ->first();
             if ($enrolledCourse) {
-                $offeredCourse=offered_courses::where('id',$enrolledCourse->offered_course_id)->with('session')->first();
-                $session=$offeredCourse->session;
+                $offeredCourse = offered_courses::where('id', $enrolledCourse->offered_course_id)->with('session')->first();
+                $session = $offeredCourse->session;
                 $teacherOfferedCourse = teacher_offered_courses::where('offered_course_id', $offeredCourse->id)
                     ->where('section_id', $enrolledCourse->section_id)
                     ->first();
@@ -758,7 +760,7 @@ class StudentManagement extends Model
                     $teacher = teacher::find($teacherOfferedCourse->teacher_id);
                     $teacherName = $teacher ? $teacher->name : null;
 
-                    
+
                 }
 
                 $course = Course::where('id', $offeredCourse->course_id)->first();
@@ -774,42 +776,42 @@ class StudentManagement extends Model
                     'credit_hours' => $course->credit_hours,
                     'Type' => $course->type,
                     'Short Form' => $course->description,
-                    'Is'=>$course->lab==1?'Lab':'Theory',
+                    'Is' => $course->lab == 1 ? 'Lab' : 'Theory',
                     'Pre-Requisite/Main' => $course->pre_req_main == null
                         ? 'Main' : Course::where('id', $course->pre_req_main)->value('name'),
                     'section' => (new section())->getNameByID($enrolledCourse->section_id),
-                    'session_name'=>$session->name.'-'.$session->year,
-                    'session_start'=>$session->start_date,
+                    'session_name' => $session->name . '-' . $session->year,
+                    'session_start' => $session->start_date,
                     'program' => $course->program
                         ? program::where('id', $course->program_id)->value('name')
                         : 'General',
                     'teacher_name' => $teacherName ? $teacherName : 'N/A',
-            
+
                     'offered_course_id' => $offeredCourse->id,
-                    'teacher_offered_course_id'=>($teacherOfferedCourse)?$teacherOfferedCourse->id:null,
-                    'teacher_image'=>($teacher && $teacher->image)?asset($teacher->image):null,
+                    'teacher_offered_course_id' => ($teacherOfferedCourse) ? $teacherOfferedCourse->id : null,
+                    'teacher_image' => ($teacher && $teacher->image) ? asset($teacher->image) : null,
                     'result Info' => $result,
                     'grade' => $enrolledCourse->grade ?: 'N/A',
                 ];
-                if($course->lab==1){
-                    if($teacherOfferedCourse){
+                if ($course->lab == 1) {
+                    if ($teacherOfferedCourse) {
                         $juniorLecturer = teacher_juniorlecturer::where('teacher_offered_course_id', $teacherOfferedCourse->id)->first();
                         if ($juniorLecturer) {
                             $juniorLecturerName = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('name');
                             $jlImage = juniorlecturer::where('id', $juniorLecturer->juniorlecturer_id)->value('image');
                         }
-                        $courseDetails['junior_image']=$jlImage?asset($jlImage):null;
+                        $courseDetails['junior_image'] = $jlImage ? asset($jlImage) : null;
                     }
-                   
+
                 }
-                if($enrolledCourse->grade == 'F' || $enrolledCourse->grade == 'D'){
-                   if($currentSessionId!=0){
-                      if(offered_courses::where('course_id',$course->id)->where('session_id',$currentSessionId)->exists()){
-                         $session=session::find($currentSessionId);
-                         $type=$session->name;
-                         $courseDetails['can_re_enroll']='Yes';
-                      }
-                   }
+                if ($enrolledCourse->grade == 'F' || $enrolledCourse->grade == 'D') {
+                    if ($currentSessionId != 0) {
+                        if (offered_courses::where('course_id', $course->id)->where('session_id', $currentSessionId)->exists()) {
+                            $session = session::find($currentSessionId);
+                            $type = $session->name;
+                            $courseDetails['can_re_enroll'] = 'Yes';
+                        }
+                    }
                 }
                 $courses[] = $courseDetails;
             }
@@ -818,7 +820,7 @@ class StudentManagement extends Model
         $sortedGroupedCourses = collect($groupedCourses)->sortByDesc(function ($group, $session_name) {
             return strtotime($group[0]['session_start']);
         })->toArray();
-        
+
         return $sortedGroupedCourses;
         //return $courses;
     }
