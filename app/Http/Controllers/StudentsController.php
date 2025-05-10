@@ -670,6 +670,7 @@ class StudentsController extends Controller
                     "offered_course_count" => offered_courses::where('session_id', (new session())->getCurrentSessionId())->count(),
                     "student_count" => student::count(),
                     "faculty_count" => teacher::count() + juniorlecturer::count(),
+                    "Current_Week" => (new session())->getCurrentSessionWeek() ?? 0,
                 ];
                 return response()->json([
                     'Type' => $role,
@@ -690,6 +691,7 @@ class StudentsController extends Controller
                     "Username" => $HOD->user->username,
                     "Password" => $HOD->user->password,
                     "user_id" => $HOD->user->id,
+                   "Current_Week" => (new session())->getCurrentSessionWeek() ?? 0,
                     "Current Session" => (new session())->getSessionNameByID($session->id) ?? 'N/A',
                     "Start Date" => $session->start_date ?? "N/A",
                     "End Date" => $session->end_date ?? "N/A",

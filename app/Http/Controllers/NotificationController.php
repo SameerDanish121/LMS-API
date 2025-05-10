@@ -30,7 +30,7 @@ class NotificationController extends Controller
 
             $imageUrl = null;
             if ($request->hasFile('image')) {
-                $imagePath = FileHandler::storeFile(now()->timestamp, 'Transcript', $request->file('image'));
+                $imagePath = FileHandler::storeFile(now()->timestamp, 'Notification', $request->file('image'));
                 $imageUrl = $imagePath;
             }else if($request->has('image')){
                 $imageUrl=$request->image;
@@ -76,7 +76,7 @@ class NotificationController extends Controller
             $description = $request->description;
             $type = 'general';
 
-            self::sendNotificationToUsers($userId, $title, $description, $imageUrl, $type, $notificationId);
+            // self::sendNotificationToUsers($userId, $title, $description, $imageUrl, $type, $notificationId);
 
             return response()->json(['message' => 'Notification sent successfully'], 200);
         } catch (\Exception $e) {

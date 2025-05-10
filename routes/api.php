@@ -21,7 +21,12 @@ use App\Http\Controllers\CourseContentContoller;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AuthenticationController;
 use App\Http\Controllers\DatacellModuleController;
+use App\Http\Controllers\HodController;
 use App\Http\Controllers\SingleInsertionController;
+
+
+
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Testing~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//
 Route::get('/', function () {
     return response()->json(['status' => 'success'], 200);
@@ -406,4 +411,17 @@ Route::prefix('Grader')->group(function () {
     Route::get('/ListOfStudent', [GraderController::class, 'ListOfStudentForTask']);
     Route::post('/SubmitTaskResult', [GraderController::class, 'SubmitNumber']);
     Route::post('/SubmitTaskResultList', [GraderController::class, 'SubmitNumberList']);
+});
+
+
+Route::prefix('Hod')->group(function () {
+Route::get('/content', [HodController::class, 'getAllCourseContents']);
+Route::post('/add-course', [HodController::class, 'addCourse']);
+Route::post('/add-teacher', [HodController::class, 'AddSingleTeacher']);
+Route::post('/add-junior', [HodController::class, 'AddSingleJunior']);
+Route::post('/link-topics', [HodController::class, 'linkTopicsToCourseContent']);
+
+Route::post('/course-content/bulk-insert', [HodController::class, 'AddMultipleCourseContents']);
+Route::get('/offered-courses/grouped', [HodController::class, 'getGroupedOfferedCoursesBySession']);
+
 });

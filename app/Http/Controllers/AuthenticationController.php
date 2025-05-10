@@ -110,7 +110,7 @@ class AuthenticationController extends Controller
                 'user_id' => 'required|exists:user,id',
                 'new_password' => [
                     'required',
-                    'min:6' // At least one letter & one number
+                    'min:1' // At least one letter & one number
                 ],
             ]);
             $user = User::findOrFail($request->user_id);

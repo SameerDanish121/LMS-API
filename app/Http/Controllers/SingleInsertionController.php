@@ -74,7 +74,7 @@ class SingleInsertionController extends Controller
                 'date_of_birth' => $formattedDOB,
                 'gender' => $gender,
                 'email' => $email,
-                'cnic'=>$cnic
+                'cnic' => $cnic
             ]);
             // Handle image upload only if it's provided
             if ($request->hasFile('image')) {
@@ -161,7 +161,7 @@ class SingleInsertionController extends Controller
                 'date_of_birth' => $formattedDOB,
                 'gender' => $gender,
                 'email' => $email,
-                'cnic'=>$cnic 
+                'cnic' => $cnic
             ]);
             if ($request->hasFile('image')) {
                 $image = $request->file('image');
@@ -414,22 +414,32 @@ class SingleInsertionController extends Controller
                 'reciever' => 'nullable|string|max:50',
                 'Brodcast' => 'nullable|boolean',
                 'url' => 'nullable|string|max:255',
+                'image'=>'nullable|file',
                 'Student_Section_Name' => 'nullable|string', // Section name to find Section ID
                 'TL_receiver_name' => 'nullable|string', // Receiver name for ID lookup
             ]);
+            $imageUrl = null;
+            if ($request->hasFile('image')) {
+                // If a file was uploaded, store it and use its path
+                $imagePath = FileHandler::storeFile(now()->timestamp, 'Notification', $request->file('image'));
+                $imageUrl = $imagePath;
+            } elseif (!is_null($request->url)) {
+                // If no image file but URL is provided, use the URL
+                $imageUrl = $request->url;
+            } elseif ($request->has('image') && is_string($request->image)) {
+                // If image is passed as a string path instead of uploaded file (fallback)
+                $imageUrl = $request->image;
+            }
 
-          
             $TL_receiver_id = null;
             $Student_Section = null;
-
-            // If Brodcast is set
             if ($request->has('Brodcast') && $request->Brodcast == true) {
                 if (!$request->has('reciever')) {
                     // Insert only broadcast data without receiver
                     $notification = notification::create([
                         'title' => $request->title,
                         'description' => $request->description,
-                        'url' => $request->url ?? null,
+                        'url' => $imageUrl ?? null,
                         'notification_date' => now(),
                         'sender' => $request->sender,
                         'reciever' => null,
@@ -454,10 +464,10 @@ class SingleInsertionController extends Controller
                     $notification = Notification::create([
                         'title' => $request->title,
                         'description' => $request->description,
-                        'url' => $request->url ?? null,
+                        'url' => $imageUrl ?? null,
                         'notification_date' => now(),
                         'sender' => $request->sender,
-                        'reciever' => $request->reciever,
+                        'reciever' => $reciver,
                         'Brodcast' => true,
                         'TL_sender_id' => $request->sender_id,
                         'Student_Section' => null,
@@ -483,45 +493,46 @@ class SingleInsertionController extends Controller
             } else {
                 $reciver = $request->reciever;
             }
-            if ($request->reciever === 'student' && $request->has('Student_Section_Name')) {
+            if (
+                $request->reciever === 'student' && 
+                $request->has('Student_Section_Name') && 
+                !is_null($request->Student_Section_Name)
+            ){
                 $section_id = (new section())->getIDByName($request->Student_Section_Name);
                 if (!$section_id) {
                     return response()->json(['message' => 'Invalid Section Name'], 400);
                 }
                 $Student_Section = $section_id;
+            } else if ($request->reciever === 'student' && !$Student_Section && $request->has('TL_receiver_name')) {
+                $student = Student::where('name', $request->TL_receiver_name)->first();
+                if (!$student) {
+                    return response()->json(['message' => 'Student not found ' . $request->TL_receiver_name], 400);
+                }
+                $TL_receiver_id = $student->user_id; // Use student's linked user_id
             } else
-
-                // If receiver is Student and Section is not given, find student’s user_id
-                if ($request->reciever === 'student' && !$Student_Section && $request->has('TL_receiver_name')) {
-                    $student = Student::where('name', $request->TL_receiver_name)->first();
-                    if (!$student) {
-                        return response()->json(['message' => 'Student not found ' . $request->TL_receiver_name], 400);
+                // If receiver is Teacher, find user_id from Teacher model
+                if ($request->reciever === 'teacher' && $request->has('TL_receiver_name')) {
+                    $teacher = Teacher::where('name', $request->TL_receiver_name)->first();
+                    if (!$teacher) {
+                        return response()->json(['message' => 'Teacher not found'], 400);
                     }
-                    $TL_receiver_id = $student->user_id; // Use student's linked user_id
+                    $TL_receiver_id = $teacher->user_id;
                 } else
-                    // If receiver is Teacher, find user_id from Teacher model
-                    if ($request->reciever === 'teacher' && $request->has('TL_receiver_name')) {
-                        $teacher = Teacher::where('name', $request->TL_receiver_name)->first();
-                        if (!$teacher) {
-                            return response()->json(['message' => 'Teacher not found'], 400);
-                        }
-                        $TL_receiver_id = $teacher->user_id;
-                    } else
 
-                        // If receiver is JuniorLecturer, find user_id from JuniorLecturer model
-                        if ($request->reciever === 'lecturer' && $request->has('TL_receiver_name')) {
-                            $junior = JuniorLecturer::where('name', $request->TL_receiver_name)->first();
-                            if (!$junior) {
-                                return response()->json(['message' => 'Junior Lecturer not found'], 400);
-                            }
-                            $TL_receiver_id = $junior->user_id;
+                    // If receiver is JuniorLecturer, find user_id from JuniorLecturer model
+                    if ($request->reciever === 'lecturer' && $request->has('TL_receiver_name')) {
+                        $junior = JuniorLecturer::where('name', $request->TL_receiver_name)->first();
+                        if (!$junior) {
+                            return response()->json(['message' => 'Junior Lecturer not found'], 400);
                         }
+                        $TL_receiver_id = $junior->user_id;
+                    }
 
             // Create and save the notification
             $notification = Notification::create([
                 'title' => $request->title,
                 'description' => $request->description,
-                'url' => $request->url ?? null,
+                'url' => $imageUrl  ?? null,
                 'notification_date' => now(),
                 'sender' => $request->sender,
                 'reciever' => $reciver,
